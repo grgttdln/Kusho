@@ -11,7 +11,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.app"
+        applicationId = "com.example.kusho"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
