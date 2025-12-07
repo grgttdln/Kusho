@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -53,7 +57,10 @@ import kotlin.math.sqrt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setTheme(android.R.style.Theme_DeviceDefault)
+
+        // Set black window background immediately to prevent system icon
+        window.setBackgroundDrawableResource(android.R.color.black)
+
         setContent {
             WearApp(messageService = null, nodeClient = null)
         }
@@ -90,40 +97,46 @@ private val LearnModeColor = Color(0xFFB388FF)
 @Suppress("UNUSED_PARAMETER")
 @Composable
 fun WearApp(messageService: MessageService?, nodeClient: NodeClient?) {
+    var showSplash by remember { mutableStateOf(true) }
+
     MaterialTheme {
-        val navController = rememberSwipeDismissableNavController()
+        if (showSplash) {
+            CustomSplashScreen(onTimeout = { showSplash = false })
+        } else {
+            val navController = rememberSwipeDismissableNavController()
 
-        SwipeDismissableNavHost(
-            navController = navController,
-            startDestination = Routes.HOME
-        ) {
-            // Home screen with mode arcs
-            composable(Routes.HOME) {
-                HomeScreen(navController = navController)
-            }
+            SwipeDismissableNavHost(
+                navController = navController,
+                startDestination = Routes.HOME
+            ) {
+                // Home screen with mode arcs
+                composable(Routes.HOME) {
+                    HomeScreen(navController = navController)
+                }
 
-            // Practice Mode screen
-            composable(Routes.PRACTICE_MODE) {
-                ModeScreen(
-                    modeName = "Practice Mode",
-                    modeColor = PracticeModeColor
-                )
-            }
+                // Practice Mode screen
+                composable(Routes.PRACTICE_MODE) {
+                    ModeScreen(
+                        modeName = "Practice Mode",
+                        modeColor = PracticeModeColor
+                    )
+                }
 
-            // Tutorial Mode screen
-            composable(Routes.TUTORIAL_MODE) {
-                ModeScreen(
-                    modeName = "Tutorial Mode",
-                    modeColor = TutorialModeColor
-                )
-            }
+                // Tutorial Mode screen
+                composable(Routes.TUTORIAL_MODE) {
+                    ModeScreen(
+                        modeName = "Tutorial Mode",
+                        modeColor = TutorialModeColor
+                    )
+                }
 
-            // Learn Mode screen
-            composable(Routes.LEARN_MODE) {
-                ModeScreen(
-                    modeName = "Learn Mode",
-                    modeColor = LearnModeColor
-                )
+                // Learn Mode screen
+                composable(Routes.LEARN_MODE) {
+                    ModeScreen(
+                        modeName = "Learn Mode",
+                        modeColor = LearnModeColor
+                    )
+                }
             }
         }
     }
