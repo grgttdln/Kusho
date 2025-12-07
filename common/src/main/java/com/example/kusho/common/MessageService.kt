@@ -10,17 +10,30 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class MessageService(context: Context) : MessageClient.OnMessageReceivedListener {
 
-    private val messageClient: MessageClient = Wearable.getMessageClient(context)
+    private val messageClient: MessageClient? = try {
+        Wearable.getMessageClient(context)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
 
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
     init {
-        messageClient.addListener(this)
+        try {
+            messageClient?.addListener(this)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun sendMessage(node: Node, path: String, message: String) {
-        messageClient.sendMessage(node.id, path, message.toByteArray())
+        try {
+            messageClient?.sendMessage(node.id, path, message.toByteArray())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
