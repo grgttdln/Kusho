@@ -35,7 +35,7 @@ fun CustomSplashScreen(onTimeout: () -> Unit) {
         Image(
             painter = painterResource(id = R.drawable.ic_home),
             contentDescription = "Kusho Logo",
-            modifier = Modifier.size(280.dp),
+            modifier = Modifier.size(160.dp),
             contentScale = ContentScale.Fit
         )
     }
