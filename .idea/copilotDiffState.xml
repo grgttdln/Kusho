@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/components/BrandingComponents.kt">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/components/BrandingComponents.kt" />
+              <option name="updatedContent" value="package com.example.app.ui.components&#10;&#10;import androidx.compose.foundation.Image&#10;import androidx.compose.foundation.layout.*&#10;import androidx.compose.material3.MaterialTheme&#10;import androidx.compose.material3.Text&#10;import androidx.compose.runtime.Composable&#10;import androidx.compose.ui.Alignment&#10;import androidx.compose.ui.Modifier&#10;import androidx.compose.ui.graphics.Color&#10;import androidx.compose.ui.layout.ContentScale&#10;import androidx.compose.ui.res.painterResource&#10;import androidx.compose.ui.unit.dp&#10;import androidx.compose.ui.unit.sp&#10;import com.example.app.R&#10;&#10;@Composable&#10;fun KushoLogo(&#10;    modifier: Modifier = Modifier&#10;) {&#10;    Image(&#10;        painter = painterResource(id = R.drawable.ic_kusho),&#10;        contentDescription = &quot;Kusho logo&quot;,&#10;        modifier = modifier&#10;            .width(300.dp)&#10;            .height(80.dp),&#10;        contentScale = ContentScale.Fit,&#10;        alignment = Alignment.CenterStart&#10;    )&#10;}&#10;&#10;@Composable&#10;fun DescriptionText(&#10;    text: String,&#10;    modifier: Modifier = Modifier&#10;) {&#10;    Text(&#10;        text = text,&#10;        style = MaterialTheme.typography.bodyLarge,&#10;        color = Color(0xFF2D2D2D),&#10;        lineHeight = 24.sp,&#10;        modifier = modifier&#10;    )&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/components/PrimaryButton.kt">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/components/PrimaryButton.kt" />
+              <option name="updatedContent" value="package com.example.app.ui.components&#10;&#10;import androidx.compose.foundation.layout.height&#10;import androidx.compose.foundation.shape.RoundedCornerShape&#10;import androidx.compose.material3.Button&#10;import androidx.compose.material3.ButtonDefaults&#10;import androidx.compose.material3.MaterialTheme&#10;import androidx.compose.material3.Text&#10;import androidx.compose.runtime.Composable&#10;import androidx.compose.ui.Modifier&#10;import androidx.compose.ui.graphics.Color&#10;import androidx.compose.ui.unit.dp&#10;import androidx.compose.ui.unit.sp&#10;&#10;@Composable&#10;fun PrimaryButton(&#10;    text: String,&#10;    onClick: () -&gt; Unit,&#10;    modifier: Modifier = Modifier&#10;) {&#10;    Button(&#10;        onClick = onClick,&#10;        modifier = modifier&#10;            .height(60.dp),&#10;        shape = RoundedCornerShape(18.dp),&#10;        colors = ButtonDefaults.buttonColors(&#10;            containerColor = Color(0xFF49A9FF)&#10;        )&#10;    ) {&#10;        Text(&#10;            text = text,&#10;            style = MaterialTheme.typography.titleMedium,&#10;            color = Color.White,&#10;            fontSize = 20.sp&#10;        )&#10;    }&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/components/TermsText.kt">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/components/TermsText.kt" />
+              <option name="updatedContent" value="package com.example.app.ui.components&#10;&#10;import androidx.compose.foundation.layout.padding&#10;import androidx.compose.material3.MaterialTheme&#10;import androidx.compose.material3.Text&#10;import androidx.compose.runtime.Composable&#10;import androidx.compose.ui.Modifier&#10;import androidx.compose.ui.graphics.Color&#10;import androidx.compose.ui.text.style.TextAlign&#10;import androidx.compose.ui.unit.dp&#10;import androidx.compose.ui.unit.sp&#10;&#10;@Composable&#10;fun TermsText(&#10;    modifier: Modifier = Modifier&#10;) {&#10;    Text(&#10;        text = &quot;By continuing, you agree to Kusho's Terms of Service and Privacy Policy.&quot;,&#10;        style = MaterialTheme.typography.bodySmall,&#10;        color = Color(0xFF666666),&#10;        textAlign = TextAlign.Center,&#10;        modifier = modifier&#10;            .padding(horizontal = 8.dp),&#10;        lineHeight = 18.sp&#10;    )&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

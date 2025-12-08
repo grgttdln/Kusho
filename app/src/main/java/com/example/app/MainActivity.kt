@@ -4,15 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.Color
+import com.example.app.ui.screens.OnboardingScreen
 import com.example.app.ui.theme.KushoTheme
 import com.example.kusho.common.MessageService
 import com.google.android.gms.wearable.NodeClient
@@ -32,32 +28,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             KushoTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    PhoneApp(
-                        modifier = Modifier.padding(innerPadding),
-                        messageService = messageService,
-                        nodeClient = nodeClient
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = Color.White
+                ) { innerPadding ->
+                    OnboardingScreen(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        onStartLearning = {
+                            // TODO: Navigate to learning screen or handle start learning action
+                        }
                     )
                 }
             }
         }
-    }
-}
-
-@Composable
-fun PhoneApp(modifier: Modifier = Modifier, messageService: MessageService, nodeClient: NodeClient) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Hello World")
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    KushoTheme {
-        PhoneApp(
-            messageService = MessageService(androidx.compose.ui.platform.LocalContext.current),
-            nodeClient = Wearable.getNodeClient(androidx.compose.ui.platform.LocalContext.current)
-        )
     }
 }
