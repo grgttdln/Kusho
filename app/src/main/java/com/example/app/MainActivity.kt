@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.example.app.ui.screens.OnboardingScreen
+import androidx.navigation.compose.rememberNavController
+import com.example.app.navigation.AppNavigation
 import com.example.app.ui.theme.KushoTheme
 import com.example.kusho.common.MessageService
 import com.google.android.gms.wearable.NodeClient
@@ -28,17 +29,17 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             KushoTheme {
+                val navController = rememberNavController()
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color.White
                 ) { innerPadding ->
-                    OnboardingScreen(
+                    AppNavigation(
+                        navController = navController,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding),
-                        onStartLearning = {
-                            // TODO: Navigate to learning screen or handle start learning action
-                        }
+                            .padding(innerPadding)
                     )
                 }
             }

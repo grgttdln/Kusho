@@ -51,6 +51,8 @@ dependencies {
     implementation(libs.ui.graphics)
     implementation(libs.ui.tooling.preview)
     implementation(libs.material3)
+    implementation(libs.navigation.compose)
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
