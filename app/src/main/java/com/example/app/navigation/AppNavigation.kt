@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import com.example.app.ui.screens.DashboardScreen
 import com.example.app.ui.screens.LoginScreen
 import com.example.app.ui.screens.OnboardingScreen
+import com.example.app.ui.screens.PostSignUpOnboardingScreen
 import com.example.app.ui.screens.SignUpScreen
 import com.example.app.ui.screens.WatchPairingScreen
 
@@ -52,7 +53,7 @@ fun AppNavigation(
         composable(Screen.SignUp.route) {
             SignUpScreen(
                 onSignUpSuccess = {
-                    navController.navigate(Screen.WatchPairing.route) {
+                    navController.navigate(Screen.PostSignUpOnboarding.route) {
                         popUpTo(Screen.SignUp.route) {
                             inclusive = true
                         }
@@ -60,6 +61,18 @@ fun AppNavigation(
                 },
                 onNavigateToLogin = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.PostSignUpOnboarding.route) {
+            PostSignUpOnboardingScreen(
+                onOnboardingComplete = {
+                    navController.navigate(Screen.WatchPairing.route) {
+                        popUpTo(Screen.PostSignUpOnboarding.route) {
+                            inclusive = true
+                        }
+                    }
                 }
             )
         }
