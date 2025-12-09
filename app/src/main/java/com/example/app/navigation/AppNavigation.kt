@@ -5,7 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.app.ui.screens.DashboardScreen
+import com.example.app.ui.screens.MainNavigationContainer
 import com.example.app.ui.screens.LoginScreen
 import com.example.app.ui.screens.OnboardingScreen
 import com.example.app.ui.screens.PostSignUpOnboardingScreen
@@ -93,7 +93,7 @@ fun AppNavigation(
         }
 
         composable(Screen.Home.route) {
-            DashboardScreen()
+            MainNavigationContainer()
         }
     }
 }

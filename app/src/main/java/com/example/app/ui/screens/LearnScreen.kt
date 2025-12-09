@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.sp
 import com.example.app.ui.components.BottomNavBar
 
 @Composable
-fun DashboardScreen(
+fun LearnScreen(
     onNavigate: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -28,7 +28,7 @@ fun DashboardScreen(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Dashboard",
+                text = "Learn",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF2D2D2D)
@@ -37,42 +37,16 @@ fun DashboardScreen(
 
         // Bottom Navigation Bar
         BottomNavBar(
-            selectedTab = 0,
+            selectedTab = 1,
             onTabSelected = { onNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 }
 
-@Composable
-fun MainNavigationContainer(
-    modifier: Modifier = Modifier
-) {
-    var currentScreen by remember { mutableStateOf(0) }
-
-    when (currentScreen) {
-        0 -> DashboardScreen(
-            onNavigate = { currentScreen = it },
-            modifier = modifier
-        )
-        1 -> LearnScreen(
-            onNavigate = { currentScreen = it },
-            modifier = modifier
-        )
-        2 -> ClassScreen(
-            onNavigate = { currentScreen = it },
-            modifier = modifier
-        )
-        3 -> LessonScreen(
-            onNavigate = { currentScreen = it },
-            modifier = modifier
-        )
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
-fun DashboardScreenPreview() {
-    MainNavigationContainer()
+fun LearnScreenPreview() {
+    LearnScreen(onNavigate = {})
 }
 
