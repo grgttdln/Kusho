@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/screens/Dashboard.kt">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/app/src/main/java/com/example/app/ui/screens/Dashboard.kt" />
+              <option name="updatedContent" value="package com.example.app.ui.screens&#10;&#10;import androidx.compose.foundation.layout.*&#10;import androidx.compose.material3.Text&#10;import androidx.compose.runtime.Composable&#10;import androidx.compose.ui.Alignment&#10;import androidx.compose.ui.Modifier&#10;import androidx.compose.ui.graphics.Color&#10;import androidx.compose.ui.text.font.FontWeight&#10;import androidx.compose.ui.tooling.preview.Preview&#10;import androidx.compose.ui.unit.sp&#10;&#10;@Composable&#10;fun DashboardScreen(&#10;    modifier: Modifier = Modifier&#10;) {&#10;    Box(&#10;        modifier = modifier.fillMaxSize(),&#10;        contentAlignment = Alignment.Center&#10;    ) {&#10;        Text(&#10;            text = &quot;Dashboard&quot;,&#10;            fontSize = 32.sp,&#10;            fontWeight = FontWeight.Bold,&#10;            color = Color(0xFF2D2D2D)&#10;        )&#10;    }&#10;}&#10;&#10;@Preview(showBackground = true)&#10;@Composable&#10;fun DashboardScreenPreview() {&#10;    DashboardScreen()&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/app/src/main/res/drawable/ic_watch_temp.xml">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/drawable/ic_watch_temp.xml" />
+              <option name="updatedContent" value="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&#10;    android:width=&quot;24dp&quot;&#10;    android:height=&quot;24dp&quot;&#10;    android:viewportWidth=&quot;960&quot;&#10;    android:viewportHeight=&quot;960&quot;&gt;&#10;    &lt;path&#10;        android:fillColor=&quot;#000000&quot;&#10;        android:pathData=&quot;M420,160h120,-120ZM420,800h120,-120ZM360,880l-54,-182q-48,-38 -77,-95t-29,-123q0,-66 29,-123t77,-95l54,-182h240l54,182q48,38 77,95t29,123q0,66 -29,123t-77,95L600,880L360,880ZM480,680q83,0 141.5,-58.5T680,480q0,-83 -58.5,-141.5T480,320q-83,0 -141.5,58.5T280,480q0,83 58.5,141.5T480,680ZM404,210q20,-5 38.5,-8t37.5,-3q19,0 37.5,3t38.5,8l-16,-50L420,160l-16,50ZM420,800h120l16,-50q-20,5 -38.5,7.5T480,760q-19,0 -37.5,-2.5T404,750l16,50Z&quot;/&gt;&#10;&lt;/vector&gt;&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

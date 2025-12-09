@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+
+    <!-- WATCH BODY with big hollow center -->
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="
+            M420,160h120,-120Z
+            M420,800h120,-120Z
+
+            M360,880l-54,-182q-48,-38 -77,-95t-29,-123q0,-66 29,-123t77,-95l54,-182h240l54,182q48,38 77,95t29,123q0,66 -29,123t-77,95L600,880L360,880Z
+
+            M480,310
+            A170,170 0 1 0 480,650
+            A170,170 0 1 0 480,310Z
+        "/>
+
+    <!-- OUTER BEZEL RING -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#000000"
+        android:strokeWidth="40"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="
+            M480,320
+            A160,160 0 1 0 480,640
+            A160,160 0 1 0 480,320
+        "/>
+
+    <!-- CONNECTORS -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="
+            M404,210q20,-5 38.5,-8t37.5,-3q19,0 37.5,3t38.5,8l-16,-50L420,160l-16,50Z
+            M420,800h120l16,-50q-20,5 -38.5,7.5T480,760q-19,0 -37.5,-2.5T404,750l16,50Z
+        "/>
+</vector>

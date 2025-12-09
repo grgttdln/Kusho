@@ -5,9 +5,11 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.example.app.ui.screens.DashboardScreen
 import com.example.app.ui.screens.LoginScreen
 import com.example.app.ui.screens.OnboardingScreen
 import com.example.app.ui.screens.SignUpScreen
+import com.example.app.ui.screens.WatchPairingScreen
 
 @Composable
 fun AppNavigation(
@@ -35,8 +37,11 @@ fun AppNavigation(
         composable(Screen.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
-                    // TODO: Navigate to home screen after successful login
-                    // navController.navigate(Screen.Home.route)
+                    navController.navigate(Screen.WatchPairing.route) {
+                        popUpTo(Screen.Login.route) {
+                            inclusive = true
+                        }
+                    }
                 },
                 onNavigateToSignUp = {
                     navController.navigate(Screen.SignUp.route)
@@ -47,8 +52,11 @@ fun AppNavigation(
         composable(Screen.SignUp.route) {
             SignUpScreen(
                 onSignUpSuccess = {
-                    // TODO: Navigate to home screen after successful sign up
-                    // navController.navigate(Screen.Home.route)
+                    navController.navigate(Screen.WatchPairing.route) {
+                        popUpTo(Screen.SignUp.route) {
+                            inclusive = true
+                        }
+                    }
                 },
                 onNavigateToLogin = {
                     navController.popBackStack()
@@ -56,8 +64,24 @@ fun AppNavigation(
             )
         }
 
-        // Add more screens here as needed
-        // composable(Screen.Home.route) { HomeScreen() }
+        composable(Screen.WatchPairing.route) {
+            WatchPairingScreen(
+                onRefresh = {
+                    // TODO: Implement device refresh logic
+                },
+                onProceedToDashboard = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.WatchPairing.route) {
+                            inclusive = true
+                        }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.Home.route) {
+            DashboardScreen()
+        }
     }
 }
 
