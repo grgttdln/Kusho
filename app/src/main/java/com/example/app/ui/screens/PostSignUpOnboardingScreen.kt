@@ -61,10 +61,12 @@ fun PostSignUpOnboardingScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .systemBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Horizontal Pager for swiping
             HorizontalPager(
@@ -119,6 +121,7 @@ fun PostSignUpOnboardingScreen(
                 onClick = onOnboardingComplete,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .statusBarsPadding()
                     .padding(top = 16.dp, end = 16.dp)
             ) {
                 Text(
@@ -141,28 +144,26 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Top
     ) {
-        Spacer(modifier = Modifier.height(80.dp))
-
-        // Illustration
+        // Illustration with weight to adapt to screen height
         Image(
             painter = painterResource(id = page.imageRes),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(350.dp),
+                .weight(1f),
             contentScale = ContentScale.Fit
         )
 
-        Spacer(modifier = Modifier.height(60.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Title
         Text(
             text = page.title,
-            fontSize = 38.sp,
+            fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF49A9FF),
             textAlign = TextAlign.Start,
-            lineHeight = 44.sp,
+            lineHeight = 40.sp,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -171,12 +172,14 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         // Description
         Text(
             text = page.description,
-            fontSize = 20.sp,
+            fontSize = 18.sp,
             color = Color(0xFF2D2D2D),
             textAlign = TextAlign.Start,
-            lineHeight = 28.sp,
+            lineHeight = 26.sp,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -185,4 +188,3 @@ private fun OnboardingPageContent(page: OnboardingPage) {
 fun PostSignUpOnboardingScreenPreview() {
     PostSignUpOnboardingScreen()
 }
-
