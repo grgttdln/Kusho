@@ -67,6 +67,14 @@ fun MainNavigationContainer(
             onNavigate = { currentScreen = it },
             modifier = modifier
         )
+        4 -> TutorialModeScreen(
+            onBack = { currentScreen = 1 },
+            modifier = modifier
+        )
+        5 -> LearnModeScreen(
+            onBack = { currentScreen = 1 },
+            modifier = modifier
+        )
     }
 }
 
