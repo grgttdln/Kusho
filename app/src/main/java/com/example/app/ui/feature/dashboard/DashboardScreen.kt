@@ -1,37 +1,301 @@
 package com.example.app.ui.feature.dashboard
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
+
 
 @Composable
 fun DashboardScreen(
     onNavigate: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var batteryPercentage by remember { mutableStateOf(67) }
+
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 80.dp),
-            contentAlignment = Alignment.Center
+                .padding(bottom = 80.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                text = "Dashboard",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF2D2D2D)
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Kusho Logo - Centered
+            Image(
+                painter = painterResource(id = R.drawable.ic_kusho),
+                contentDescription = "Kusho Logo",
+                modifier = Modifier
+                    .height(54.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.Center
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // User Profile Section - 45dp circle, blue background
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(45.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1769C2)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_profile_placeholder),
+                        contentDescription = "Profile Picture",
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(13.dp))
+
+                Text(
+                    text = "Mary Jane Dela Cruz",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.Black,
+                    lineHeight = 24.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(29.dp))
+
+            // Greeting - 18sp, Medium weight
+            Text(
+                text = "Good Day, Mary Jane!",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
+                lineHeight = 27.sp,
+                modifier = Modifier.padding(horizontal = 30.dp)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Device Card - #E9FCFF background, 145dp height, 24dp radius
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp)
+                    .height(145.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFE9FCFF)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(18.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Galaxy Watch 7",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF3FA9F8),
+                                lineHeight = 27.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "Connected",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color(0xFF3FA9F8),
+                                lineHeight = 21.sp
+                            )
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BatteryIcon(percentage = batteryPercentage)
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text(
+                                    text = "$batteryPercentage%",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color(0xFF3FA9F8),
+                                    lineHeight = 21.sp
+                                )
+                            }
+                        }
+
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_watch7),
+                            contentDescription = "Watch",
+                            modifier = Modifier.size(111.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Quick Analytics - 20sp, Medium weight
+            Text(
+                text = "Quick Analytics",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
+                lineHeight = 30.sp,
+                modifier = Modifier.padding(horizontal = 30.dp)
+            )
+
+            Spacer(modifier = Modifier.height(7.dp))
+
+            // Analytics Cards - 168dp wide, 128dp tall, 18dp radius
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp),
+                horizontalArrangement = Arrangement.spacedBy(15.dp)
+            ) {
+                AnalyticsCard(
+                    number = "17",
+                    label = "Total Students",
+                    modifier = Modifier.weight(1f)
+                )
+
+                AnalyticsCard(
+                    number = "2",
+                    label = "Classrooms",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Your Recent Class - 20sp, Medium weight
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Your Recent Class",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black,
+                    lineHeight = 30.sp
+                )
+
+                TextButton(onClick = { /* TODO */ }) {
+                    Text(
+                        text = "View More",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF3FA9F8),
+                        lineHeight = 18.sp,
+                        textDecoration = TextDecoration.Underline
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(9.dp))
+
+            // Class Card - #F6F6F8 background, 12dp radius
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp)
+                    .height(247.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFF6F6F8)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_class_abc),
+                        contentDescription = "Class",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(183.dp),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 20.dp, bottom = 12.dp)
+                    ) {
+                        Text(
+                            text = "G1-YB",
+                            fontSize = 14.sp,
+                            color = Color(0xFF3FA9F8),
+                            fontWeight = FontWeight.Normal,
+                            lineHeight = 21.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(0.dp))
+
+                        Text(
+                            text = "Grade 1 Young Builders",
+                            fontSize = 20.57.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black,
+                            lineHeight = 31.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         BottomNavBar(
@@ -42,9 +306,96 @@ fun DashboardScreen(
     }
 }
 
+@Composable
+fun BatteryIcon(
+    percentage: Int,
+    modifier: Modifier = Modifier
+) {
+    val batteryColor = Color(0xFF14FF1E) // Green color from design
+
+    Box(
+        modifier = modifier.size(24.dp)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val bodyWidth = size.width * 0.75f
+            val bodyHeight = size.height * 0.65f
+            val strokeWidth = 1.dp.toPx()
+
+            // Battery border with opacity 0.35
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.35f),
+                topLeft = Offset(0f, (size.height - bodyHeight) / 2),
+                size = Size(bodyWidth, bodyHeight),
+                cornerRadius = CornerRadius(4.3.dp.toPx()),
+                style = Stroke(width = strokeWidth)
+            )
+
+            // Battery cap with opacity 0.4
+            drawRect(
+                color = Color.Black.copy(alpha = 0.4f),
+                topLeft = Offset(bodyWidth, size.height * 0.35f),
+                size = Size(size.width * 0.25f, size.height * 0.3f)
+            )
+
+            // Battery capacity (fill)
+            val fillWidth = (bodyWidth - strokeWidth * 2) * (percentage / 100f)
+            val fillHeight = bodyHeight - strokeWidth * 2
+            drawRoundRect(
+                color = batteryColor,
+                topLeft = Offset(strokeWidth, (size.height - bodyHeight) / 2 + strokeWidth),
+                size = Size(fillWidth, fillHeight),
+                cornerRadius = CornerRadius(2.5.dp.toPx())
+            )
+        }
+    }
+}
+
+@Composable
+fun AnalyticsCard(
+    number: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.height(128.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFE9FCFF)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = number,
+                    fontSize = 40.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF3FA9F8),
+                    lineHeight = 27.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = label,
+                    fontSize = 16.sp,
+                    color = Color(0xFF3FA9F8),
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 27.sp
+                )
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun DashboardScreenPreview() {
     DashboardScreen(onNavigate = {})
 }
-
