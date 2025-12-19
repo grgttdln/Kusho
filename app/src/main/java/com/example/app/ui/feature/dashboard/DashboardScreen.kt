@@ -3,13 +3,19 @@ package com.example.app.ui.feature.dashboard
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -22,22 +28,28 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.ClassCard
 
 
 @Composable
 fun DashboardScreen(
     onNavigate: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: DashboardViewModel = viewModel()
 ) {
-    var batteryPercentage by remember { mutableStateOf(67) }
+    val uiState by viewModel.uiState.collectAsState()
+    val watchDevice = uiState.watchDevice
+    val greeting = viewModel.getGreeting()
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -88,7 +100,7 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.width(13.dp))
 
                 Text(
-                    text = "Mary Jane Dela Cruz",
+                    text = uiState.userName,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color.Black,
@@ -100,7 +112,7 @@ fun DashboardScreen(
 
             // Greeting - 18sp, Medium weight
             Text(
-                text = "Good Day, Mary Jane!",
+                text = greeting,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.Black,
@@ -115,16 +127,48 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 30.dp)
-                    .height(145.dp),
+                    .height(145.dp)
+                    .clickable {
+                        if (!watchDevice.isConnected) {
+                            // Navigate to watch pairing screen
+                            // onNavigate(Screen.WatchPairing.route)
+                        }
+                    },
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFE9FCFF)
+                    containerColor = if (watchDevice.isConnected) Color(0xFFE9FCFF) else Color(0xFFF5F5F5)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
+                    // Refresh button
+                    if (watchDevice.isConnected) {
+                        IconButton(
+                            onClick = { viewModel.checkWatchConnection() },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .size(24.dp)
+                        ) {
+                            if (uiState.isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFF3FA9F8)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Refresh connection",
+                                    tint = Color(0xFF3FA9F8),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                    
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
@@ -135,39 +179,41 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                text = "Galaxy Watch 7",
+                                text = if (watchDevice.isConnected) watchDevice.name else "No Watch Connected",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFF3FA9F8),
+                                color = if (watchDevice.isConnected) Color(0xFF3FA9F8) else Color(0xFF888888),
                                 lineHeight = 27.sp
                             )
 
                             Spacer(modifier = Modifier.height(10.dp))
 
                             Text(
-                                text = "Connected",
+                                text = if (watchDevice.isConnected) "Connected" else "Tap to connect",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Normal,
-                                color = Color(0xFF3FA9F8),
+                                color = if (watchDevice.isConnected) Color(0xFF3FA9F8) else Color(0xFF888888),
                                 lineHeight = 21.sp
                             )
 
                             Spacer(modifier = Modifier.weight(1f))
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                BatteryIcon(percentage = batteryPercentage)
+                            if (watchDevice.isConnected) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    BatteryIcon(percentage = watchDevice.batteryPercentage)
 
-                                Spacer(modifier = Modifier.width(8.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
 
-                                Text(
-                                    text = "$batteryPercentage%",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = Color(0xFF3FA9F8),
-                                    lineHeight = 21.sp
-                                )
+                                    Text(
+                                        text = "${watchDevice.batteryPercentage}%",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = Color(0xFF3FA9F8),
+                                        lineHeight = 21.sp
+                                    )
+                                }
                             }
                         }
 
@@ -175,7 +221,8 @@ fun DashboardScreen(
                             painter = painterResource(id = R.drawable.ic_watch7),
                             contentDescription = "Watch",
                             modifier = Modifier.size(111.dp),
-                            contentScale = ContentScale.Fit
+                            contentScale = ContentScale.Fit,
+                            alpha = if (watchDevice.isConnected) 1f else 0.4f
                         )
                     }
                 }
@@ -203,13 +250,13 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.spacedBy(15.dp)
             ) {
                 AnalyticsCard(
-                    number = "17",
+                    number = uiState.totalStudents.toString(),
                     label = "Total Students",
                     modifier = Modifier.weight(1f)
                 )
 
                 AnalyticsCard(
-                    number = "2",
+                    number = uiState.totalClassrooms.toString(),
                     label = "Classrooms",
                     modifier = Modifier.weight(1f)
                 )
@@ -247,53 +294,14 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(9.dp))
 
-            // Class Card - #F6F6F8 background, 12dp radius
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 30.dp)
-                    .height(247.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFF6F6F8)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_class_abc),
-                        contentDescription = "Class",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(183.dp),
-                        contentScale = ContentScale.Crop
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 20.dp, bottom = 12.dp)
-                    ) {
-                        Text(
-                            text = "G1-YB",
-                            fontSize = 14.sp,
-                            color = Color(0xFF3FA9F8),
-                            fontWeight = FontWeight.Normal,
-                            lineHeight = 21.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(0.dp))
-
-                        Text(
-                            text = "Grade 1 Young Builders",
-                            fontSize = 20.57.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.Black,
-                            lineHeight = 31.sp
-                        )
-                    }
-                }
-            }
+            // Class Card
+            ClassCard(
+                classCode = "G1-YB",
+                className = "Grade 1 Young Builders",
+                imageRes = R.drawable.ic_class_abc,
+                onClick = { /* TODO: Navigate to class details */ },
+                modifier = Modifier.padding(horizontal = 30.dp)
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
         }
