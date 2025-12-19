@@ -5,13 +5,12 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.ArrayDeque
 
 /**
- * Manages motion sensors (accelerometer + gyroscope) on Wear OS and exposes
- * a circular buffer of combined [SensorSample]s for inference.
+ * Manages motion sensors (accelerometer + gyroscope) on Wear OS.
+ * Records data the same way as the data collection app:
+ * - Accelerometer events drive the sampling
+ * - Latest gyroscope values are paired with each accelerometer reading
  */
 class MotionSensorManager(private val context: Context) : SensorEventListener {
 
@@ -22,21 +21,25 @@ class MotionSensorManager(private val context: Context) : SensorEventListener {
     private var gyroscope: Sensor? = null
 
     // Latest readings
-    private var lastAccel: FloatArray? = null
-    private var lastGyro: FloatArray? = null
+    private var accelerometerValues: FloatArray? = null
+    private var gyroscopeValues: FloatArray? = null
 
-    // Circular buffer for recent samples
-    private val bufferCapacity = 512
-    private val samples = ArrayDeque<SensorSample>(bufferCapacity)
-    private val mutex = Mutex()
+    // Collected samples during recording
+    private val gestureData = mutableListOf<SensorSample>()
+    private var startTime = 0L
 
     @Volatile
-    private var isStarted: Boolean = false
+    private var isRecording: Boolean = false
 
-    /** Start listening to motion sensors. */
-    fun start() {
-        if (isStarted) return
-        isStarted = true
+    /** Start listening to motion sensors and begin recording. */
+    fun startRecording() {
+        if (isRecording) return
+
+        isRecording = true
+        startTime = System.currentTimeMillis()
+        gestureData.clear()
+        accelerometerValues = null
+        gyroscopeValues = null
 
         val sm = sensorManager ?: return
 
@@ -45,88 +48,74 @@ class MotionSensorManager(private val context: Context) : SensorEventListener {
 
         // If either sensor is missing, stop early.
         if (accelerometer == null || gyroscope == null) {
-            isStarted = false
+            isRecording = false
             return
         }
 
-        // Use SENSOR_DELAY_GAME for ~50-100 Hz sampling suitable for motion.
-        sm.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
-        sm.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME)
+        // Use specific sampling rate of 100Hz (10,000 microseconds = 0.01 seconds = 100Hz)
+        val samplingPeriodUs = 10000 // 10,000 microseconds = 100Hz
+        sm.registerListener(this, accelerometer, samplingPeriodUs)
+        sm.registerListener(this, gyroscope, samplingPeriodUs)
     }
 
     /** Stop listening to motion sensors. */
-    fun stop() {
-        if (!isStarted) return
-        isStarted = false
+    fun stopRecording() {
+        if (!isRecording) return
+        isRecording = false
         sensorManager?.unregisterListener(this)
-        lastAccel = null
-        lastGyro = null
-        synchronized(samples) {
-            samples.clear()
+        accelerometerValues = null
+        gyroscopeValues = null
+    }
+
+    /** Get all collected samples from the current recording session. */
+    fun getCollectedSamples(): List<SensorSample> {
+        return synchronized(gestureData) {
+            gestureData.toList()
+        }
+    }
+
+    /** Get the number of samples collected so far. */
+    fun getSampleCount(): Int {
+        return synchronized(gestureData) {
+            gestureData.size
         }
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (!isStarted) return
+        if (!isRecording) return
 
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                lastAccel = event.values.clone()
+                accelerometerValues = event.values.clone()
+                // When we get a new accelerometer event, record a new data row
+                // using the latest gyroscope data. This makes accelerometer events the
+                // "driver" for our sampling rate (same as data collection app).
+                gyroscopeValues?.let { gyro ->
+                    val acc = accelerometerValues!!
+                    val timestamp = System.currentTimeMillis() - startTime
+
+                    val sample = SensorSample(
+                        timestampNanos = timestamp * 1_000_000, // Convert ms to nanoseconds for consistency
+                        ax = acc[0],
+                        ay = acc[1],
+                        az = acc[2],
+                        gx = gyro[0],
+                        gy = gyro[1],
+                        gz = gyro[2]
+                    )
+
+                    synchronized(gestureData) {
+                        gestureData.add(sample)
+                    }
+                }
             }
             Sensor.TYPE_GYROSCOPE -> {
-                lastGyro = event.values.clone()
-            }
-            else -> return
-        }
-
-        val acc = lastAccel
-        val gyr = lastGyro
-
-        // Only emit sample when we have both accel and gyro readings.
-        if (acc != null && gyr != null) {
-            val sample = SensorSample(
-                timestampNanos = event.timestamp,
-                ax = acc[0],
-                ay = acc[1],
-                az = acc[2],
-                gx = gyr[0],
-                gy = gyr[1],
-                gz = gyr[2]
-            )
-
-            synchronized(samples) {
-                if (samples.size == bufferCapacity) {
-                    samples.removeFirst()
-                }
-                samples.addLast(sample)
+                gyroscopeValues = event.values.clone()
             }
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // No-op but kept for interface completeness
-    }
-
-    /**
-     * Returns up to [maxSamples] most recent [SensorSample]s.
-     */
-    suspend fun getRecentSamples(maxSamples: Int): List<SensorSample> {
-        return mutex.withLock {
-            val size = samples.size
-            if (size <= maxSamples) {
-                samples.toList()
-            } else {
-                // Manually take the last [maxSamples] elements since ArrayDeque doesn't support takeLast.
-                val result = ArrayList<SensorSample>(maxSamples)
-                val skip = size - maxSamples
-                var index = 0
-                for (sample in samples) {
-                    if (index++ >= skip) {
-                        result.add(sample)
-                    }
-                }
-                result
-            }
-        }
     }
 }
