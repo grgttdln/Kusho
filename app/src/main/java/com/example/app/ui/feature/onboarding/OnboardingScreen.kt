@@ -1,4 +1,4 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.onboarding
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
@@ -21,14 +21,10 @@ fun OnboardingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-
-        // Character illustration
         CharacterIllustration()
 
-        // Bottom content area
         Column(
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Top
         ) {
@@ -50,9 +46,7 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            TermsText(
-                modifier = Modifier.fillMaxWidth()
-            )
+            TermsText(modifier = Modifier.fillMaxWidth())
         }
     }
 }

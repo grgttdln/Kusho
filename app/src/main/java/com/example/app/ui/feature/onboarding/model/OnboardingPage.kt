@@ -1,4 +1,4 @@
-package com.example.app.ui.screens.data
+package com.example.app.ui.feature.onboarding.model
 
 data class OnboardingPage(
     val imageRes: Int,

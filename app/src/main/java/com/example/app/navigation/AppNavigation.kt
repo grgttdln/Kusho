@@ -5,12 +5,12 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.app.ui.screens.MainNavigationContainer
-import com.example.app.ui.screens.LoginScreen
-import com.example.app.ui.screens.OnboardingScreen
-import com.example.app.ui.screens.PostSignUpOnboardingScreen
-import com.example.app.ui.screens.SignUpScreen
-import com.example.app.ui.screens.WatchPairingScreen
+import com.example.app.ui.feature.home.MainNavigationContainer
+import com.example.app.ui.feature.auth.login.LoginScreen
+import com.example.app.ui.feature.auth.signup.SignUpScreen
+import com.example.app.ui.feature.onboarding.OnboardingScreen
+import com.example.app.ui.feature.onboarding.PostSignUpOnboardingScreen
+import com.example.app.ui.feature.watch.WatchPairingScreen
 
 @Composable
 fun AppNavigation(
@@ -97,4 +97,3 @@ fun AppNavigation(
         }
     }
 }
-

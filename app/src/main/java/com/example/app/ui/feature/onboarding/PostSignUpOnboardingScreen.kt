@@ -1,4 +1,4 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.onboarding
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
-import com.example.app.ui.screens.data.OnboardingPage
+import com.example.app.ui.feature.onboarding.model.OnboardingPage
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -68,7 +68,6 @@ fun PostSignUpOnboardingScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Horizontal Pager for swiping
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.weight(1f)
@@ -76,7 +75,6 @@ fun PostSignUpOnboardingScreen(
                 OnboardingPageContent(pages[page])
             }
 
-            // Page Indicators (hide on last page)
             if (pagerState.currentPage < pages.size - 1) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -101,7 +99,6 @@ fun PostSignUpOnboardingScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Get Started Button (only show on last page)
             if (pagerState.currentPage == pages.size - 1) {
                 PrimaryButton(
                     text = "Let's Go!",
@@ -115,7 +112,6 @@ fun PostSignUpOnboardingScreen(
             }
         }
 
-        // Skip button in upper right corner (hide on last page)
         if (pagerState.currentPage < pages.size - 1) {
             TextButton(
                 onClick = onOnboardingComplete,
@@ -144,7 +140,6 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Top
     ) {
-        // Illustration with weight to adapt to screen height
         Image(
             painter = painterResource(id = page.imageRes),
             contentDescription = null,
@@ -156,7 +151,6 @@ private fun OnboardingPageContent(page: OnboardingPage) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Title
         Text(
             text = page.title,
             fontSize = 32.sp,
@@ -169,7 +163,6 @@ private fun OnboardingPageContent(page: OnboardingPage) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Description
         Text(
             text = page.description,
             fontSize = 18.sp,
@@ -188,3 +181,4 @@ private fun OnboardingPageContent(page: OnboardingPage) {
 fun PostSignUpOnboardingScreenPreview() {
     PostSignUpOnboardingScreen()
 }
+

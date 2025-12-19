@@ -1,4 +1,4 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.learn
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -25,7 +25,6 @@ fun LearnModeScreen(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // Back button positioned at top-left
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -47,7 +46,6 @@ fun LearnModeScreen(
         ) {
             Spacer(Modifier.height(24.dp))
 
-            // Centered logo at the top
             Image(
                 painter = painterResource(id = R.drawable.ic_kusho),
                 contentDescription = "Kusho Logo",
@@ -57,29 +55,28 @@ fun LearnModeScreen(
                 contentScale = ContentScale.Fit
             )
 
+            Spacer(Modifier.height(32.dp))
 
-        Spacer(Modifier.height(32.dp))
+            Text(
+                text = "Learn Mode",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF0B0B0B)
+            )
 
-        Text(
-            text = "Learn Mode",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color(0xFF0B0B0B)
-        )
+            Spacer(Modifier.height(16.dp))
 
-        Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Test what you know!",
+                fontSize = 16.sp,
+                color = Color(0xFF4A4A4A)
+            )
 
-        Text(
-            text = "Test what you know!",
-            fontSize = 16.sp,
-            color = Color(0xFF4A4A4A)
-        )
+            Spacer(Modifier.weight(1f))
 
-        Spacer(Modifier.weight(1f))
+            // Add learn mode content here
 
-        // Add learn mode content here
-
-        Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
         }
     }
 }
