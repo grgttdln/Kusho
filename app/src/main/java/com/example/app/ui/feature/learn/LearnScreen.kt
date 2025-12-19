@@ -1,4 +1,4 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.learn
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -117,8 +117,6 @@ private fun ModeCard(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-
-
     }
 }
 
@@ -127,3 +125,4 @@ private fun ModeCard(
 fun LearnScreenPreview() {
     LearnScreen(onNavigate = {})
 }
+

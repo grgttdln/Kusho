@@ -1,4 +1,4 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.dashboard
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -13,14 +13,13 @@ import androidx.compose.ui.unit.sp
 import com.example.app.ui.components.BottomNavBar
 
 @Composable
-fun ClassScreen(
+fun DashboardScreen(
     onNavigate: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-        // Main content
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -28,16 +27,15 @@ fun ClassScreen(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Class",
+                text = "Dashboard",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF2D2D2D)
             )
         }
 
-        // Bottom Navigation Bar
         BottomNavBar(
-            selectedTab = 2,
+            selectedTab = 0,
             onTabSelected = { onNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
@@ -46,7 +44,7 @@ fun ClassScreen(
 
 @Preview(showBackground = true)
 @Composable
-fun ClassScreenPreview() {
-    ClassScreen(onNavigate = {})
+fun DashboardScreenPreview() {
+    DashboardScreen(onNavigate = {})
 }
 

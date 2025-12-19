@@ -1,4 +1,4 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.learn
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -43,7 +43,6 @@ fun LessonScreen(
         ) {
             Spacer(Modifier.height(24.dp))
 
-            // Kusho Logo at the top
             Image(
                 painter = painterResource(id = R.drawable.ic_kusho),
                 contentDescription = "Kusho Logo",
@@ -55,7 +54,6 @@ fun LessonScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // Title
             Text(
                 text = "Customize Activities",
                 fontSize = 28.sp,
@@ -65,7 +63,6 @@ fun LessonScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            // Activity Cards Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -74,7 +71,7 @@ fun LessonScreen(
                     title = "Your\nActivities",
                     imageRes = R.drawable.ic_book,
                     backgroundColor = Color(0xFF5DB7FF),
-                    onClick = { /* Navigate to activities */ },
+                    onClick = { },
                     modifier = Modifier.weight(1f)
                 )
 
@@ -82,14 +79,13 @@ fun LessonScreen(
                     title = "Your\nSets",
                     imageRes = R.drawable.ic_pen,
                     backgroundColor = Color(0xFF5DB7FF),
-                    onClick = { /* Navigate to sets */ },
+                    onClick = { },
                     modifier = Modifier.weight(1f)
                 )
             }
 
             Spacer(Modifier.height(32.dp))
 
-            // Word Bank Section
             Text(
                 text = "Word Bank",
                 fontSize = 24.sp,
@@ -99,12 +95,8 @@ fun LessonScreen(
             )
 
             Spacer(Modifier.height(16.dp))
-
-            // Placeholder for word bank content
-            // You can add word bank items here
         }
 
-        // Bottom Navigation Bar
         BottomNavBar(
             selectedTab = 3,
             onTabSelected = { onNavigate(it) },
@@ -133,7 +125,6 @@ private fun ActivityCard(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Icon at the top left
             Image(
                 painter = painterResource(id = imageRes),
                 contentDescription = title,
@@ -143,7 +134,6 @@ private fun ActivityCard(
                 contentScale = ContentScale.Fit
             )
 
-            // Title and arrow at the bottom
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

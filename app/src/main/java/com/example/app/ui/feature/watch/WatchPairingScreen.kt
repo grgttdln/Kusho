@@ -1,4 +1,4 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.watch
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -45,7 +45,6 @@ fun WatchPairingScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Top illustration
         Image(
             painter = painterResource(id = R.drawable.dis_pairing),
             contentDescription = "Watch pairing illustration",
@@ -58,7 +57,6 @@ fun WatchPairingScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Title
         Text(
             text = "Connect your\nSmartwatch",
             fontSize = 32.sp,
@@ -71,7 +69,6 @@ fun WatchPairingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Description text
         Text(
             text = "Make sure that the smartwatch you want to add has Bluetooth turned on. Make sure that you have the Kusho' Wearable App installed.",
             fontSize = 14.sp,
@@ -83,7 +80,6 @@ fun WatchPairingScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Paired Devices header with Refresh button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -117,7 +113,6 @@ fun WatchPairingScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // List of paired devices
         pairedDevices.forEachIndexed { index, deviceName ->
             DeviceListItem(
                 deviceName = deviceName,
@@ -129,7 +124,6 @@ fun WatchPairingScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Proceed to Dashboard button
         PrimaryButton(
             text = "Proceed to Dashboard",
             onClick = onProceedToDashboard,
@@ -155,7 +149,6 @@ private fun DeviceListItem(
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Watch icon
         Icon(
             painter = painterResource(id = R.drawable.ic_watch),
             contentDescription = "Watch",
@@ -165,7 +158,6 @@ private fun DeviceListItem(
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        // Device name
         Text(
             text = deviceName,
             fontSize = 18.sp,
@@ -180,3 +172,4 @@ private fun DeviceListItem(
 fun WatchPairingScreenPreview() {
     WatchPairingScreen()
 }
+

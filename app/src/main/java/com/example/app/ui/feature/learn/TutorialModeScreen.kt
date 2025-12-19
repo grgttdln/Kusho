@@ -1,9 +1,9 @@
-package com.example.app.ui.screens
+package com.example.app.ui.feature.learn
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -25,7 +25,6 @@ fun TutorialModeScreen(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // Back button positioned at top-left
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -33,7 +32,7 @@ fun TutorialModeScreen(
                 .padding(start = 8.dp, top = 16.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color(0xFF2196F3)
             )
@@ -47,7 +46,6 @@ fun TutorialModeScreen(
         ) {
             Spacer(Modifier.height(24.dp))
 
-            // Centered logo at the top
             Image(
                 painter = painterResource(id = R.drawable.ic_kusho),
                 contentDescription = "Kusho Logo",
@@ -57,29 +55,28 @@ fun TutorialModeScreen(
                 contentScale = ContentScale.Fit
             )
 
+            Spacer(Modifier.height(32.dp))
 
-        Spacer(Modifier.height(32.dp))
+            Text(
+                text = "Tutorial Mode",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF0B0B0B)
+            )
 
-        Text(
-            text = "Tutorial Mode",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color(0xFF0B0B0B)
-        )
+            Spacer(Modifier.height(16.dp))
 
-        Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Watch and learn how it's done!",
+                fontSize = 16.sp,
+                color = Color(0xFF4A4A4A)
+            )
 
-        Text(
-            text = "Watch and learn how it's done!",
-            fontSize = 16.sp,
-            color = Color(0xFF4A4A4A)
-        )
+            Spacer(Modifier.weight(1f))
 
-        Spacer(Modifier.weight(1f))
+            // Add tutorial content here
 
-        // Add tutorial content here
-
-        Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
         }
     }
 }
