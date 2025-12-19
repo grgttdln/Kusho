@@ -28,18 +28,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.WordBankModal
 
 @Composable
 fun LessonScreen(
     onNavigate: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: LessonViewModel = viewModel()
 ) {
-    // Sample word bank data
-    val words = remember {
-        listOf("cat", "map", "dog", "log", "sun", "bed", "pen", "fin", "sit", "mop")
-    }
+    // Collect UI state from ViewModel
+    val uiState by viewModel.uiState.collectAsState()
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -123,9 +124,9 @@ fun LessonScreen(
                     .padding(horizontal = 20.dp)
             ) {
                 WordBankList(
-                    words = words,
+                    words = uiState.words,
                     onWordClick = { word ->
-                        // Handle word click
+                        viewModel.onWordClick(word)
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -136,7 +137,7 @@ fun LessonScreen(
 
             AddWordBankButton(
                 onClick = {
-                    // Handle add word bank click
+                    viewModel.showWordBankModal()
                 },
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
@@ -149,6 +150,24 @@ fun LessonScreen(
             selectedTab = 3,
             onTabSelected = { onNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        // Word Bank Modal
+        WordBankModal(
+            isVisible = uiState.isModalVisible,
+            wordInput = uiState.wordInput,
+            inputError = uiState.inputError,
+            isSubmitEnabled = viewModel.isSubmitEnabled(),
+            onWordInputChanged = { viewModel.onWordInputChanged(it) },
+            onMediaUploadClick = {
+                // TODO: Implement media picker
+            },
+            onAddClick = {
+                viewModel.addWordToBank()
+            },
+            onDismiss = {
+                viewModel.hideWordBankModal()
+            }
         )
     }
 }
