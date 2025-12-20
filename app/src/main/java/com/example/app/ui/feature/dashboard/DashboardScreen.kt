@@ -69,7 +69,8 @@ fun DashboardScreen(
                 modifier = Modifier
                     .height(54.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 30.dp)
+                    .offset(x = 10.dp), 
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.Center
             )
