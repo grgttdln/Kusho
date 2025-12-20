@@ -21,7 +21,7 @@ data class DashboardUiState(
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     
-    private val watchConnectionManager = WatchConnectionManager(application)
+    private val watchConnectionManager = WatchConnectionManager.getInstance(application)
     private val sessionManager = SessionManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -49,6 +49,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         
         // Initial connection check
         checkWatchConnection()
+        
+        // IMPORTANT: Force battery request when Dashboard loads
+        requestBatteryUpdate()
     }
     
     /**
@@ -60,6 +63,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             watchConnectionManager.checkConnection()
             _uiState.value = _uiState.value.copy(isLoading = false)
         }
+    }
+    
+    /**
+     * Force battery status request from connected watch
+     * Call this when Dashboard is shown/resumed
+     */
+    fun requestBatteryUpdate() {
+        watchConnectionManager.requestBatteryFromConnectedWatch()
     }
     
     /**

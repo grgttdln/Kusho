@@ -37,6 +37,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Background service to receive messages from phone even when app is closed -->
+        <service
+            android:name=".presentation.service.WearMessageListenerService"
+            android:exported="true">
+            <intent-filter>
+                <!-- Listeners receive events that match the action and data filters -->
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

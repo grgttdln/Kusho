@@ -1,19 +1,26 @@
 package com.example.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.app.data.SessionManager
+import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.feature.home.MainNavigationContainer
 import com.example.app.ui.feature.auth.login.LoginScreen
 import com.example.app.ui.feature.auth.signup.SignUpScreen
 import com.example.app.ui.feature.onboarding.OnboardingScreen
 import com.example.app.ui.feature.onboarding.PostSignUpOnboardingScreen
 import com.example.app.ui.feature.watch.WatchPairingScreen
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavigation(
@@ -51,11 +58,35 @@ fun AppNavigation(
         }
 
         composable(Screen.Login.route) {
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            var isCheckingConnection by remember { mutableStateOf(false) }
+            
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(Screen.WatchPairing.route) {
-                        popUpTo(Screen.Login.route) {
-                            inclusive = true
+                    // Don't navigate immediately - check watch connection first
+                    isCheckingConnection = true
+                    scope.launch {
+                        val watchManager = WatchConnectionManager.getInstance(context)
+                        val hasWatch = watchManager.checkConnection()
+                        
+                        isCheckingConnection = false
+                        
+                        // Navigate based on watch connection status
+                        if (hasWatch) {
+                            // Watch is connected - go straight to dashboard
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Login.route) {
+                                    inclusive = true
+                                }
+                            }
+                        } else {
+                            // No watch - show pairing screen
+                            navController.navigate(Screen.WatchPairing.route) {
+                                popUpTo(Screen.Login.route) {
+                                    inclusive = true
+                                }
+                            }
                         }
                     }
                 },
@@ -81,11 +112,35 @@ fun AppNavigation(
         }
 
         composable(Screen.PostSignUpOnboarding.route) {
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            var isCheckingConnection by remember { mutableStateOf(false) }
+            
             PostSignUpOnboardingScreen(
                 onOnboardingComplete = {
-                    navController.navigate(Screen.WatchPairing.route) {
-                        popUpTo(Screen.PostSignUpOnboarding.route) {
-                            inclusive = true
+                    // Don't navigate immediately - check watch connection first
+                    isCheckingConnection = true
+                    scope.launch {
+                        val watchManager = WatchConnectionManager.getInstance(context)
+                        val hasWatch = watchManager.checkConnection()
+                        
+                        isCheckingConnection = false
+                        
+                        // Navigate based on watch connection status
+                        if (hasWatch) {
+                            // Watch is connected - go straight to dashboard
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.PostSignUpOnboarding.route) {
+                                    inclusive = true
+                                }
+                            }
+                        } else {
+                            // No watch - show pairing screen
+                            navController.navigate(Screen.WatchPairing.route) {
+                                popUpTo(Screen.PostSignUpOnboarding.route) {
+                                    inclusive = true
+                                }
+                            }
                         }
                     }
                 }
@@ -94,9 +149,6 @@ fun AppNavigation(
 
         composable(Screen.WatchPairing.route) {
             WatchPairingScreen(
-                onRefresh = {
-                    // TODO: Implement device refresh logic
-                },
                 onProceedToDashboard = {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.WatchPairing.route) {

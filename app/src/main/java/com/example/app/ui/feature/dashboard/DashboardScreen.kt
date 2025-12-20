@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.SessionManager
+import com.example.app.service.ConnectionState
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.ClassCard
 
@@ -59,6 +60,18 @@ fun DashboardScreen(
     // State for logout confirmation dialog
     var showLogoutDialog by remember { mutableStateOf(false) }
     val greeting = viewModel.getGreeting()
+    
+    // Request battery update every time Dashboard appears/resumes
+    LaunchedEffect(Unit) {
+        viewModel.requestBatteryUpdate()
+    }
+    
+    // Also request when watch connection state changes to connected
+    LaunchedEffect(watchDevice.isConnected) {
+        if (watchDevice.isConnected) {
+            viewModel.requestBatteryUpdate()
+        }
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -198,7 +211,10 @@ fun DashboardScreen(
                     // Refresh button
                     if (watchDevice.isConnected) {
                         IconButton(
-                            onClick = { viewModel.checkWatchConnection() },
+                            onClick = { 
+                                viewModel.checkWatchConnection()
+                                viewModel.requestBatteryUpdate() // Also request fresh battery data
+                            },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(8.dp)
@@ -230,8 +246,14 @@ fun DashboardScreen(
                         Column(
                             modifier = Modifier.weight(1f)
                         ) {
+                            // Display name based on connection state
                             Text(
-                                text = if (watchDevice.isConnected) watchDevice.name else "No Watch Connected",
+                                text = when (watchDevice.connectionState) {
+                                    ConnectionState.WATCH_CONNECTED -> watchDevice.name
+                                    ConnectionState.WATCH_PAIRED_NO_APP -> watchDevice.name
+                                    ConnectionState.BLUETOOTH_OFF -> "Bluetooth Off"
+                                    ConnectionState.NO_WATCH -> "No Watch Connected"
+                                },
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (watchDevice.isConnected) Color(0xFF3FA9F8) else Color(0xFF888888),
@@ -240,17 +262,28 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
+                            // Display status based on connection state
                             Text(
-                                text = if (watchDevice.isConnected) "Connected" else "Tap to connect",
+                                text = when (watchDevice.connectionState) {
+                                    ConnectionState.WATCH_CONNECTED -> "Connected"
+                                    ConnectionState.WATCH_PAIRED_NO_APP -> "Install Kusho app on watch"
+                                    ConnectionState.BLUETOOTH_OFF -> "Turn on Bluetooth"
+                                    ConnectionState.NO_WATCH -> "Tap to connect"
+                                },
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Normal,
-                                color = if (watchDevice.isConnected) Color(0xFF3FA9F8) else Color(0xFF888888),
+                                color = when (watchDevice.connectionState) {
+                                    ConnectionState.WATCH_CONNECTED -> Color(0xFF3FA9F8)
+                                    ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800) // Orange for warning
+                                    else -> Color(0xFF888888)
+                                },
                                 lineHeight = 21.sp
                             )
 
                             Spacer(modifier = Modifier.weight(1f))
 
-                            if (watchDevice.isConnected) {
+                            // Only show battery if fully connected with app
+                            if (watchDevice.connectionState == ConnectionState.WATCH_CONNECTED) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
