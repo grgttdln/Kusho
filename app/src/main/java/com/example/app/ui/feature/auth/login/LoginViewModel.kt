@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
  */
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Initialize database and repository
+    // Initialize database, repository, and session manager
     private val database = AppDatabase.getInstance(application)
     private val userRepository = UserRepository(database.userDao())
     private val sessionManager = SessionManager.getInstance(application)
@@ -73,6 +73,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             when (val result = userRepository.login(email, password)) {
                 is UserRepository.LoginResult.Success -> {
+
                     // Save user session with staySignedIn preference
                     sessionManager.saveUserSession(result.user, staySignedIn)
 

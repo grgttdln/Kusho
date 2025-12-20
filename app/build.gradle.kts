@@ -61,6 +61,9 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // DataStore for session management
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
     // ViewModel for Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
 
