@@ -29,7 +29,7 @@ fun LearnModeScreen(
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(start = 8.dp, top = 16.dp)
+                .padding(start = 8.dp, top = 25.dp)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -51,8 +51,11 @@ fun LearnModeScreen(
                 contentDescription = "Kusho Logo",
                 modifier = Modifier
                     .height(54.dp)
-                    .fillMaxWidth(0.6f),
-                contentScale = ContentScale.Fit
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp)
+                    .offset(x = 10.dp),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.Center
             )
 
             Spacer(Modifier.height(32.dp))

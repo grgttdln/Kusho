@@ -23,7 +23,7 @@ fun KushoLogo(
         contentDescription = "Kusho logo",
         modifier = modifier
             .width(300.dp)
-            .height(80.dp),
+             .height(80.dp),
         contentScale = ContentScale.Fit,
         alignment = Alignment.CenterStart
     )

@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
@@ -49,7 +51,9 @@ fun LessonScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 80.dp), // Space for bottom nav
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 80.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Fixed Header Section
@@ -61,14 +65,17 @@ fun LessonScreen(
             ) {
                 Spacer(Modifier.height(24.dp))
 
-                Image(
-                    painter = painterResource(id = R.drawable.ic_kusho),
-                    contentDescription = "Kusho Logo",
-                    modifier = Modifier
-                        .height(54.dp)
-                        .fillMaxWidth(0.6f),
-                    contentScale = ContentScale.Fit
-                )
+            Image(
+                painter = painterResource(id = R.drawable.ic_kusho),
+                contentDescription = "Kusho Logo",
+                modifier = Modifier
+                    .height(54.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp)
+                    .offset(x = 10.dp),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.Center
+            )
 
                 Spacer(Modifier.height(32.dp))
 
@@ -280,7 +287,7 @@ private fun ActivityCard(
             .clip(RoundedCornerShape(24.dp))
             .background(backgroundColor)
             .clickable { onClick() }
-            .padding(20.dp)
+            .padding(16.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -290,7 +297,7 @@ private fun ActivityCard(
                 painter = painterResource(id = imageRes),
                 contentDescription = title,
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(40.dp)
                     .align(Alignment.Start),
                 contentScale = ContentScale.Fit
             )
@@ -302,15 +309,18 @@ private fun ActivityCard(
             ) {
                 Text(
                     text = title,
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    lineHeight = 24.sp
+                    lineHeight = 22.sp,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(36.dp)
                         .background(Color.White, RoundedCornerShape(50)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -318,7 +328,7 @@ private fun ActivityCard(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Navigate",
                         tint = backgroundColor,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -332,23 +342,3 @@ fun LessonScreenPreview() {
     LessonScreen(onNavigate = {})
 }
 
-@Preview(showBackground = true)
-@Composable
-fun WordBankListPreview() {
-    val sampleWords = listOf(
-        Word(id = 1, userId = 1, word = "cat"),
-        Word(id = 2, userId = 1, word = "map"),
-        Word(id = 3, userId = 1, word = "dog"),
-        Word(id = 4, userId = 1, word = "log"),
-        Word(id = 5, userId = 1, word = "sun"),
-        Word(id = 6, userId = 1, word = "bed")
-    )
-    WordBankList(
-        words = sampleWords,
-        onWordClick = {},
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .padding(16.dp)
-    )
-}

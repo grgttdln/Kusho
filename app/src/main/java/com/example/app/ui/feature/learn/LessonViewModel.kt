@@ -5,14 +5,15 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
-import com.example.app.data.UserSessionManager
+import com.example.app.data.SessionManager
 import com.example.app.data.entity.Word
 import com.example.app.data.repository.WordRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -27,7 +28,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     // Initialize database and repositories
     private val database = AppDatabase.getInstance(application)
     private val wordRepository = WordRepository(database.wordDao())
-    private val sessionManager = UserSessionManager.getInstance(application)
+    private val sessionManager = SessionManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -38,10 +39,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     init {
         // Observe the current user session
         viewModelScope.launch {
-            sessionManager.currentUserId.collectLatest { userId ->
-                currentUserId = userId
-                if (userId != null) {
-                    loadWordsForUser(userId)
+            sessionManager.currentUser.collectLatest { user ->
+                currentUserId = user?.id
+                if (user != null) {
+                    loadWordsForUser(user.id)
                 } else {
                     // Clear words if no user is logged in
                     _uiState.update { it.copy(words = emptyList()) }
