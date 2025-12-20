@@ -15,6 +15,7 @@ import com.example.app.ui.feature.learn.LearnModeScreen
  */
 @Composable
 fun MainNavigationContainer(
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentScreen by remember { mutableStateOf(0) }
@@ -22,6 +23,7 @@ fun MainNavigationContainer(
     when (currentScreen) {
         0 -> DashboardScreen(
             onNavigate = { currentScreen = it },
+            onLogout = onLogout,
             modifier = modifier
         )
         1 -> LearnScreen(

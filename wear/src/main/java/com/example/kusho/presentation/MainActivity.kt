@@ -13,6 +13,7 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.example.kusho.presentation.navigation.AppNavigation
 import com.example.kusho.presentation.screens.splash.CustomSplashScreen
+import com.example.kusho.presentation.service.PhoneCommunicationManager
 
 /**
  * Main Activity - Entry point for the Kusho Wear OS app
@@ -21,10 +22,19 @@ import com.example.kusho.presentation.screens.splash.CustomSplashScreen
  * - Activity lifecycle management
  * - Window configuration
  * - App initialization
+ * - Phone communication management
  */
 class MainActivity : ComponentActivity() {
+    
+    private lateinit var phoneCommunicationManager: PhoneCommunicationManager
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize phone communication manager
+        phoneCommunicationManager = PhoneCommunicationManager(this)
+        phoneCommunicationManager.startBatteryMonitoring()
+        phoneCommunicationManager.sendInitialInfo()
 
         // Set black window background to prevent system icon flash
         window.setBackgroundDrawableResource(android.R.color.black)
@@ -32,6 +42,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             KushoWearApp()
         }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        phoneCommunicationManager.cleanup()
     }
 }
 

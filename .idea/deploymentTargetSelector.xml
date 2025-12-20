@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="wear">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-12-08T14:18:23.850305Z">
+        <DropdownSelection timestamp="2025-12-19T16:50:20.778506Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=10HD9Q0NRP0008Y" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=/Users/wincelarcen/.android/avd/Medium_Phone_API_35.avd" />
             </handle>
           </Target>
         </DropdownSelection>
@@ -15,10 +15,10 @@
       </SelectionState>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-12-08T14:23:56.623639Z">
+        <DropdownSelection timestamp="2025-12-20T05:46:43.291703Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=10HD9Q0NRP0008Y" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=8be9bcd9" />
             </handle>
           </Target>
         </DropdownSelection>
