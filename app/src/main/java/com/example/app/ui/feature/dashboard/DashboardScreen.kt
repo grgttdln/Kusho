@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +27,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
+import com.example.app.data.SessionManager
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.ClassCard
 
@@ -44,11 +47,17 @@ import com.example.app.ui.components.ClassCard
 @Composable
 fun DashboardScreen(
     onNavigate: (Int) -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val watchDevice = uiState.watchDevice
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager.getInstance(context) }
+
+    // State for logout confirmation dialog
+    var showLogoutDialog by remember { mutableStateOf(false) }
     val greeting = viewModel.getGreeting()
 
     Box(
@@ -70,18 +79,59 @@ fun DashboardScreen(
                     .height(54.dp)
                     .fillMaxWidth()
                     .padding(horizontal = 30.dp)
-                    .offset(x = 10.dp), 
+                    .offset(x = 10.dp),
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.Center
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // User Profile Section - 45dp circle, blue background
+            // Logout Confirmation Dialog
+            if (showLogoutDialog) {
+                AlertDialog(
+                    onDismissRequest = { showLogoutDialog = false },
+                    title = {
+                        Text(
+                            text = "Log Out",
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Text("Are you sure you want to log out?")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showLogoutDialog = false
+                                sessionManager.clearSession()
+                                onLogout()
+                            }
+                        ) {
+                            Text(
+                                text = "Log Out",
+                                color = Color(0xFFE53935)
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showLogoutDialog = false }
+                        ) {
+                            Text(
+                                text = "Cancel",
+                                color = Color(0xFF2196F3)
+                            )
+                        }
+                    }
+                )
+            }
+
+            // User Profile Section - 45dp circle, blue background (clickable for logout)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 30.dp),
+                    .padding(horizontal = 30.dp)
+                    .clickable { showLogoutDialog = true },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -94,7 +144,8 @@ fun DashboardScreen(
                     Image(
                         painter = painterResource(id = R.drawable.ic_profile_placeholder),
                         contentDescription = "Profile Picture",
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier.size(30.dp),
+                        colorFilter = ColorFilter.tint(Color.White)
                     )
                 }
 
@@ -406,5 +457,5 @@ fun AnalyticsCard(
 @Preview(showBackground = true)
 @Composable
 fun DashboardScreenPreview() {
-    DashboardScreen(onNavigate = {})
+    DashboardScreen(onNavigate = {}, onLogout = {})
 }

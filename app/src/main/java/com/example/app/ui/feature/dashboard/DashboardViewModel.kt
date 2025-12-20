@@ -3,6 +3,7 @@ package com.example.app.ui.feature.dashboard
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.app.data.SessionManager
 import com.example.app.service.WatchConnectionManager
 import com.example.app.service.WatchDeviceInfo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,7 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class DashboardUiState(
-    val userName: String = "Mary Jane Dela Cruz",
+    val userName: String = "Guest",
     val watchDevice: WatchDeviceInfo = WatchDeviceInfo(),
     val isLoading: Boolean = false,
     val totalStudents: Int = 17,
@@ -21,7 +22,8 @@ data class DashboardUiState(
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     
     private val watchConnectionManager = WatchConnectionManager(application)
-    
+    private val sessionManager = SessionManager.getInstance(application)
+
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
     
@@ -33,6 +35,15 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
         
+        // Collect current user updates
+        viewModelScope.launch {
+            sessionManager.currentUser.collect { user ->
+                _uiState.value = _uiState.value.copy(
+                    userName = user?.name ?: "Guest"
+                )
+            }
+        }
+
         // Start monitoring watch connection
         watchConnectionManager.startMonitoring()
         

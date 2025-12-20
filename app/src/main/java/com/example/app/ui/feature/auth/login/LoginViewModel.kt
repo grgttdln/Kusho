@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
+import com.example.app.data.SessionManager
 import com.example.app.data.entity.User
 import com.example.app.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     // Initialize database and repository
     private val database = AppDatabase.getInstance(application)
     private val userRepository = UserRepository(database.userDao())
+    private val sessionManager = SessionManager.getInstance(application)
 
     // UI State
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -71,6 +73,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             when (val result = userRepository.login(email, password)) {
                 is UserRepository.LoginResult.Success -> {
+                    // Save user session with staySignedIn preference
+                    sessionManager.saveUserSession(result.user, staySignedIn)
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isSuccess = true,
@@ -78,7 +83,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         errorMessage = null
                     )
 
-                    // TODO: If staySignedIn is true, save session to SharedPreferences/DataStore
                     onSuccess(result.user)
                 }
                 is UserRepository.LoginResult.Error -> {
