@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
+import com.example.app.data.entity.Word
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.WordBankModal
 
@@ -178,8 +179,8 @@ fun LessonScreen(
  */
 @Composable
 fun WordBankList(
-    words: List<String>,
-    onWordClick: (String) -> Unit,
+    words: List<Word>,
+    onWordClick: (Word) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyVerticalGrid(
@@ -189,9 +190,9 @@ fun WordBankList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 8.dp)
     ) {
-        items(words) { word ->
+        items(words, key = { it.id }) { word ->
             WordBankItem(
-                word = word,
+                word = word.word,
                 onClick = { onWordClick(word) }
             )
         }
@@ -334,7 +335,14 @@ fun LessonScreenPreview() {
 @Preview(showBackground = true)
 @Composable
 fun WordBankListPreview() {
-    val sampleWords = listOf("cat", "map", "dog", "log", "sun", "bed")
+    val sampleWords = listOf(
+        Word(id = 1, userId = 1, word = "cat"),
+        Word(id = 2, userId = 1, word = "map"),
+        Word(id = 3, userId = 1, word = "dog"),
+        Word(id = 4, userId = 1, word = "log"),
+        Word(id = 5, userId = 1, word = "sun"),
+        Word(id = 6, userId = 1, word = "bed")
+    )
     WordBankList(
         words = sampleWords,
         onWordClick = {},

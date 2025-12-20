@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
+import com.example.app.data.UserSessionManager
 import com.example.app.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,7 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
 
     private val database = AppDatabase.getInstance(application)
     private val userRepository = UserRepository(database.userDao())
+    private val sessionManager = UserSessionManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(SignUpUiState())
     val uiState: StateFlow<SignUpUiState> = _uiState.asStateFlow()
@@ -50,6 +52,13 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             when (val result = userRepository.signUp(email, name, school, password)) {
                 is UserRepository.SignUpResult.Success -> {
+                    // Save user session for persistence
+                    sessionManager.saveUserSession(
+                        userId = result.userId,
+                        email = email.lowercase().trim(),
+                        name = name.trim()
+                    )
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isSuccess = true,
