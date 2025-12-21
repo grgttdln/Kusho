@@ -1,5 +1,8 @@
 package com.example.app.ui.feature.learn
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,6 +47,13 @@ fun LessonScreen(
 ) {
     // Collect UI state from ViewModel
     val uiState by viewModel.uiState.collectAsState()
+
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        viewModel.onMediaSelected(uri)
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -164,11 +174,19 @@ fun LessonScreen(
         WordBankModal(
             isVisible = uiState.isModalVisible,
             wordInput = uiState.wordInput,
+            selectedImageUri = uiState.selectedMediaUri,
             inputError = uiState.inputError,
+            imageError = uiState.imageError,
             isSubmitEnabled = viewModel.isSubmitEnabled(),
+            isLoading = uiState.isLoading,
             onWordInputChanged = { viewModel.onWordInputChanged(it) },
             onMediaUploadClick = {
-                // TODO: Implement media picker
+                imagePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onRemoveImage = {
+                viewModel.onRemoveMedia()
             },
             onAddClick = {
                 viewModel.addWordToBank()
