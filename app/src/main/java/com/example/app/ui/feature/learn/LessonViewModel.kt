@@ -183,7 +183,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
             // Add word with optional image path
             when (val result = wordRepository.addWord(userId, currentWord, imagePath)) {
                 is WordRepository.AddWordResult.Success -> {
-                    // Success - close modal and reset input
+                    // Success - close input modal and show confirmation
                     _uiState.update {
                         it.copy(
                             isModalVisible = false,
@@ -191,7 +191,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                             selectedMediaUri = null,
                             inputError = null,
                             imageError = null,
-                            isLoading = false
+                            isLoading = false,
+                            // Show confirmation modal with the added word
+                            isConfirmationVisible = true,
+                            confirmedWord = currentWord
                         )
                     }
                 }
@@ -209,6 +212,18 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Dismiss the confirmation modal and reset its state.
+     */
+    fun dismissConfirmation() {
+        _uiState.update {
+            it.copy(
+                isConfirmationVisible = false,
+                confirmedWord = ""
+            )
         }
     }
 
@@ -255,6 +270,8 @@ data class LessonUiState(
     val selectedMediaUri: Uri? = null,
     val inputError: String? = null,
     val imageError: String? = null,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isConfirmationVisible: Boolean = false,
+    val confirmedWord: String = ""
 )
 

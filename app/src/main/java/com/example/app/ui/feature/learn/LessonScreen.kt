@@ -37,7 +37,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.entity.Word
 import com.example.app.ui.components.BottomNavBar
-import com.example.app.ui.components.WordBankModal
+import com.example.app.ui.components.wordbank.WordAddedConfirmationModal
+import com.example.app.ui.components.wordbank.WordBankModal
 
 @Composable
 fun LessonScreen(
@@ -193,6 +194,15 @@ fun LessonScreen(
             },
             onDismiss = {
                 viewModel.hideWordBankModal()
+            }
+        )
+
+        // Word Added Confirmation Modal
+        WordAddedConfirmationModal(
+            isVisible = uiState.isConfirmationVisible,
+            addedWord = uiState.confirmedWord,
+            onDismiss = {
+                viewModel.dismissConfirmation()
             }
         )
     }
