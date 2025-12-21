@@ -17,7 +17,7 @@ import com.example.app.data.entity.Word
  */
 @Database(
     entities = [User::class, Word::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

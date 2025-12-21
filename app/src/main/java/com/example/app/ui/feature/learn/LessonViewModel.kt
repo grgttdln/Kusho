@@ -8,12 +8,11 @@ import com.example.app.data.AppDatabase
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Word
 import com.example.app.data.repository.WordRepository
+import com.example.app.util.ImageStorageManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -29,6 +28,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private val database = AppDatabase.getInstance(application)
     private val wordRepository = WordRepository(database.wordDao())
     private val sessionManager = SessionManager.getInstance(application)
+    private val imageStorageManager = ImageStorageManager(application)
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -84,7 +84,8 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 isModalVisible = false,
                 wordInput = "",
                 selectedMediaUri = null,
-                inputError = null
+                inputError = null,
+                imageError = null
             )
         }
     }
@@ -103,14 +104,41 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
 
     /**
      * Update the selected media URI.
+     * Validates the image type before accepting.
      */
     fun onMediaSelected(uri: Uri?) {
-        _uiState.update { it.copy(selectedMediaUri = uri) }
+        if (uri != null && !imageStorageManager.isValidImageUri(uri)) {
+            _uiState.update {
+                it.copy(
+                    imageError = "Please select a JPG, PNG, or WebP image"
+                )
+            }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                selectedMediaUri = uri,
+                imageError = null
+            )
+        }
+    }
+
+    /**
+     * Remove the selected media.
+     */
+    fun onRemoveMedia() {
+        _uiState.update {
+            it.copy(
+                selectedMediaUri = null,
+                imageError = null
+            )
+        }
     }
 
     /**
      * Validate and add the word to the Word Bank.
      * Saves to Room database associated with the current user.
+     * If an image is selected, it will be saved to local storage and linked to the word.
      */
     fun addWordToBank() {
         val userId = currentUserId
@@ -120,6 +148,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val currentWord = _uiState.value.wordInput.trim()
+        val selectedUri = _uiState.value.selectedMediaUri
 
         // Basic validation before database operation
         if (!isValidWord(currentWord)) {
@@ -132,20 +161,48 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
 
         // Add word to database on background thread
         viewModelScope.launch {
-            when (val result = wordRepository.addWord(userId, currentWord)) {
+            // Save image if one is selected
+            var imagePath: String? = null
+            if (selectedUri != null) {
+                when (val saveResult = imageStorageManager.saveImageFromUri(selectedUri)) {
+                    is ImageStorageManager.SaveResult.Success -> {
+                        imagePath = saveResult.imagePath
+                    }
+                    is ImageStorageManager.SaveResult.Error -> {
+                        _uiState.update {
+                            it.copy(
+                                imageError = saveResult.message,
+                                isLoading = false
+                            )
+                        }
+                        return@launch
+                    }
+                }
+            }
+
+            // Add word with optional image path
+            when (val result = wordRepository.addWord(userId, currentWord, imagePath)) {
                 is WordRepository.AddWordResult.Success -> {
-                    // Success - close modal and reset input
+                    // Success - close input modal and show confirmation
                     _uiState.update {
                         it.copy(
                             isModalVisible = false,
                             wordInput = "",
                             selectedMediaUri = null,
                             inputError = null,
-                            isLoading = false
+                            imageError = null,
+                            isLoading = false,
+                            // Show confirmation modal with the added word
+                            isConfirmationVisible = true,
+                            confirmedWord = currentWord
                         )
                     }
                 }
                 is WordRepository.AddWordResult.Error -> {
+                    // Clean up saved image if word insertion failed
+                    if (imagePath != null) {
+                        imageStorageManager.deleteImage(imagePath)
+                    }
                     // Show error message
                     _uiState.update {
                         it.copy(
@@ -155,6 +212,18 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Dismiss the confirmation modal and reset its state.
+     */
+    fun dismissConfirmation() {
+        _uiState.update {
+            it.copy(
+                isConfirmationVisible = false,
+                confirmedWord = ""
+            )
         }
     }
 
@@ -200,6 +269,9 @@ data class LessonUiState(
     val wordInput: String = "",
     val selectedMediaUri: Uri? = null,
     val inputError: String? = null,
-    val isLoading: Boolean = false
+    val imageError: String? = null,
+    val isLoading: Boolean = false,
+    val isConfirmationVisible: Boolean = false,
+    val confirmedWord: String = ""
 )
 

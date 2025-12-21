@@ -32,9 +32,10 @@ class WordRepository(private val wordDao: WordDao) {
      *
      * @param userId The ID of the user adding the word
      * @param word The word to add
+     * @param imagePath Optional path to an associated image
      * @return AddWordResult indicating success or failure
      */
-    suspend fun addWord(userId: Long, word: String): AddWordResult = withContext(Dispatchers.IO) {
+    suspend fun addWord(userId: Long, word: String, imagePath: String? = null): AddWordResult = withContext(Dispatchers.IO) {
         try {
             val trimmedWord = word.trim()
 
@@ -56,7 +57,8 @@ class WordRepository(private val wordDao: WordDao) {
             // Insert the word
             val wordEntity = Word(
                 userId = userId,
-                word = trimmedWord
+                word = trimmedWord,
+                imagePath = imagePath
             )
             val wordId = wordDao.insertWord(wordEntity)
 

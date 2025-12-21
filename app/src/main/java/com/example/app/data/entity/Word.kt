@@ -14,6 +14,7 @@ import androidx.room.PrimaryKey
  * @property id Auto-generated primary key
  * @property userId Foreign key reference to the User who owns this word
  * @property word The word text stored in the Word Bank
+ * @property imagePath Optional file path to an associated image (null if no image)
  * @property createdAt Timestamp when the word was added
  */
 @Entity(
@@ -38,6 +39,8 @@ data class Word(
     val userId: Long,
 
     val word: String,
+
+    val imagePath: String? = null,
 
     val createdAt: Long = System.currentTimeMillis()
 )
