@@ -142,8 +142,13 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun addWordToBank() {
         val userId = currentUserId
-        if (userId == null) {
-            _uiState.update { it.copy(inputError = "Please log in to add words") }
+        if (userId == null || userId == 0L) {
+            _uiState.update { 
+                it.copy(
+                    inputError = "Please log in to add words",
+                    isLoading = false
+                ) 
+            }
             return
         }
 
@@ -181,23 +186,24 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             // Add word with optional image path
-            when (val result = wordRepository.addWord(userId, currentWord, imagePath)) {
-                is WordRepository.AddWordResult.Success -> {
-                    // Success - close input modal and show confirmation
-                    _uiState.update {
-                        it.copy(
-                            isModalVisible = false,
-                            wordInput = "",
-                            selectedMediaUri = null,
-                            inputError = null,
-                            imageError = null,
-                            isLoading = false,
-                            // Show confirmation modal with the added word
-                            isConfirmationVisible = true,
-                            confirmedWord = currentWord
-                        )
+            try {
+                when (val result = wordRepository.addWord(userId, currentWord, imagePath)) {
+                    is WordRepository.AddWordResult.Success -> {
+                        // Success - close input modal and show confirmation
+                        _uiState.update {
+                            it.copy(
+                                isModalVisible = false,
+                                wordInput = "",
+                                selectedMediaUri = null,
+                                inputError = null,
+                                imageError = null,
+                                isLoading = false,
+                                // Show confirmation modal with the added word
+                                isConfirmationVisible = true,
+                                confirmedWord = currentWord
+                            )
+                        }
                     }
-                }
                 is WordRepository.AddWordResult.Error -> {
                     // Clean up saved image if word insertion failed
                     if (imagePath != null) {
@@ -210,6 +216,19 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                             isLoading = false
                         )
                     }
+                }
+            }
+            } catch (e: Exception) {
+                // Clean up saved image on any error
+                if (imagePath != null) {
+                    imageStorageManager.deleteImage(imagePath)
+                }
+                // Show error message
+                _uiState.update {
+                    it.copy(
+                        inputError = "Failed to add word: ${e.message}",
+                        isLoading = false
+                    )
                 }
             }
         }
