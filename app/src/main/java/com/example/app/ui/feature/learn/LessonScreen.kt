@@ -44,6 +44,7 @@ import com.example.app.ui.components.wordbank.WordBankModal
 fun LessonScreen(
     onNavigate: (Int) -> Unit,
     onNavigateToActivities: () -> Unit = {},
+    onNavigateToSets: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: LessonViewModel = viewModel()
 ) {
@@ -117,7 +118,7 @@ fun LessonScreen(
                         title = "Your\nSets",
                         imageRes = R.drawable.ic_pen,
                         backgroundColor = Color(0xFF5DB7FF),
-                        onClick = { },
+                        onClick = { onNavigateToSets() },
                         modifier = Modifier.weight(1f)
                     )
                 }
