@@ -292,7 +292,7 @@ fun DashboardScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
 
                                     Text(
-                                        text = "${watchDevice.batteryPercentage}%",
+                                        text = watchDevice.batteryPercentage?.let { "$it%" } ?: "Loading...",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Normal,
                                         color = Color(0xFF3FA9F8),
@@ -401,7 +401,7 @@ fun DashboardScreen(
 
 @Composable
 fun BatteryIcon(
-    percentage: Int,
+    percentage: Int?,
     modifier: Modifier = Modifier
 ) {
     val batteryColor = Color(0xFF14FF1E) // Green color from design
@@ -430,15 +430,17 @@ fun BatteryIcon(
                 size = Size(size.width * 0.25f, size.height * 0.3f)
             )
 
-            // Battery capacity (fill)
-            val fillWidth = (bodyWidth - strokeWidth * 2) * (percentage / 100f)
-            val fillHeight = bodyHeight - strokeWidth * 2
-            drawRoundRect(
-                color = batteryColor,
-                topLeft = Offset(strokeWidth, (size.height - bodyHeight) / 2 + strokeWidth),
-                size = Size(fillWidth, fillHeight),
-                cornerRadius = CornerRadius(2.5.dp.toPx())
-            )
+            // Battery capacity (fill) - only if percentage is not null
+            percentage?.let {
+                val fillWidth = (bodyWidth - strokeWidth * 2) * (it / 100f)
+                val fillHeight = bodyHeight - strokeWidth * 2
+                drawRoundRect(
+                    color = batteryColor,
+                    topLeft = Offset(strokeWidth, (size.height - bodyHeight) / 2 + strokeWidth),
+                    size = Size(fillWidth, fillHeight),
+                    cornerRadius = CornerRadius(2.5.dp.toPx())
+                )
+            }
         }
     }
 }

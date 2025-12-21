@@ -269,7 +269,7 @@ private fun DeviceListItem(
     deviceName: String,
     isSelected: Boolean,
     isConnected: Boolean = true,
-    batteryPercentage: Int = 0,
+    batteryPercentage: Int? = null,
     onClick: () -> Unit
 ) {
     Card(
@@ -314,7 +314,7 @@ private fun DeviceListItem(
                 }
             }
             
-            if (isConnected && batteryPercentage > 0) {
+            if (isConnected && batteryPercentage != null) {
                 Text(
                     text = "$batteryPercentage%",
                     fontSize = 14.sp,

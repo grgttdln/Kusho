@@ -83,6 +83,7 @@ class WatchPairingViewModel(application: Application) : AndroidViewModel(applica
     
     override fun onCleared() {
         super.onCleared()
-        watchConnectionManager.cleanup()
+        // Don't cleanup singleton - it's shared across screens
+        watchConnectionManager.stopMonitoring()
     }
 }

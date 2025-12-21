@@ -3,6 +3,7 @@ package com.example.kusho.presentation.service
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
@@ -23,6 +24,7 @@ class WearMessageListenerService : WearableListenerService() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     companion object {
+        private const val TAG = "WearMessageListener"
         private const val MESSAGE_PATH_REQUEST_BATTERY = "/request_battery"
         private const val MESSAGE_PATH_REQUEST_DEVICE_INFO = "/request_device_info"
         private const val MESSAGE_PATH_BATTERY_STATUS = "/battery_status"
@@ -32,12 +34,16 @@ class WearMessageListenerService : WearableListenerService() {
     override fun onMessageReceived(messageEvent: MessageEvent) {
         super.onMessageReceived(messageEvent)
         
+        Log.d(TAG, "📨 Message received: ${messageEvent.path}")
+        
         when (messageEvent.path) {
             MESSAGE_PATH_REQUEST_BATTERY -> {
+                Log.d(TAG, "🔋 Battery request received from phone")
                 // Phone is requesting battery status
                 sendBatteryStatusToPhone()
             }
             MESSAGE_PATH_REQUEST_DEVICE_INFO -> {
+                Log.d(TAG, "📱 Device info request received from phone")
                 // Phone is requesting device info
                 sendDeviceInfoToPhone()
             }
@@ -88,6 +94,8 @@ class WearMessageListenerService : WearableListenerService() {
                 val batteryLevel = getBatteryLevel()
                 val batteryData = batteryLevel.toString().toByteArray()
                 
+                Log.d(TAG, "📤 Sending battery: $batteryLevel% to ${nodes.size} phone(s)")
+                
                 nodes.forEach { node ->
                     try {
                         messageClient.sendMessage(
@@ -95,11 +103,14 @@ class WearMessageListenerService : WearableListenerService() {
                             MESSAGE_PATH_BATTERY_STATUS,
                             batteryData
                         ).await()
+                        Log.d(TAG, "✅ Battery sent successfully to ${node.displayName}")
                     } catch (e: Exception) {
+                        Log.e(TAG, "❌ Failed to send battery to ${node.displayName}", e)
                         e.printStackTrace()
                     }
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "❌ Error in sendBatteryStatusToPhone", e)
                 e.printStackTrace()
             }
         }

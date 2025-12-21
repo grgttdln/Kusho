@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.util.Log
 import com.google.android.gms.wearable.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +26,7 @@ data class WatchDeviceInfo(
     val nodeId: String = "",
     val isConnected: Boolean = false,
     val connectionState: ConnectionState = ConnectionState.BLUETOOTH_OFF,
-    val batteryPercentage: Int = 0,
+    val batteryPercentage: Int? = null,
     val lastUpdated: Long = System.currentTimeMillis()
 )
 
@@ -43,6 +44,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
     companion object {
         @Volatile
         private var INSTANCE: WatchConnectionManager? = null
+        private const val TAG = "WatchConnectionMgr"
         
         fun getInstance(context: Context): WatchConnectionManager {
             return INSTANCE ?: synchronized(this) {
@@ -62,6 +64,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
     
     private var monitoringJob: Job? = null
     private val messageListener = MessageClient.OnMessageReceivedListener { messageEvent ->
+        Log.d(TAG, "📨 Phone received message: ${messageEvent.path}")
         handleIncomingMessage(messageEvent)
     }
     
@@ -281,6 +284,8 @@ class WatchConnectionManager private constructor(private val context: Context) {
             try {
                 val currentDevice = _deviceInfo.value
                 
+                Log.d(TAG, "🔋 Phone requesting battery - isConnected: ${currentDevice.isConnected}, state: ${currentDevice.connectionState}, nodeId: ${currentDevice.nodeId}")
+                
                 // Only request if watch is fully connected with app
                 if (currentDevice.isConnected && 
                     currentDevice.connectionState == ConnectionState.WATCH_CONNECTED &&
@@ -288,18 +293,23 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     
                     // Send immediate battery request (with retry)
                     repeat(3) { attempt ->
+                        Log.d(TAG, "📤 Sending battery request (attempt ${attempt + 1}/3) to ${currentDevice.nodeId}")
                         messageClient.sendMessage(
                             currentDevice.nodeId,
                             MESSAGE_PATH_REQUEST_BATTERY,
                             ByteArray(0)
                         ).await()
+                        Log.d(TAG, "✅ Battery request sent successfully (attempt ${attempt + 1}/3)")
                         
                         if (attempt < 2) {
                             delay(1000L) // 1 second between retries
                         }
                     }
+                } else {
+                    Log.w(TAG, "⚠️ Cannot request battery - watch not fully connected")
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send battery request", e)
                 e.printStackTrace()
             }
         }
@@ -309,16 +319,20 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * Handle incoming messages from watch
      */
     private fun handleIncomingMessage(messageEvent: MessageEvent) {
+        Log.d(TAG, "📥 Processing message: ${messageEvent.path}")
         when (messageEvent.path) {
             MESSAGE_PATH_BATTERY_STATUS -> {
-                val batteryLevel = String(messageEvent.data).toIntOrNull() ?: 0
+                val batteryLevel = String(messageEvent.data).toIntOrNull()
+                Log.d(TAG, "🔋 Received battery status: ${batteryLevel?.let { "$it%" } ?: "parsing failed"}")
                 _deviceInfo.value = _deviceInfo.value.copy(
                     batteryPercentage = batteryLevel,
                     lastUpdated = System.currentTimeMillis()
                 )
+                Log.d(TAG, "✅ Updated device info with battery: ${batteryLevel?.let { "$it%" } ?: "null"}")
             }
             MESSAGE_PATH_DEVICE_INFO -> {
                 val deviceName = String(messageEvent.data)
+                Log.d(TAG, "📱 Received device info: $deviceName")
                 _deviceInfo.value = _deviceInfo.value.copy(
                     name = deviceName,
                     lastUpdated = System.currentTimeMillis()
@@ -362,6 +376,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
     
     /**
      * Clean up resources
+     * Note: Does NOT cancel scope since this is a singleton that persists across screens
      */
     fun cleanup() {
         stopMonitoring()
@@ -372,6 +387,6 @@ class WatchConnectionManager private constructor(private val context: Context) {
         } catch (e: Exception) {
             // Receiver might not be registered
         }
-        scope.cancel()
+        // DO NOT cancel scope - singleton needs persistent scope
     }
 }

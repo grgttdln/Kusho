@@ -96,6 +96,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     
     override fun onCleared() {
         super.onCleared()
-        watchConnectionManager.cleanup()
+        // Don't cleanup singleton - it's shared across screens
+        watchConnectionManager.stopMonitoring()
     }
 }
