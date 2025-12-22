@@ -23,6 +23,7 @@ enum class ConnectionState {
 
 data class WatchDeviceInfo(
     val name: String = "Unknown Watch",
+    val model: String = "",
     val nodeId: String = "",
     val isConnected: Boolean = false,
     val connectionState: ConnectionState = ConnectionState.BLUETOOTH_OFF,
