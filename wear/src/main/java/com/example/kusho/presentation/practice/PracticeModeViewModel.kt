@@ -260,6 +260,22 @@ class PracticeModeViewModel(
         }
     }
 
+    /**
+     * Reset from result state back to idle
+     */
+    fun resetToIdle() {
+        Log.d(TAG, "Resetting to idle")
+        _uiState.update {
+            it.copy(
+                state = State.IDLE,
+                statusMessage = "Tap Start",
+                errorMessage = null,
+                recordingProgress = 0f,
+                countdownSeconds = 0
+            )
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         recordingJob?.cancel()
