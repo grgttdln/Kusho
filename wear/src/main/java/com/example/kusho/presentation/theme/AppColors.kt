@@ -6,4 +6,5 @@ object AppColors {
     val LearnModeColor = Color(0xFFB388FF)
     val Background = Color.Black
     val TextPrimary = Color.White
+    val TextSecondary = Color(0xFFB0B0B0)
 }

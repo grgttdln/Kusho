@@ -19,3 +19,11 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep TensorFlow Lite classes
+-keepclassmembers class org.tensorflow.** { *; }
+-keep class org.tensorflow.** { *; }
+
+# Keep ML wrapper classes
+-keepclassmembers class com.example.kusho.ml.** { *; }
+-keep class com.example.kusho.ml.** { *; }

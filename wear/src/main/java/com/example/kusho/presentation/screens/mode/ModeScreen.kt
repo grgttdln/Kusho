@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
 import com.example.kusho.presentation.theme.AppColors
 
 /**
@@ -22,11 +21,7 @@ import com.example.kusho.presentation.theme.AppColors
  */
 @Composable
 fun ModeScreen(modeName: String, modeColor: Color) {
-    Scaffold(
-        timeText = {
-            TimeText()
-        }
-    ) {
+    Scaffold {
         Column(
             modifier = Modifier
                 .fillMaxSize()
