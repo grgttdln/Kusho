@@ -32,6 +32,7 @@ import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
 import com.example.kusho.ml.ModelLoader
+import com.example.kusho.presentation.components.CircularModeBorder
 import com.example.kusho.presentation.theme.AppColors
 import com.example.kusho.sensors.MotionSensorManager
 
@@ -53,22 +54,22 @@ fun PracticeModeScreen() {
 
     val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        timeText = { TimeText() }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            when (uiState.state) {
-                PracticeModeViewModel.State.IDLE -> IdleContent(uiState, viewModel)
-                PracticeModeViewModel.State.COUNTDOWN -> CountdownContent(uiState, viewModel)
-                PracticeModeViewModel.State.RECORDING -> RecordingContent(uiState, viewModel)
-                PracticeModeViewModel.State.PROCESSING -> ProcessingContent(uiState)
-                PracticeModeViewModel.State.RESULT -> ResultContent(uiState)
+    CircularModeBorder(borderColor = AppColors.PracticeModeColor) {
+        Scaffold {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                when (uiState.state) {
+                    PracticeModeViewModel.State.IDLE -> IdleContent(uiState, viewModel)
+                    PracticeModeViewModel.State.COUNTDOWN -> CountdownContent(uiState, viewModel)
+                    PracticeModeViewModel.State.RECORDING -> RecordingContent(uiState, viewModel)
+                    PracticeModeViewModel.State.PROCESSING -> ProcessingContent(uiState)
+                    PracticeModeViewModel.State.RESULT -> ResultContent(uiState)
+                }
             }
         }
     }
