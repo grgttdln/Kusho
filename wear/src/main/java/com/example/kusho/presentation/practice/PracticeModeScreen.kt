@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -250,8 +251,12 @@ private fun ResultContent(
         Text(
             text = uiState.prediction ?: "?",
             color = Color.White,
-            fontSize = 120.sp,
-            fontWeight = FontWeight.Normal
+            textAlign = TextAlign.Center,
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.display1,
+            modifier = Modifier
+                .wrapContentSize(Alignment.Center)
         )
     }
 }
