@@ -5,8 +5,9 @@ import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import com.example.kusho.presentation.screens.home.HomeScreen
-import com.example.kusho.presentation.screens.mode.ModeScreen
-import com.example.kusho.presentation.theme.AppColors
+import com.example.kusho.presentation.practice.PracticeModeScreen
+import com.example.kusho.presentation.tutorial.TutorialModeScreen
+import com.example.kusho.presentation.learn.LearnModeScreen
 
 /**
  * Navigation graph for the app
@@ -24,29 +25,19 @@ fun AppNavigation() {
             HomeScreen(navController = navController)
         }
 
-        // Practice Mode screen
+        // Practice Mode screen with real-time inference
         composable(NavigationRoutes.PRACTICE_MODE) {
-            ModeScreen(
-                modeName = "Practice Mode",
-                modeColor = AppColors.PracticeModeColor
-            )
+            PracticeModeScreen()
         }
 
         // Tutorial Mode screen
         composable(NavigationRoutes.TUTORIAL_MODE) {
-            ModeScreen(
-                modeName = "Tutorial Mode",
-                modeColor = AppColors.TutorialModeColor
-            )
+            TutorialModeScreen()
         }
 
         // Learn Mode screen
         composable(NavigationRoutes.LEARN_MODE) {
-            ModeScreen(
-                modeName = "Learn Mode",
-                modeColor = AppColors.LearnModeColor
-            )
+            LearnModeScreen()
         }
     }
 }
-
