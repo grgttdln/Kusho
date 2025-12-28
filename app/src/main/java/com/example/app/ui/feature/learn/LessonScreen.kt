@@ -72,8 +72,7 @@ fun LessonScreen(
             // Fixed Header Section
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                    .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(Modifier.height(24.dp))
@@ -142,7 +141,6 @@ fun LessonScreen(
                 modifier = Modifier
                     .weight(1f) // Takes remaining space
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
             ) {
                 WordBankList(
                     words = uiState.words,
@@ -159,8 +157,7 @@ fun LessonScreen(
             AddWordBankButton(
                 onClick = {
                     viewModel.showWordBankModal()
-                },
-                modifier = Modifier.padding(horizontal = 20.dp)
+                }
             )
 
             Spacer(Modifier.height(16.dp))
@@ -279,13 +276,14 @@ fun AddWordBankButton(
     Button(
         onClick = onClick,
         modifier = modifier
-            .height(60.dp)
+            .height(75.dp)
+            .width(207.dp)
             .widthIn(min = 200.dp),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF49A9FF)
+            containerColor = Color(0xFF3FA9F8)
         ),
-        contentPadding = PaddingValues(horizontal = 32.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp)
     ) {
         Icon(
             imageVector = Icons.Default.Add,
@@ -296,8 +294,8 @@ fun AddWordBankButton(
         Spacer(Modifier.width(8.dp))
         Text(
             text = "Word Bank",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Normal,
             color = Color.White
         )
     }
@@ -371,4 +369,3 @@ private fun ActivityCard(
 fun LessonScreenPreview() {
     LessonScreen(onNavigate = {})
 }
-
