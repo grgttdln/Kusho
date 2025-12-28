@@ -9,6 +9,7 @@ import com.example.app.ui.feature.learn.LessonScreen
 import com.example.app.ui.feature.learn.TutorialModeScreen
 import com.example.app.ui.feature.learn.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
+import com.example.app.ui.feature.learn.set.YourSetsScreen
 
 /**
  * Main navigation container for the home section of the app.
@@ -38,6 +39,7 @@ fun MainNavigationContainer(
         3 -> LessonScreen(
             onNavigate = { currentScreen = it },
             onNavigateToActivities = { currentScreen = 6 },
+            onNavigateToSets = { currentScreen = 7 },
             modifier = modifier
         )
         4 -> TutorialModeScreen(
@@ -49,6 +51,11 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         6 -> YourActivitiesScreen(
+            onNavigate = { currentScreen = it },
+            onBackClick = { currentScreen = 3 },
+            modifier = modifier
+        )
+        7 -> YourSetsScreen(
             onNavigate = { currentScreen = it },
             onBackClick = { currentScreen = 3 },
             modifier = modifier
