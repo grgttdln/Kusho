@@ -81,7 +81,7 @@ fun YourSetsScreen(
 
             // Title
             Text(
-                text = "Your Sets",
+                text = "Your Activity Sets",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -137,7 +137,7 @@ fun YourSetsScreen(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "Add Sets",
+                text = "Add a Set",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.White
