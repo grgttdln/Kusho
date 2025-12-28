@@ -43,6 +43,7 @@ import com.example.app.ui.components.wordbank.WordBankModal
 @Composable
 fun LessonScreen(
     onNavigate: (Int) -> Unit,
+    onNavigateToActivities: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: LessonViewModel = viewModel()
 ) {
@@ -108,7 +109,7 @@ fun LessonScreen(
                         title = "Your\nActivities",
                         imageRes = R.drawable.ic_book,
                         backgroundColor = Color(0xFF5DB7FF),
-                        onClick = { },
+                        onClick = { onNavigateToActivities() },
                         modifier = Modifier.weight(1f)
                     )
 
