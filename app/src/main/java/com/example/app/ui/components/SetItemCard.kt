@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,6 +29,7 @@ import androidx.compose.ui.unit.sp
  * @param title The title text to display (e.g., "Meet the Vowels")
  * @param iconRes The drawable resource ID for the icon (e.g., R.drawable.ic_pencil)
  * @param onClick Callback when the card is clicked
+ * @param isSelected Whether the card is selected (shows blue highlight and checkmark)
  * @param modifier Optional modifier for customization
  */
 @Composable
@@ -33,13 +37,14 @@ fun SetItemCard(
     title: String,
     iconRes: Int,
     onClick: () -> Unit,
+    isSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(120.dp)
-            .background(Color.White)
+            .background(if (isSelected) Color(0xFFD5F2FF) else Color.White)
             .clip(RoundedCornerShape(12.dp))
             .drawBehind {
                 drawRoundRect(
@@ -83,6 +88,25 @@ fun SetItemCard(
                         .rotate(-5f),
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.Center
+                )
+            }
+        }
+
+        // Checkmark if selected
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .size(28.dp)
+                    .background(Color(0xFF14FF1E), RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

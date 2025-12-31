@@ -6,24 +6,34 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.app.data.dao.UserDao
 import com.example.app.data.dao.WordDao
+import com.example.app.data.dao.ActivityDao
+import com.example.app.data.dao.SetDao
+import com.example.app.data.dao.SetWordDao
 import com.example.app.data.entity.User
 import com.example.app.data.entity.Word
+import com.example.app.data.entity.Activity
+import com.example.app.data.entity.Set
+import com.example.app.data.entity.SetWord
+import com.example.app.data.entity.ActivitySet
 
 /**
  * Room Database for the Kusho application.
  *
- * This is a singleton database that provides access to the UserDao and WordDao.
+ * This is a singleton database that provides access to the UserDao, WordDao, and ActivityDao.
  * The database is created lazily when first accessed.
  */
 @Database(
-    entities = [User::class, Word::class],
-    version = 3,
+    entities = [User::class, Word::class, Activity::class, Set::class, SetWord::class, ActivitySet::class],
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun userDao(): UserDao
     abstract fun wordDao(): WordDao
+    abstract fun activityDao(): ActivityDao
+    abstract fun setDao(): SetDao
+    abstract fun setWordDao(): SetWordDao
 
     companion object {
         private const val DATABASE_NAME = "kusho_database"
