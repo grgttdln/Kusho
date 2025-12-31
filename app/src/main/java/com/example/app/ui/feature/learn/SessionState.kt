@@ -5,5 +5,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
 object SessionState {
-    var selectedSets by mutableStateOf<List<String>>(emptyList())
+    private var _selectedSets by mutableStateOf<List<String>>(emptyList())
+
+    val selectedSets: List<String>
+        get() = _selectedSets
+
+    fun updateSelectedSets(sets: List<String>) {
+        _selectedSets = sets
+    }
 }

@@ -49,7 +49,7 @@ fun AddNewActivityScreen(
     modifier: Modifier = Modifier,
     viewModel: AddActivityViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState(initial = AddActivityUiState())
+    val uiState by viewModel.uiState.collectAsState()
     
     // Use local references to prevent unnecessary recompositions
     val activityTitle = uiState.activityTitle

@@ -24,7 +24,7 @@ import com.example.app.data.entity.ActivitySet
  */
 @Database(
     entities = [User::class, Word::class, Activity::class, Set::class, SetWord::class, ActivitySet::class],
-    version = 7,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

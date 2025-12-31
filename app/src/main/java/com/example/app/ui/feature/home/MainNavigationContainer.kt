@@ -88,7 +88,7 @@ fun MainNavigationContainer(
         7 -> YourSetsScreen(
             userId = userId,
             onNavigate = { currentScreen = it },
-            onBackClick = { currentScreen = 6 },
+            onBackClick = { currentScreen = 3 },
             onAddSetClick = { 
                 // Reset words and navigate to AddSetScreen
                 wordsForCreation = emptyList()

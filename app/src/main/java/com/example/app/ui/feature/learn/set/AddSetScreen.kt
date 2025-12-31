@@ -50,15 +50,20 @@ fun AddSetScreen(
     var setDescription by remember { mutableStateOf(uiState.setDescription) }
     var internalWords by remember { mutableStateOf(selectedWords) }
 
-    // Update viewModel when local state changes - consolidated to avoid excessive launches
+    // Update viewModel when local state changes
     LaunchedEffect(setTitle, setDescription) {
         viewModel.setTitle(setTitle)
         viewModel.setDescription(setDescription)
     }
 
+    // Keep local copy in sync when external selectedWords changes
     LaunchedEffect(selectedWords) {
         internalWords = selectedWords
-        viewModel.setSelectedWords(selectedWords)
+    }
+
+    // Propagate any local changes to internalWords back to the ViewModel
+    LaunchedEffect(internalWords) {
+        viewModel.setSelectedWords(internalWords)
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -402,40 +407,6 @@ private fun WordWithConfigItem(
         IconButton(
             onClick = onRemove,
             modifier = Modifier.size(36.dp)
-        ) {
-            Text(
-                text = "✕",
-                fontSize = 16.sp,
-                color = Color(0xFF3FA9F8),
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-private fun WordChip(
-    word: String,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color(0xFFE8F4FF), RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = word,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Normal,
-            color = Color(0xFF0B0B0B)
-        )
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(24.dp)
         ) {
             Text(
                 text = "✕",

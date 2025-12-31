@@ -167,38 +167,34 @@ fun SelectWordsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 15.dp)
             ) {
-                var rowWords = mutableListOf<String>()
-                filteredWords.forEachIndexed { index, word ->
-                    rowWords.add(word)
-                    if (rowWords.size == 2 || index == filteredWords.size - 1) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(20.dp)
-                        ) {
-                            rowWords.forEach { w ->
-                                WordButton(
-                                    word = w,
-                                    isSelected = selectedWords.contains(w),
-                                    onClick = {
-                                        selectedWords = if (selectedWords.contains(w)) {
-                                            selectedWords - w
-                                        } else {
-                                            selectedWords + w
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            // Add spacer if only one item in last row
-                            if (rowWords.size == 1) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
+                val rows = filteredWords.chunked(2)
+                rows.forEachIndexed { rowIndex, rowWords ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        rowWords.forEach { w ->
+                            WordButton(
+                                word = w,
+                                isSelected = selectedWords.contains(w),
+                                onClick = {
+                                    selectedWords = if (selectedWords.contains(w)) {
+                                        selectedWords - w
+                                    } else {
+                                        selectedWords + w
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
-                        if (index < filteredWords.size - 1) {
-                            Spacer(modifier = Modifier.height(20.dp))
+                        // Add spacer if only one item in last row
+                        if (rowWords.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
-                        rowWords.clear()
+                    }
+                    if (rowIndex < rows.size - 1) {
+                        Spacer(modifier = Modifier.height(20.dp))
                     }
                 }
             }

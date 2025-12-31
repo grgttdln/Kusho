@@ -51,7 +51,8 @@ class YourSetsViewModel(application: Application) : AndroidViewModel(application
                     _uiState.update {
                         it.copy(
                             sets = sets,
-                            isLoading = false
+                            isLoading = false,
+                            errorMessage = null
                         )
                     }
                 }

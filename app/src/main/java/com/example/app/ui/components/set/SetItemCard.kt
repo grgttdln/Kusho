@@ -26,6 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Color constants
+private val CHECKMARK_BACKGROUND_COLOR = Color(0xFF14FF1E)
+
 /**
  * Reusable card component for displaying a single set
  *
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.sp
  * @param itemCount Number of items in the set
  * @param onClick Callback when the card is clicked
  * @param onDelete Callback when delete button is clicked
+ * @param isSelected Optional; whether the card is selected (shows blue highlight and checkmark). Defaults to false.
  * @param modifier Optional modifier for customization
  */
 @Composable

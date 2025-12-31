@@ -22,6 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Color constants
+private val CHECKMARK_BACKGROUND_COLOR = Color(0xFF14FF1E)
+
 /**
  * Reusable Set Item Card component for displaying sets with an icon.
  * Used in Your Sets screen to show different phonics sets.
@@ -99,7 +102,7 @@ fun SetItemCard(
                     .align(Alignment.TopEnd)
                     .padding(12.dp)
                     .size(28.dp)
-                    .background(Color(0xFF14FF1E), RoundedCornerShape(6.dp)),
+                    .background(CHECKMARK_BACKGROUND_COLOR, RoundedCornerShape(6.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

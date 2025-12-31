@@ -43,7 +43,7 @@ fun YourSetsScreen(
     modifier: Modifier = Modifier,
     viewModel: YourSetsViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState(initial = YourSetsUiState())
+    val uiState by viewModel.uiState.collectAsState()
 
     // Load sets only once when userId changes
     LaunchedEffect(userId) {
