@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.material3.MaterialTheme
 
 /**
  * Reusable component to display an added chapter pill
@@ -136,6 +138,24 @@ fun ChapterCard(
             contentDescription = "Add Chapter",
             tint = Color(0xFF3FA9F8),
             modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+
+@Preview(
+    name = "AddedChapterPill Preview",
+    showBackground = true,
+    backgroundColor = 0xFFF0F4F8
+)
+@Composable
+fun AddedChapterPillPreview() {
+    MaterialTheme {
+        AddedChapterPill(
+            number = 1,
+            title = "Introduction to Vocabulary",
+            itemCount = 12,
+            onRemove = {}
         )
     }
 }

@@ -5,25 +5,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.app.R
 
-// Color constants
-private val CHECKMARK_BACKGROUND_COLOR = Color(0xFF14FF1E)
 
 /**
  * Reusable Set Item Card component for displaying sets with an icon.
@@ -46,14 +43,14 @@ fun SetItemCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .background(if (isSelected) Color(0xFFD5F2FF) else Color.White)
-            .clip(RoundedCornerShape(12.dp))
+            .height(150.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isSelected) Color(0xFFD5F2FF) else Color(0xFFF8FBFF))
             .drawBehind {
                 drawRoundRect(
-                    color = Color(0xFFC5E5FD),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 9f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx())
+                    color = Color(0xFFB8DDF8),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx())
                 )
             }
             .clickable { onClick() }
@@ -69,49 +66,46 @@ fun SetItemCard(
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B),
+                lineHeight = 28.sp,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 20.dp)
+                    .padding(start = 24.dp, end = 8.dp)
             )
 
             // Icon on the right - fills the height and extends to fill container
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(200.dp)
-                    .offset(x = 30.dp)
-                    .clip(RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
+                    .width(220.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(id = iconRes),
                     contentDescription = title,
                     modifier = Modifier
-                        .size(300.dp)
-                        .offset(x = (-20).dp, y = (-20).dp)
-                        .rotate(-5f),
-                    contentScale = ContentScale.Crop,
+                        .requiredSize(500.dp)
+                        .offset(x = 80.dp, y = -110.dp),
+                    contentScale = ContentScale.Fit,
                     alignment = Alignment.Center
-                )
-            }
-        }
-
-        // Checkmark if selected
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .size(28.dp)
-                    .background(CHECKMARK_BACKGROUND_COLOR, RoundedCornerShape(6.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
                 )
             }
         }
     }
 }
+
+@Preview(
+    name = "SetItemCard Preview",
+    showBackground = true,
+    backgroundColor = 0xFFF0F4F8
+)
+@Composable
+fun SetItemCardPreview() {
+    MaterialTheme {
+        SetItemCard(
+            title = "Meet the Vowels",
+            iconRes = R.drawable.ic_pencil,
+            onClick = {}
+        )
+    }
+}
+

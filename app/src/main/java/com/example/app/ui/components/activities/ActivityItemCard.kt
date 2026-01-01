@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextAlign
 import com.example.app.R
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.material3.MaterialTheme
 
 /**
  * Component for displaying a single activity card with icon and title.
@@ -126,5 +128,22 @@ fun ActivityItemCard(
                 )
             }
         }
+    }
+}
+
+@Preview(
+    name = "ActivityItemCard Preview",
+    showBackground = true,
+    backgroundColor = 0xFFF0F4F8
+)
+@Composable
+fun ActivityItemCardPreview() {
+    MaterialTheme {
+        ActivityItemCard(
+            title = "Flashcards",
+            description = "Practice words daily",
+            iconRes = R.drawable.ic_apple,
+            onClick = {}
+        )
     }
 }
