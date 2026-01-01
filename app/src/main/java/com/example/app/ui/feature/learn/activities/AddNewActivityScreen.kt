@@ -106,7 +106,7 @@ fun AddNewActivityScreen(
 
             // Add a Lesson Title
             Text(
-                text = "Add a Lesson Title",
+                text = "Add an Activity Title",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color(0xFF000000),
@@ -157,7 +157,7 @@ fun AddNewActivityScreen(
             if (addedChapters.isNotEmpty()) {
                 // Show Added Chapters
                 Text(
-                    text = "Added Chapters",
+                    text = "Added Activity Sets",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color(0xFF000000),
@@ -215,7 +215,7 @@ fun AddNewActivityScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Add More Sets",
+                        text = "Add More Activity Sets",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color(0xFF3FA9F8)
@@ -226,7 +226,7 @@ fun AddNewActivityScreen(
             } else {
                 // Show Add Chapters
                 Text(
-                    text = "Add Chapters",
+                    text = "Add Activity Sets",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color(0xFF000000),

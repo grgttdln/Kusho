@@ -116,7 +116,7 @@ fun ConfirmationScreen(
         ) {
             Text(
                 text = buttonText,
-                fontSize = 24.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )

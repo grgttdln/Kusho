@@ -204,7 +204,7 @@ fun SelectWordsScreen(
             // "Configure" label and items
             if (selectedWords.isNotEmpty()) {
                 Text(
-                    text = "Configure",
+                    text = "Assign Question Type",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color(0xFF0B0B0B),
@@ -220,7 +220,7 @@ fun SelectWordsScreen(
                     ConfigureWordItem(
                         index = index + 1,
                         word = word,
-                        configurationType = wordConfigurations[word] ?: "Fill in the blank",
+                        configurationType = wordConfigurations[word] ?: "Fill in the Blank",
                         onConfigurationChange = { newConfig ->
                             wordConfigurations = wordConfigurations.toMutableMap().apply {
                                 this[word] = newConfig
@@ -240,7 +240,7 @@ fun SelectWordsScreen(
                 val configuredWords = selectedWords.map { word ->
                     SetRepository.SelectedWordConfig(
                         wordName = word,
-                        configurationType = wordConfigurations[word] ?: "Fill in the blank"
+                        configurationType = wordConfigurations[word] ?: "Fill in the Blank"
                     )
                 }
                 onWordsSelected(configuredWords)
@@ -323,7 +323,7 @@ private fun ConfigureWordItem(
 ) {
     var expandedDropdown by remember { mutableStateOf(false) }
 
-    val dropdownOptions = listOf("Fill in the blank", "Identification", "Air writing")
+    val dropdownOptions = listOf("Fill in the Blank", "Name the Picture", "Write the Word")
 
     Row(
         modifier = modifier
@@ -341,7 +341,7 @@ private fun ConfigureWordItem(
     ) {
         // Word info on the left
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(0.8f), // Reduced weight to give more space to dropdown
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -360,54 +360,87 @@ private fun ConfigureWordItem(
         }
 
         // Dropdown button on the right
-        Box(modifier = Modifier.weight(1f)) {
+        Box(modifier = Modifier.weight(1.2f)) { // Increased weight for wider dropdown
             Button(
                 onClick = { expandedDropdown = !expandedDropdown },
                 modifier = Modifier
-                    .height(33.dp)
+                    .height(36.dp)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF3FA9F8)
                 ),
-                contentPadding = PaddingValues(horizontal = 8.dp)
+                contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
                 Text(
                     text = configurationType,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, // Handle overflow gracefully
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     imageVector = Icons.Default.ArrowDropDown,
                     contentDescription = "Dropdown",
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            // Dropdown Menu
+            // Dropdown Menu with improved styling
             DropdownMenu(
                 expanded = expandedDropdown,
                 onDismissRequest = { expandedDropdown = false },
-                modifier = Modifier.align(Alignment.BottomEnd)
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .background(
+                        color = Color.White,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = Color(0xFFC5E5FD),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(vertical = 8.dp)
+                    .width(IntrinsicSize.Max) // Allow dropdown to size itself based on content
             ) {
                 dropdownOptions.forEach { option ->
                     DropdownMenuItem(
                         text = {
                             Text(
                                 text = option,
-                                fontSize = 14.sp,
-                                color = Color(0xFF0B0B0B)
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = if (option == configurationType) Color(0xFF3FA9F8) else Color(0xFF0B0B0B),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Visible // Ensure text is not truncated
                             )
                         },
                         onClick = {
                             onConfigurationChange(option)
                             expandedDropdown = false
-                        }
+                        },
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp)
+                            .height(40.dp)
+                            .background(
+                                color = if (option == configurationType) Color(0xFFF0F9FF) else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .fillMaxWidth() // Ensure full width usage
                     )
+                    if (option != dropdownOptions.last()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .padding(horizontal = 16.dp)
+                                .background(Color(0xFFF5F5F5))
+                        )
+                    }
                 }
             }
         }

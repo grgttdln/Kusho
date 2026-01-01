@@ -227,7 +227,7 @@ fun AddSetScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = if (internalWords.isEmpty()) "Add Words" else "Words Added",
+                        text = if (internalWords.isEmpty()) "Add Word/s" else "Words Added",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color(0xFF0B0B0B)
@@ -277,7 +277,7 @@ fun AddSetScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (internalWords.isEmpty()) "Add Words" else "Add More Words",
+                            text = if (internalWords.isEmpty()) "Add Word/s" else "Add More Words",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color(0xFF3FA9F8)

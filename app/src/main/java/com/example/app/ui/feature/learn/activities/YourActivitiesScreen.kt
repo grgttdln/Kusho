@@ -53,7 +53,7 @@ fun YourActivitiesScreen(
         }
     }
 
-    // Default icons for activities (shuffled, no repeat until all used)
+    // Default icons for activities (persistent assignment based on activity ID)
     val allIcons = remember {
         listOf(
             R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
@@ -62,7 +62,16 @@ fun YourActivitiesScreen(
             R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
             R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
             R.drawable.ic_activity_21, R.drawable.ic_activity_22
-        ).shuffled()
+        )
+    }
+
+    // Function to get persistent icon for an activity based on its ID
+    fun getIconForActivity(activityId: Long): Int {
+        // Adjust for 1-based IDs to ensure ic_activity_1 is used
+        // Activity ID 1 → Index 0 → ic_activity_1
+        // Activity ID 2 → Index 1 → ic_activity_2, etc.
+        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
+        return allIcons[iconIndex]
     }
 
     Box(
@@ -160,9 +169,8 @@ fun YourActivitiesScreen(
                         items = uiState.activities,
                         key = { it.id }
                     ) { activity ->
-                        // Get icon based on position (cycles through shuffled list)
-                        val iconIndex = (uiState.activities.indexOf(activity)) % allIcons.size
-                        val activityIcon = allIcons[iconIndex]
+                        // Get persistent icon for this activity based on its ID
+                        val activityIcon = getIconForActivity(activity.id)
 
                         ActivityItemCard(
                             title = activity.title,
@@ -199,7 +207,7 @@ fun YourActivitiesScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Add Activity",
+                text = "Add an Activity",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.White
