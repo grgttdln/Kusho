@@ -53,8 +53,17 @@ fun YourActivitiesScreen(
         }
     }
 
-    // Default icons for activities (rotation)
-    val defaultIcons = listOf(R.drawable.ic_apple, R.drawable.ic_ball, R.drawable.ic_flower)
+    // Default icons for activities (shuffled, no repeat until all used)
+    val allIcons = remember {
+        listOf(
+            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
+            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
+            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
+            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
+            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
+            R.drawable.ic_activity_21, R.drawable.ic_activity_22
+        ).shuffled()
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -151,14 +160,14 @@ fun YourActivitiesScreen(
                         items = uiState.activities,
                         key = { it.id }
                     ) { activity ->
-                        // Get default icon based on position (rotate through apple, ball, flower)
-                        val iconIndex = (uiState.activities.indexOf(activity)) % defaultIcons.size
-                        val defaultIcon = defaultIcons[iconIndex]
+                        // Get icon based on position (cycles through shuffled list)
+                        val iconIndex = (uiState.activities.indexOf(activity)) % allIcons.size
+                        val activityIcon = allIcons[iconIndex]
 
                         ActivityItemCard(
                             title = activity.title,
                             description = activity.description,
-                            iconRes = defaultIcon,
+                            iconRes = activityIcon,
                             onClick = { onNavigateToSets(activity.id, activity.title) }
                         )
                     }

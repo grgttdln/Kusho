@@ -16,12 +16,11 @@ import com.example.app.ui.feature.learn.TutorialModeScreen
 import com.example.app.ui.feature.learn.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
 import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
-import com.example.app.ui.feature.learn.activities.ConfirmationScreen
 import com.example.app.ui.feature.learn.set.SelectSetsScreen
 import com.example.app.ui.feature.learn.set.YourSetsScreen
 import com.example.app.ui.feature.learn.set.AddSetScreen
 import com.example.app.ui.feature.learn.set.SelectWordsScreen
-import com.example.app.ui.feature.learn.ConfirmationScreen as LearnConfirmationScreen
+import com.example.app.ui.feature.learn.ConfirmationScreen
 
 /**
  * Main navigation container for the home section of the app.
@@ -110,7 +109,8 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         10 -> ConfirmationScreen(
-            onNavigate = { currentScreen = it },
+            title = "Activity Created!",
+            onContinueClick = { currentScreen = 6 },
             modifier = modifier
         )
         11 -> {
@@ -144,10 +144,10 @@ fun MainNavigationContainer(
                 modifier = modifier
             )
         }
-        13 -> LearnConfirmationScreen(
+        13 -> ConfirmationScreen(
             title = "Set Created!",
             subtitle = createdSetTitle,
-            onNavigate = { 
+            onContinueClick = {
                 createdSetTitle = ""
                 // YourSetsScreen will automatically refresh via Flow when returning
                 currentScreen = 7 

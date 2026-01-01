@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -23,19 +22,21 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.material3.MaterialTheme
 
 /**
- * Reusable confirmation screen for both activities and sets.
- * 
+ * Reusable confirmation screen for various features and flows.
+ *
+ * @param onContinueClick Callback invoked when the continue button is clicked
+ * @param modifier Modifier for the screen
  * @param title The main confirmation message (e.g., "Activity Created!" or "Set Created!")
  * @param subtitle Optional subtitle with name/title (e.g., activity or set name)
- * @param onNavigate Callback to navigate to the next screen with destination screen ID
- * @param modifier Modifier for the screen
+ * @param buttonText Text displayed on the continue button
  */
 @Composable
 fun ConfirmationScreen(
+    onContinueClick: () -> Unit,
+    modifier: Modifier = Modifier,
     title: String = "Created!",
     subtitle: String = "",
-    onNavigate: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    buttonText: String = "Continue"
 ) {
     Box(
         modifier = modifier
@@ -102,9 +103,7 @@ fun ConfirmationScreen(
 
         // Continue Button
         Button(
-            onClick = {
-                onNavigate(7)  // Default to YourSetsScreen (screen 7)
-            },
+            onClick = onContinueClick,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 50.dp)
@@ -116,7 +115,7 @@ fun ConfirmationScreen(
             shape = RoundedCornerShape(16.dp)
         ) {
             Text(
-                text = "Continue",
+                text = buttonText,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -137,7 +136,7 @@ fun ConfirmationScreenPreview() {
         ConfirmationScreen(
             title = "Set Created!",
             subtitle = "Meet the Vowels",
-            onNavigate = {}
+            onContinueClick = {}
         )
     }
 }
