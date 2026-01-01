@@ -173,7 +173,7 @@ fun YourActivitiesScreen(
             onClick = { onNavigate(8) },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 100.dp)
+                .padding(bottom = 96.dp)
                 .width(207.dp)
                 .height(75.dp),
             colors = ButtonDefaults.buttonColors(

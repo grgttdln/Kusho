@@ -13,11 +13,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.R
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.material3.MaterialTheme
 
 /**
  * Reusable confirmation screen for both activities and sets.
@@ -42,45 +45,59 @@ fun ConfirmationScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 100.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Celebration Icon
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Kusho Logo at top - matching LearnScreen style
             Image(
-                painter = painterResource(id = R.drawable.ic_confirmation),
-                contentDescription = "Confirmation",
+                painter = painterResource(id = R.drawable.ic_kusho),
+                contentDescription = "Kusho Logo",
                 modifier = Modifier
-                    .size(200.dp)
-                    .align(Alignment.CenterHorizontally),
-                contentScale = ContentScale.Fit
+                    .height(54.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp)
+                    .offset(x = 10.dp),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.Center
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            // Center content vertically in available space
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Celebration Icon - larger size
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_confirmation),
+                        contentDescription = "Confirmation",
+                        modifier = Modifier
+                            .size(300.dp),
+                        contentScale = ContentScale.Fit
+                    )
 
-            // Main Title
-            Text(
-                text = title,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF000000),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 30.dp)
-            )
+                    Spacer(modifier = Modifier.height(32.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Subtitle if provided
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = "\"$subtitle\"",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color(0xFF3FA9F8),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 30.dp)
-                )
+                    // Main Title - bold and italic
+                    Text(
+                        text = title,
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF000000),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 30.dp)
+                    )
+                }
             }
+
+            // Space for button
+            Spacer(modifier = Modifier.height(120.dp))
         }
 
         // Continue Button
@@ -90,9 +107,9 @@ fun ConfirmationScreen(
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 80.dp)
+                .padding(bottom = 50.dp)
                 .fillMaxWidth(0.86f)
-                .height(56.dp),
+                .height(60.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF3FA9F8)
             ),
@@ -100,10 +117,27 @@ fun ConfirmationScreen(
         ) {
             Text(
                 text = "Continue",
-                fontSize = 22.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
         }
+    }
+}
+
+
+@Preview(
+    name = "ConfirmationScreen Preview",
+    showBackground = true,
+    showSystemUi = true
+)
+@Composable
+fun ConfirmationScreenPreview() {
+    MaterialTheme {
+        ConfirmationScreen(
+            title = "Set Created!",
+            subtitle = "Meet the Vowels",
+            onNavigate = {}
+        )
     }
 }
