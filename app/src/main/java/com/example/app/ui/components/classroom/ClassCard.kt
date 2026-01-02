@@ -1,4 +1,4 @@
-package com.example.app.ui.components
+package com.example.app.ui.components.classroom
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable

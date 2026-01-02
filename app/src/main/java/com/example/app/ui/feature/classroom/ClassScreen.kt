@@ -17,13 +17,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
-import com.example.app.ui.components.ClassCard
+import com.example.app.ui.components.classroom.ClassCard
 import com.example.app.ui.components.PrimaryButton
 
 @Composable
 fun ClassScreen(
     onNavigate: (Int) -> Unit,
     onNavigateToCreateClass: () -> Unit = {},
+    onNavigateToClassDetails: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -65,7 +66,7 @@ fun ClassScreen(
                 classCode = "G1-YB",
                 className = "Grade 1 Young Builders",
                 imageRes = R.drawable.ic_class_abc,
-                onClick = { /* TODO: Navigate to class details */ }
+                onClick = { onNavigateToClassDetails("1") }
             )
 
             Spacer(Modifier.height(20.dp))
@@ -74,7 +75,7 @@ fun ClassScreen(
                 classCode = "G1-BS",
                 className = "Grade 1 Bright Sparks",
                 imageRes = R.drawable.ic_class_stars,
-                onClick = { /* TODO: Navigate to class details */ }
+                onClick = { onNavigateToClassDetails("2") }
             )
 
             Spacer(Modifier.height(28.dp))

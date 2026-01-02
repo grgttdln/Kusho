@@ -42,7 +42,7 @@ import com.example.app.R
 import com.example.app.data.SessionManager
 import com.example.app.service.ConnectionState
 import com.example.app.ui.components.BottomNavBar
-import com.example.app.ui.components.ClassCard
+import com.example.app.ui.components.classroom.ClassCard
 
 
 @Composable
