@@ -309,9 +309,10 @@ private fun ActionButtonsRow(
                 .height(56.dp),
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF49A9FF),
-                disabledContainerColor = Color(0xFFB0D9FF)
+                containerColor = Color.Red,
+                disabledContainerColor = Color(0xFFFFB0B0)
             )
+
         ) {
             Text(
                 text = "Delete",
