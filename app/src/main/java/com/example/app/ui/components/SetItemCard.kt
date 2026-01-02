@@ -11,13 +11,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.app.R
+
 
 /**
  * Reusable Set Item Card component for displaying sets with an icon.
@@ -26,6 +29,7 @@ import androidx.compose.ui.unit.sp
  * @param title The title text to display (e.g., "Meet the Vowels")
  * @param iconRes The drawable resource ID for the icon (e.g., R.drawable.ic_pencil)
  * @param onClick Callback when the card is clicked
+ * @param isSelected Whether the card is selected (shows blue highlight and checkmark)
  * @param modifier Optional modifier for customization
  */
 @Composable
@@ -33,19 +37,20 @@ fun SetItemCard(
     title: String,
     iconRes: Int,
     onClick: () -> Unit,
+    isSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .background(Color.White)
-            .clip(RoundedCornerShape(12.dp))
+            .height(150.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isSelected) Color(0xFFD5F2FF) else Color(0xFFF8FBFF))
             .drawBehind {
                 drawRoundRect(
-                    color = Color(0xFFC5E5FD),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 9f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx())
+                    color = Color(0xFFB8DDF8),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx())
                 )
             }
             .clickable { onClick() }
@@ -61,30 +66,46 @@ fun SetItemCard(
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B),
+                lineHeight = 28.sp,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 20.dp)
+                    .padding(start = 24.dp, end = 8.dp)
             )
 
             // Icon on the right - fills the height and extends to fill container
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(200.dp)
-                    .offset(x = 30.dp)
-                    .clip(RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
+                    .width(220.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(id = iconRes),
                     contentDescription = title,
                     modifier = Modifier
-                        .size(300.dp)
-                        .offset(x = (-20).dp, y = (-20).dp)
-                        .rotate(-5f),
-                    contentScale = ContentScale.Crop,
+                        .requiredSize(500.dp)
+                        .offset(x = 80.dp, y = -110.dp),
+                    contentScale = ContentScale.Fit,
                     alignment = Alignment.Center
                 )
             }
         }
     }
 }
+
+@Preview(
+    name = "SetItemCard Preview",
+    showBackground = true,
+    backgroundColor = 0xFFF0F4F8
+)
+@Composable
+fun SetItemCardPreview() {
+    MaterialTheme {
+        SetItemCard(
+            title = "Meet the Vowels",
+            iconRes = R.drawable.ic_pencil,
+            onClick = {}
+        )
+    }
+}
+
