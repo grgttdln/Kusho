@@ -5,7 +5,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -29,7 +28,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,6 +36,8 @@ import com.example.app.R
 import com.example.app.data.entity.Word
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.wordbank.WordAddedConfirmationModal
+import com.example.app.ui.components.wordbank.WordBankEditModal
+import com.example.app.ui.components.wordbank.WordBankItem
 import com.example.app.ui.components.wordbank.WordBankModal
 
 @Composable
@@ -56,6 +56,13 @@ fun LessonScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         viewModel.onMediaSelected(uri)
+    }
+
+    // Image picker launcher for edit modal
+    val editImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        viewModel.onEditMediaSelected(uri)
     }
 
     Box(
@@ -204,6 +211,36 @@ fun LessonScreen(
                 viewModel.dismissConfirmation()
             }
         )
+
+        // Word Bank Edit Modal
+        WordBankEditModal(
+            isVisible = uiState.isEditModalVisible,
+            wordInput = uiState.editWordInput,
+            existingImagePath = uiState.editingWord?.imagePath,
+            selectedImageUri = uiState.editSelectedMediaUri,
+            inputError = uiState.editInputError,
+            imageError = uiState.editImageError,
+            isSaveEnabled = viewModel.isEditSaveEnabled(),
+            isLoading = uiState.isEditLoading,
+            onWordInputChanged = { viewModel.onEditWordInputChanged(it) },
+            onMediaUploadClick = {
+                editImagePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onRemoveImage = {
+                viewModel.onEditRemoveMedia()
+            },
+            onSaveClick = {
+                viewModel.saveEditedWord()
+            },
+            onDeleteClick = {
+                viewModel.deleteEditingWord()
+            },
+            onDismiss = {
+                viewModel.hideEditModal()
+            }
+        )
     }
 }
 
@@ -233,37 +270,6 @@ fun WordBankList(
     }
 }
 
-/**
- * Individual word item in the Word Bank grid.
- */
-@Composable
-fun WordBankItem(
-    word: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .border(
-                width = 1.dp,
-                color = Color(0xFF49A9FF),
-                shape = RoundedCornerShape(14.dp)
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = word,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF49A9FF),
-            textAlign = TextAlign.Center
-        )
-    }
-}
 
 /**
  * Add Word Bank button component.
