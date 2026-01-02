@@ -7,5 +7,9 @@ sealed class Screen(val route: String) {
     object PostSignUpOnboarding : Screen("post_signup_onboarding")
     object WatchPairing : Screen("watch_pairing")
     object Home : Screen("home")
+    object CreateClass : Screen("create_class")
+    object ClassCreatedSuccess : Screen("class_created_success/{className}") {
+        fun createRoute(className: String) = "class_created_success/$className"
+    }
 }
 

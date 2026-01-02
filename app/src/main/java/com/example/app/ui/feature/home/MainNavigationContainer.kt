@@ -5,6 +5,8 @@ import androidx.compose.ui.Modifier
 import com.example.app.ui.feature.dashboard.DashboardScreen
 import com.example.app.ui.feature.learn.LearnScreen
 import com.example.app.ui.feature.classroom.ClassScreen
+import com.example.app.ui.feature.classroom.CreateClassScreen
+import com.example.app.ui.feature.classroom.ClassCreatedSuccessScreen
 import com.example.app.ui.feature.learn.LessonScreen
 import com.example.app.ui.feature.learn.TutorialModeScreen
 import com.example.app.ui.feature.learn.LearnModeScreen
@@ -21,6 +23,7 @@ fun MainNavigationContainer(
     modifier: Modifier = Modifier
 ) {
     var currentScreen by remember { mutableStateOf(0) }
+    var createdClassName by remember { mutableStateOf("") }
 
     when (currentScreen) {
         0 -> DashboardScreen(
@@ -34,6 +37,7 @@ fun MainNavigationContainer(
         )
         2 -> ClassScreen(
             onNavigate = { currentScreen = it },
+            onNavigateToCreateClass = { currentScreen = 8 },
             modifier = modifier
         )
         3 -> LessonScreen(
@@ -58,6 +62,19 @@ fun MainNavigationContainer(
         7 -> YourSetsScreen(
             onNavigate = { currentScreen = it },
             onBackClick = { currentScreen = 3 },
+            modifier = modifier
+        )
+        8 -> CreateClassScreen(
+            onNavigateBack = { currentScreen = 2 },
+            onClassCreated = { className ->
+                createdClassName = className
+                currentScreen = 9
+            },
+            modifier = modifier
+        )
+        9 -> ClassCreatedSuccessScreen(
+            className = createdClassName,
+            onContinue = { currentScreen = 2 },
             modifier = modifier
         )
     }
