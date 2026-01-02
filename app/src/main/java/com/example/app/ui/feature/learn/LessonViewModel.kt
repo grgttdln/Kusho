@@ -256,10 +256,216 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Handle word item click.
+     * Handle word item click - opens the edit modal with the selected word.
      */
     fun onWordClick(word: Word) {
-        // Can be extended for word selection, editing, etc.
+        _uiState.update {
+            it.copy(
+                isEditModalVisible = true,
+                editingWord = word,
+                editWordInput = word.word,
+                editSelectedMediaUri = null,
+                editInputError = null,
+                editImageError = null,
+                isEditLoading = false
+            )
+        }
+    }
+
+    /**
+     * Hide the edit modal and reset its state.
+     */
+    fun hideEditModal() {
+        _uiState.update {
+            it.copy(
+                isEditModalVisible = false,
+                editingWord = null,
+                editWordInput = "",
+                editSelectedMediaUri = null,
+                editInputError = null,
+                editImageError = null,
+                isEditLoading = false
+            )
+        }
+    }
+
+    /**
+     * Update the edit word input text.
+     */
+    fun onEditWordInputChanged(word: String) {
+        _uiState.update {
+            it.copy(
+                editWordInput = word.trim(),
+                editInputError = null
+            )
+        }
+    }
+
+    /**
+     * Update the selected media URI for editing.
+     */
+    fun onEditMediaSelected(uri: Uri?) {
+        if (uri != null && !imageStorageManager.isValidImageUri(uri)) {
+            _uiState.update {
+                it.copy(
+                    editImageError = "Please select a JPG, PNG, or WebP image"
+                )
+            }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                editSelectedMediaUri = uri,
+                editImageError = null
+            )
+        }
+    }
+
+    /**
+     * Remove the selected media for editing.
+     */
+    fun onEditRemoveMedia() {
+        _uiState.update {
+            it.copy(
+                editSelectedMediaUri = null,
+                editImageError = null
+            )
+        }
+    }
+
+    /**
+     * Check if the edit input is valid for submission.
+     */
+    fun isEditSaveEnabled(): Boolean {
+        val word = _uiState.value.editWordInput.trim()
+        return word.isNotBlank() && word.all { it.isLetter() } && !_uiState.value.isEditLoading
+    }
+
+    /**
+     * Save the edited word to the Word Bank.
+     */
+    fun saveEditedWord() {
+        val userId = currentUserId
+        val editingWord = _uiState.value.editingWord
+
+        if (userId == null || userId == 0L) {
+            _uiState.update {
+                it.copy(
+                    editInputError = "Please log in to update words",
+                    isEditLoading = false
+                )
+            }
+            return
+        }
+
+        if (editingWord == null) {
+            _uiState.update {
+                it.copy(
+                    editInputError = "No word selected for editing",
+                    isEditLoading = false
+                )
+            }
+            return
+        }
+
+        val newWord = _uiState.value.editWordInput.trim()
+        val newMediaUri = _uiState.value.editSelectedMediaUri
+
+        if (!isValidWord(newWord)) {
+            _uiState.update { it.copy(editInputError = "Please enter a valid word") }
+            return
+        }
+
+        _uiState.update { it.copy(isEditLoading = true) }
+
+        viewModelScope.launch {
+            var newImagePath: String? = editingWord.imagePath
+
+            if (newMediaUri != null) {
+                when (val saveResult = imageStorageManager.saveImageFromUri(newMediaUri)) {
+                    is ImageStorageManager.SaveResult.Success -> {
+                        if (editingWord.imagePath != null) {
+                            imageStorageManager.deleteImage(editingWord.imagePath)
+                        }
+                        newImagePath = saveResult.imagePath
+                    }
+                    is ImageStorageManager.SaveResult.Error -> {
+                        _uiState.update {
+                            it.copy(
+                                editImageError = saveResult.message,
+                                isEditLoading = false
+                            )
+                        }
+                        return@launch
+                    }
+                }
+            }
+
+            try {
+                when (val result = wordRepository.updateWord(userId, editingWord.id, newWord, newImagePath)) {
+                    is WordRepository.UpdateWordResult.Success -> {
+                        _uiState.update {
+                            it.copy(
+                                isEditModalVisible = false,
+                                editingWord = null,
+                                editWordInput = "",
+                                editSelectedMediaUri = null,
+                                editInputError = null,
+                                editImageError = null,
+                                isEditLoading = false
+                            )
+                        }
+                    }
+                    is WordRepository.UpdateWordResult.Error -> {
+                        if (newMediaUri != null && newImagePath != editingWord.imagePath) {
+                            newImagePath?.let { imageStorageManager.deleteImage(it) }
+                        }
+                        _uiState.update {
+                            it.copy(
+                                editInputError = result.message,
+                                isEditLoading = false
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (newMediaUri != null && newImagePath != editingWord.imagePath) {
+                    newImagePath?.let { imageStorageManager.deleteImage(it) }
+                }
+                _uiState.update {
+                    it.copy(
+                        editInputError = "Failed to update word: ${e.message}",
+                        isEditLoading = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Delete the word being edited from the Word Bank.
+     */
+    fun deleteEditingWord() {
+        val editingWord = _uiState.value.editingWord ?: return
+
+        _uiState.update { it.copy(isEditLoading = true) }
+
+        viewModelScope.launch {
+            editingWord.imagePath?.let { imageStorageManager.deleteImage(it) }
+            wordRepository.deleteWord(editingWord.id)
+
+            _uiState.update {
+                it.copy(
+                    isEditModalVisible = false,
+                    editingWord = null,
+                    editWordInput = "",
+                    editSelectedMediaUri = null,
+                    editInputError = null,
+                    editImageError = null,
+                    isEditLoading = false
+                )
+            }
+        }
     }
 
     /**
@@ -291,6 +497,14 @@ data class LessonUiState(
     val imageError: String? = null,
     val isLoading: Boolean = false,
     val isConfirmationVisible: Boolean = false,
-    val confirmedWord: String = ""
+    val confirmedWord: String = "",
+    // Edit modal state
+    val isEditModalVisible: Boolean = false,
+    val editingWord: Word? = null,
+    val editWordInput: String = "",
+    val editSelectedMediaUri: Uri? = null,
+    val editInputError: String? = null,
+    val editImageError: String? = null,
+    val isEditLoading: Boolean = false
 )
 

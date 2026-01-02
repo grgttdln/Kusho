@@ -23,6 +23,14 @@ class WordRepository(private val wordDao: WordDao) {
     }
 
     /**
+     * Result class for update word operation.
+     */
+    sealed class UpdateWordResult {
+        data object Success : UpdateWordResult()
+        data class Error(val message: String) : UpdateWordResult()
+    }
+
+    /**
      * Add a new word to the user's Word Bank.
      *
      * This method:
@@ -99,6 +107,57 @@ class WordRepository(private val wordDao: WordDao) {
             wordDao.deleteWordById(wordId) > 0
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /**
+     * Update an existing word in the Word Bank.
+     *
+     * This method:
+     * 1. Validates the word is not empty
+     * 2. Checks for duplicates (case-insensitive), excluding the current word
+     * 3. Updates the word in the database
+     *
+     * @param userId The ID of the user who owns the word
+     * @param wordId The ID of the word to update
+     * @param word The new word text
+     * @param imagePath Optional new path to an associated image
+     * @return UpdateWordResult indicating success or failure
+     */
+    suspend fun updateWord(
+        userId: Long,
+        wordId: Long,
+        word: String,
+        imagePath: String?
+    ): UpdateWordResult = withContext(Dispatchers.IO) {
+        try {
+            val trimmedWord = word.trim()
+
+            // Validate word is not empty
+            if (trimmedWord.isBlank()) {
+                return@withContext UpdateWordResult.Error("Word cannot be empty")
+            }
+
+            // Validate word contains only letters
+            if (!trimmedWord.all { it.isLetter() }) {
+                return@withContext UpdateWordResult.Error("Word can only contain letters")
+            }
+
+            // Check for duplicates (case-insensitive), excluding current word
+            if (wordDao.wordExistsForUserExcluding(userId, trimmedWord, wordId)) {
+                return@withContext UpdateWordResult.Error("This word already exists in your Word Bank")
+            }
+
+            // Update the word
+            val rowsUpdated = wordDao.updateWord(wordId, trimmedWord, imagePath)
+
+            if (rowsUpdated > 0) {
+                UpdateWordResult.Success
+            } else {
+                UpdateWordResult.Error("Word not found")
+            }
+        } catch (e: Exception) {
+            UpdateWordResult.Error(e.message ?: "Failed to update word")
         }
     }
 
