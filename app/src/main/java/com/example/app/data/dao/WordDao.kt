@@ -49,6 +49,15 @@ interface WordDao {
     suspend fun getWordsByUserIdOnce(userId: Long): List<Word>
 
     /**
+     * Get a word by its ID.
+     *
+     * @param wordId The ID of the word
+     * @return The word entity or null if not found
+     */
+    @Query("SELECT * FROM words WHERE id = :wordId")
+    suspend fun getWordById(wordId: Long): Word?
+
+    /**
      * Check if a word already exists for a specific user.
      *
      * @param userId The user's ID

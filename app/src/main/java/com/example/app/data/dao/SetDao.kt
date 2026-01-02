@@ -38,6 +38,15 @@ interface SetDao {
     fun getAllSets(): Flow<List<Set>>
 
     /**
+     * Get a set by its ID.
+     *
+     * @param setId The ID of the set
+     * @return The set entity or null if not found
+     */
+    @Query("SELECT * FROM sets WHERE id = :setId")
+    suspend fun getSetById(setId: Long): Set?
+
+    /**
      * Delete a set by its ID.
      *
      * @param setId The ID of the set to delete

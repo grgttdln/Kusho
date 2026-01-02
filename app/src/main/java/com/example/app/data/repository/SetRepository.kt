@@ -180,6 +180,48 @@ class SetRepository(
     }
 
     /**
+     * Data class representing set details with words and their configuration types.
+     */
+    data class SetDetails(
+        val set: Set,
+        val words: List<WordWithConfig>
+    )
+
+    /**
+     * Data class representing a word with its configuration type in a set.
+     */
+    data class WordWithConfig(
+        val word: String,
+        val configurationType: String
+    )
+
+    /**
+     * Get detailed information about a set including its words and configuration types.
+     *
+     * @param setId The ID of the set
+     * @return SetDetails containing the set info and associated words
+     */
+    suspend fun getSetDetails(setId: Long): SetDetails? = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val set = setDao.getSetById(setId) ?: return@withContext null
+            val setWords = setWordDao.getSetWords(setId)
+
+            val words = setWords.map { setWord ->
+                val word = wordDao.getWordById(setWord.wordId)
+                WordWithConfig(
+                    word = word?.word ?: "Unknown",
+                    configurationType = setWord.configurationType
+                )
+            }
+
+            SetDetails(set = set, words = words)
+        } catch (e: Exception) {
+            Log.e(TAG_REPO, "Error getting set details: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * Delete a set by its ID.
      *
      * @param setId The ID of the set to delete

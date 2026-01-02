@@ -4,9 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -21,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,17 +27,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
-import com.example.app.data.SessionManager
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.SetItemCard
+import com.example.app.ui.components.set.SetDetailsModal
 
 @Composable
 fun YourSetsScreen(
+    modifier: Modifier = Modifier,
     userId: Long = 0L,
     onNavigate: (Int) -> Unit,
     onBackClick: () -> Unit,
     onAddSetClick: () -> Unit = {},
-    modifier: Modifier = Modifier,
+    onEditSetClick: (Long) -> Unit = {},
     viewModel: YourSetsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -49,6 +47,14 @@ fun YourSetsScreen(
     LaunchedEffect(userId) {
         if (userId > 0L) {
             viewModel.loadSets(userId)
+        }
+    }
+
+    // Handle error messages
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { _ ->
+            // You can show a Toast or Snackbar here if needed
+            viewModel.clearError()
         }
     }
 
@@ -150,7 +156,7 @@ fun YourSetsScreen(
                         SetItemCard(
                             title = set.title,
                             iconRes = R.drawable.ic_pencil,
-                            onClick = { /* Navigate to set details */ }
+                            onClick = { viewModel.showSetDetails(set.id) }
                         )
                     }
                 }
@@ -194,6 +200,23 @@ fun YourSetsScreen(
             onTabSelected = { onNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+    }
+
+    // Modal Display
+    if (uiState.showModal) {
+        uiState.selectedSetDetails?.let { setDetails ->
+            SetDetailsModal(
+                setDetails = setDetails,
+                onDismiss = { viewModel.closeModal() },
+                onEdit = {
+                    viewModel.closeModal()
+                    onEditSetClick(setDetails.set.id)
+                },
+                onDelete = {
+                    viewModel.deleteSet(setDetails.set.id)
+                }
+            )
+        }
     }
 }
 

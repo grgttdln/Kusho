@@ -19,7 +19,9 @@ import kotlinx.coroutines.launch
 data class YourSetsUiState(
     val sets: List<Set> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val selectedSetDetails: SetRepository.SetDetails? = null,
+    val showModal: Boolean = false
 )
 
 /**
@@ -76,6 +78,8 @@ class YourSetsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 setRepository.deleteSet(setId)
+                // Close modal after successful deletion
+                closeModal()
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -83,6 +87,46 @@ class YourSetsViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Show modal with set details
+     *
+     * @param setId The ID of the set to show details for
+     */
+    fun showSetDetails(setId: Long) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isLoading = true) }
+                val setDetails = setRepository.getSetDetails(setId)
+                _uiState.update {
+                    it.copy(
+                        selectedSetDetails = setDetails,
+                        showModal = true,
+                        isLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = e.message ?: "Failed to load set details"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Close the modal
+     */
+    fun closeModal() {
+        _uiState.update {
+            it.copy(
+                showModal = false,
+                selectedSetDetails = null
+            )
         }
     }
 
