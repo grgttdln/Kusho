@@ -35,7 +35,7 @@ fun RemoveStudentDialog(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 100.dp),
+                    .padding(top = 80.dp),
                 shape = RoundedCornerShape(28.dp)
             ) {
                 Column(
@@ -48,7 +48,7 @@ fun RemoveStudentDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(120.dp)
+                            .height(80.dp)
                             .background(Color(0xFF49A9FF))
                     )
                     
@@ -120,7 +120,7 @@ fun RemoveStudentDialog(
                 painter = painterResource(R.drawable.dis_remove),
                 contentDescription = "Remove Student",
                 modifier = Modifier
-                    .size(250.dp)
+                    .size(180.dp)
                     .align(Alignment.TopCenter)
             )
         }

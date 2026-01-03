@@ -40,6 +40,7 @@ fun ClassDetailsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToAddStudent: (String) -> Unit = {},
     onNavigateToEditClass: (String, String, String) -> Unit = { _, _, _ -> },
+    onNavigateToStudentDetails: (String, String, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     // State for removal mode
@@ -166,7 +167,9 @@ fun ClassDetailsScreen(
                                 StudentCard(
                                     studentName = student.name,
                                     profileImageRes = student.profileImageRes,
-                                    onClick = { /* TODO: View student details */ },
+                                    onClick = { 
+                                        onNavigateToStudentDetails(student.id, student.name, className)
+                                    },
                                     isRemovalMode = isRemovalMode,
                                     onRemove = { studentToRemove = student },
                                     modifier = Modifier.weight(1f)

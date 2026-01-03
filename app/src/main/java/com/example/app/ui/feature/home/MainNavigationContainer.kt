@@ -11,6 +11,7 @@ import com.example.app.ui.feature.classroom.ClassDetailsScreen
 import com.example.app.ui.feature.classroom.AddStudentScreen
 import com.example.app.ui.feature.classroom.ClassCreatedSuccessScreen
 import com.example.app.ui.feature.classroom.StudentAddedSuccessScreen
+import com.example.app.ui.feature.classroom.StudentDetailsScreen
 import com.example.app.ui.feature.learn.LessonScreen
 import com.example.app.ui.feature.learn.TutorialModeScreen
 import com.example.app.ui.feature.learn.LearnModeScreen
@@ -32,6 +33,8 @@ fun MainNavigationContainer(
     var selectedClassName by remember { mutableStateOf("") }
     var selectedClassCode by remember { mutableStateOf("") }
     var addedStudentName by remember { mutableStateOf("") }
+    var selectedStudentId by remember { mutableStateOf("") }
+    var selectedStudentName by remember { mutableStateOf("") }
 
     when (currentScreen) {
         0 -> DashboardScreen(
@@ -102,6 +105,12 @@ fun MainNavigationContainer(
                 selectedClassCode = classCode
                 currentScreen = 13
             },
+            onNavigateToStudentDetails = { studentId, studentName, className ->
+                selectedStudentId = studentId
+                selectedStudentName = studentName
+                selectedClassName = className
+                currentScreen = 14
+            },
             modifier = modifier
         )
         11 -> AddStudentScreen(
@@ -133,6 +142,13 @@ fun MainNavigationContainer(
                 // TODO: Archive class in database
                 currentScreen = 2
             },
+            modifier = modifier
+        )
+        14 -> StudentDetailsScreen(
+            studentId = selectedStudentId,
+            studentName = selectedStudentName,
+            className = selectedClassName,
+            onNavigateBack = { currentScreen = 10 },
             modifier = modifier
         )
     }
