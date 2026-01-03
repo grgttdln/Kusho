@@ -1,6 +1,8 @@
 package com.example.app.ui.feature.learn.set
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,12 +10,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
+import com.example.app.data.entity.Set
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.SetItemCard
 
@@ -41,6 +48,11 @@ fun YourSetsScreen(
     viewModel: YourSetsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Edit mode state for delete functionality
+    var isEditMode by remember { mutableStateOf(false) }
+    var setToDelete by remember { mutableStateOf<Set?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     // Create stable callback references using rememberUpdatedState
     // This ensures the lambda always has the latest callback reference
@@ -68,14 +80,14 @@ fun YourSetsScreen(
         ) {
             Spacer(Modifier.height(24.dp))
 
-            // Back Button and Kusho Logo
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Back Button, Kusho Logo (centered), and Edit/Delete Button
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                // Back Button (left)
                 IconButton(
                     onClick = { currentOnBackClick() },
-                    modifier = Modifier.offset(x = (-12).dp)
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -84,19 +96,29 @@ fun YourSetsScreen(
                     )
                 }
 
+                // Kusho Logo (centered)
                 Image(
                     painter = painterResource(id = R.drawable.ic_kusho),
                     contentDescription = "Kusho Logo",
                     modifier = Modifier
                         .height(54.dp)
-                        .weight(1f)
-                        .padding(horizontal = 30.dp)
-                        .offset(x = 10.dp),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.Center
+                        .offset(x = 10.dp)
+                        .align(Alignment.Center),
+                    contentScale = ContentScale.Fit
                 )
 
-                Spacer(modifier = Modifier.width(48.dp))
+                // Edit/Delete Mode Button (right)
+                IconButton(
+                    onClick = { isEditMode = !isEditMode },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
+                    Icon(
+                        imageVector = if (isEditMode) Icons.Default.Delete else Icons.Default.Edit,
+                        contentDescription = if (isEditMode) "Exit Edit Mode" else "Edit Mode",
+                        tint = if (isEditMode) Color(0xFFFF6B6B) else Color(0xFF3FA9F8),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(32.dp))
@@ -151,11 +173,42 @@ fun YourSetsScreen(
                         items = uiState.sets,
                         key = { it.id }
                     ) { set ->
-                        SetItemCard(
-                            title = set.title,
-                            iconRes = R.drawable.ic_pencil,
-                            onClick = { currentOnEditSetClick(set.id) }
-                        )
+                        // Check if this set is selected for deletion
+                        val isSelected = setToDelete?.id == set.id
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (isSelected && isEditMode) {
+                                        Modifier
+                                            .border(
+                                                width = 3.dp,
+                                                color = Color(0xFF3FA9F8),
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                            .background(
+                                                color = Color(0x203FA9F8),
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            SetItemCard(
+                                title = set.title,
+                                iconRes = R.drawable.ic_pencil,
+                                onClick = {
+                                    if (isEditMode) {
+                                        setToDelete = set
+                                        showDeleteDialog = true
+                                    } else {
+                                        currentOnEditSetClick(set.id)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -198,6 +251,57 @@ fun YourSetsScreen(
             onTabSelected = { currentOnNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // Delete Confirmation Dialog
+        if (showDeleteDialog && setToDelete != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteDialog = false
+                    setToDelete = null
+                },
+                title = {
+                    Text(
+                        text = "Delete Set",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to delete \"${setToDelete?.title}\"? This action cannot be undone."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            setToDelete?.let { set ->
+                                viewModel.deleteSet(set.id)
+                            }
+                            showDeleteDialog = false
+                            setToDelete = null
+                            isEditMode = false
+                        }
+                    ) {
+                        Text(
+                            text = "Delete",
+                            color = Color(0xFFFF6B6B)
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog = false
+                            setToDelete = null
+                        }
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            color = Color(0xFF3FA9F8)
+                        )
+                    }
+                }
+            )
+        }
     }
 }
 

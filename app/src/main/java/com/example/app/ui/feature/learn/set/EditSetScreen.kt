@@ -10,7 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,7 +43,6 @@ fun EditSetScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
-    var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     // Create stable callback references
     val currentOnBackClick by rememberUpdatedState(onBackClick)
@@ -129,24 +128,12 @@ fun EditSetScreen(
                         contentDescription = "Kusho Logo",
                         modifier = Modifier
                             .height(54.dp)
-                            .weight(1f)
-                            .padding(horizontal = 30.dp)
-                            .offset(x = 10.dp),
-                        contentScale = ContentScale.Fit,
+                            .offset(x = -10.dp)
+                            .weight(1f),
                         alignment = Alignment.Center
                     )
 
-                    // Delete button in top right
-                    IconButton(
-                        onClick = { showDeleteConfirmation = true },
-                        enabled = !uiState.isDeleting
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete Set",
-                            tint = if (uiState.isDeleting) Color(0xFFBDBDBD) else Color(0xFFE53935)
-                        )
-                    }
+
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -402,48 +389,6 @@ fun EditSetScreen(
                 Text(uiState.errorMessage ?: "", color = Color.White)
             }
         }
-    }
-
-    // Delete Confirmation Dialog
-    if (showDeleteConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmation = false },
-            title = {
-                Text(
-                    text = "Delete Set?",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    text = "Are you sure you want to delete \"${uiState.setTitle}\"? This action cannot be undone."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirmation = false
-                        viewModel.deleteSet()
-                    }
-                ) {
-                    Text(
-                        text = "Delete",
-                        color = Color(0xFFE53935),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showDeleteConfirmation = false }
-                ) {
-                    Text(
-                        text = "Cancel",
-                        color = Color(0xFF3FA9F8)
-                    )
-                }
-            }
-        )
     }
 }
 

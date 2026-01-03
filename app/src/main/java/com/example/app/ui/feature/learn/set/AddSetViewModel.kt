@@ -97,7 +97,7 @@ class AddSetViewModel(application: Application) : AndroidViewModel(application) 
                 if (activityId != null && activityId > 0L) {
                     setRepository.linkSetToActivity(result.setId, activityId)
                 }
-
+                
                 _uiState.update {
                     it.copy(
                         isLoading = false,

@@ -152,7 +152,7 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
                 state.selectedChapters.forEach { chapter ->
                     setRepository.linkSetToActivity(chapter.setId, activityId)
                 }
-
+                
                 _uiState.update {
                     it.copy(
                         isLoading = false,
