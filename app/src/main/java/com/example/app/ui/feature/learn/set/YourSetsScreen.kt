@@ -12,14 +12,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +33,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.entity.Set
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.DeleteConfirmationDialog
+import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.SetItemCard
 
 @Composable
@@ -253,55 +253,22 @@ fun YourSetsScreen(
         )
 
         // Delete Confirmation Dialog
-        if (showDeleteDialog && setToDelete != null) {
-            AlertDialog(
-                onDismissRequest = {
-                    showDeleteDialog = false
-                    setToDelete = null
-                },
-                title = {
-                    Text(
-                        text = "Delete Set",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                text = {
-                    Text(
-                        text = "Are you sure you want to delete \"${setToDelete?.title}\"? This action cannot be undone."
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            setToDelete?.let { set ->
-                                viewModel.deleteSet(set.id)
-                            }
-                            showDeleteDialog = false
-                            setToDelete = null
-                            isEditMode = false
-                        }
-                    ) {
-                        Text(
-                            text = "Delete",
-                            color = Color(0xFFFF6B6B)
-                        )
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            showDeleteDialog = false
-                            setToDelete = null
-                        }
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            color = Color(0xFF3FA9F8)
-                        )
-                    }
+        DeleteConfirmationDialog(
+            isVisible = showDeleteDialog && setToDelete != null,
+            deleteType = DeleteType.SET,
+            onConfirm = {
+                setToDelete?.let { set ->
+                    viewModel.deleteSet(set.id)
                 }
-            )
-        }
+                showDeleteDialog = false
+                setToDelete = null
+                isEditMode = false
+            },
+            onDismiss = {
+                showDeleteDialog = false
+                setToDelete = null
+            }
+        )
     }
 }
 

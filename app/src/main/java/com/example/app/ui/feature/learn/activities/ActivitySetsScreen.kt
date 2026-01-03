@@ -29,6 +29,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.entity.Set
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.DeleteConfirmationDialog
+import com.example.app.ui.components.DeleteType
 
 /**
  * Screen to display and manage sets within a specific activity.
@@ -247,55 +249,22 @@ fun ActivitySetsScreen(
         )
 
         // Delete Confirmation Dialog
-        if (showDeleteDialog && setToUnlink != null) {
-            AlertDialog(
-                onDismissRequest = {
-                    showDeleteDialog = false
-                    setToUnlink = null
-                },
-                title = {
-                    Text(
-                        text = "Remove Set from Activity",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                text = {
-                    Text(
-                        text = "Are you sure you want to remove \"${setToUnlink?.title}\" from this activity? The original set will not be deleted."
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            setToUnlink?.let { set ->
-                                viewModel.unlinkSetFromActivity(set.id, activityId)
-                            }
-                            showDeleteDialog = false
-                            setToUnlink = null
-                            isEditMode = false
-                        }
-                    ) {
-                        Text(
-                            text = "Remove",
-                            color = Color(0xFFFF6B6B)
-                        )
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            showDeleteDialog = false
-                            setToUnlink = null
-                        }
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            color = Color(0xFF3FA9F8)
-                        )
-                    }
+        DeleteConfirmationDialog(
+            isVisible = showDeleteDialog && setToUnlink != null,
+            deleteType = DeleteType.SET_FROM_ACTIVITY,
+            onConfirm = {
+                setToUnlink?.let { set ->
+                    viewModel.unlinkSetFromActivity(set.id, activityId)
                 }
-            )
-        }
+                showDeleteDialog = false
+                setToUnlink = null
+                isEditMode = false
+            },
+            onDismiss = {
+                showDeleteDialog = false
+                setToUnlink = null
+            }
+        )
     }
 }
 
