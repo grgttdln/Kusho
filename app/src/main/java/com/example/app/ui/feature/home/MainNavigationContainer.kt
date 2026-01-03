@@ -19,6 +19,7 @@ import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
 import com.example.app.ui.feature.learn.set.SelectSetsScreen
 import com.example.app.ui.feature.learn.set.YourSetsScreen
 import com.example.app.ui.feature.learn.set.AddSetScreen
+import com.example.app.ui.feature.learn.set.EditSetScreen
 import com.example.app.ui.feature.learn.set.SelectWordsScreen
 import com.example.app.ui.feature.learn.ConfirmationScreen
 
@@ -36,11 +37,18 @@ fun MainNavigationContainer(
     var selectedActivityTitle by remember { mutableStateOf("") }
     var availableWords by remember { mutableStateOf(listOf<String>()) }
     var createdSetTitle by remember { mutableStateOf("") }
-    
+    var selectedSetId by remember { mutableStateOf(0L) }
+
+    // Counter to force YourSetsScreen refresh when returning from edit
+    var yourSetsScreenKey by remember { mutableStateOf(0) }
+
     // State for Add Set Screen - selected words persist across navigation
     var wordsForCreation by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
     var selectedWordsWithConfigs by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
     
+    // State for Edit Set Screen - words being added to an existing set
+    var wordsForEdit by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
+
     val context = LocalContext.current
     val sessionManager = remember { SessionManager.getInstance(context) }
     val userId = remember { sessionManager.getUserId() }
@@ -84,18 +92,40 @@ fun MainNavigationContainer(
             onBackClick = { currentScreen = 3 },
             modifier = modifier
         )
-        7 -> YourSetsScreen(
-            userId = userId,
-            onNavigate = { currentScreen = it },
-            onBackClick = { currentScreen = 3 },
-            onAddSetClick = { 
-                // Reset words and navigate to AddSetScreen
-                wordsForCreation = emptyList()
-                selectedWordsWithConfigs = emptyList()
-                currentScreen = 11 
-            },
-            modifier = modifier
-        )
+        7 -> {
+            // Use key to force refresh when returning from edit/add screens
+            key(yourSetsScreenKey, selectedActivityId) {
+                YourSetsScreen(
+                    userId = userId,
+                    activityId = if (selectedActivityId > 0L) selectedActivityId else null,
+                    activityTitle = if (selectedActivityId > 0L) selectedActivityTitle else null,
+                    onNavigate = { currentScreen = it },
+                    onBackClick = {
+                        // Go back to YourActivitiesScreen if coming from an activity, otherwise to LessonScreen
+                        if (selectedActivityId > 0L) {
+                            selectedActivityId = 0L
+                            selectedActivityTitle = ""
+                            currentScreen = 6
+                        } else {
+                            currentScreen = 3
+                        }
+                    },
+                    onAddSetClick = {
+                        // Reset words and navigate to AddSetScreen
+                        wordsForCreation = emptyList()
+                        selectedWordsWithConfigs = emptyList()
+                        currentScreen = 11
+                    },
+                    onEditSetClick = { setId ->
+                        // Navigate to EditSetScreen with the selected set ID
+                        selectedSetId = setId
+                        wordsForEdit = emptyList()
+                        currentScreen = 14
+                    },
+                    modifier = modifier
+                )
+            }
+        }
         8 -> AddNewActivityScreen(
             userId = userId,
             onNavigate = { currentScreen = it },
@@ -116,7 +146,8 @@ fun MainNavigationContainer(
         11 -> {
             AddSetScreen(
                 userId = userId,
-                onBackClick = { 
+                activityId = if (selectedActivityId > 0L) selectedActivityId else null,
+                onBackClick = {
                     wordsForCreation = emptyList()
                     selectedWordsWithConfigs = emptyList()
                     currentScreen = 7 
@@ -149,10 +180,48 @@ fun MainNavigationContainer(
             subtitle = createdSetTitle,
             onContinueClick = {
                 createdSetTitle = ""
-                // YourSetsScreen will automatically refresh via Flow when returning
-                currentScreen = 7 
+                yourSetsScreenKey++ // Force YourSetsScreen to refresh
+                currentScreen = 7
             },
             modifier = modifier
         )
+        14 -> {
+            EditSetScreen(
+                setId = selectedSetId,
+                userId = userId,
+                onBackClick = {
+                    wordsForEdit = emptyList()
+                    yourSetsScreenKey++ // Force YourSetsScreen to refresh
+                    currentScreen = 7
+                },
+                onAddWordsClick = { currentScreen = 15 },
+                onUpdateSuccess = {
+                    wordsForEdit = emptyList()
+                    yourSetsScreenKey++ // Force YourSetsScreen to refresh
+                    currentScreen = 7
+                },
+                onDeleteSuccess = {
+                    wordsForEdit = emptyList()
+                    yourSetsScreenKey++ // Force YourSetsScreen to refresh
+                    currentScreen = 7
+                },
+                selectedWords = wordsForEdit,
+                modifier = modifier
+            )
+        }
+        15 -> {
+            LaunchedEffect(Unit) {
+                availableWords = wordRepository.getWordsForUserOnce(userId).map { it.word }
+            }
+            SelectWordsScreen(
+                availableWords = availableWords,
+                onBackClick = { currentScreen = 14 },
+                onWordsSelected = { selectedWords ->
+                    wordsForEdit = selectedWords
+                    currentScreen = 14
+                },
+                modifier = modifier
+            )
+        }
     }
 }

@@ -56,14 +56,16 @@ class AddSetViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Create and save the set to the database (independent of activities)
+     * Create and save the set to the database
+     * Optionally links to an activity if activityId is provided
      * Suspends until the database operation completes
      */
     suspend fun createSet(
         title: String,
         description: String,
         selectedWords: List<SetRepository.SelectedWordConfig>,
-        userId: Long
+        userId: Long,
+        activityId: Long? = null
     ): Boolean {
         // Validation
         if (title.isBlank()) {
@@ -91,6 +93,11 @@ class AddSetViewModel(application: Application) : AndroidViewModel(application) 
             )
 
             if (result is SetRepository.AddSetResult.Success) {
+                // Link to activity if activityId is provided
+                if (activityId != null && activityId > 0L) {
+                    setRepository.linkSetToActivity(result.setId, activityId)
+                }
+
                 _uiState.update {
                     it.copy(
                         isLoading = false,

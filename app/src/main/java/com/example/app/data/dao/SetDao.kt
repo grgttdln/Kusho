@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.example.app.data.entity.ActivitySet
 import com.example.app.data.entity.Set
 import kotlinx.coroutines.flow.Flow
 
@@ -18,6 +19,14 @@ interface SetDao {
      */
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSet(set: Set): Long
+
+    /**
+     * Insert an activity-set relationship into the junction table.
+     *
+     * @param activitySet The activity-set relationship to insert
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertActivitySet(activitySet: ActivitySet)
 
     /**
      * Get all sets for a specific user as a Flow.
@@ -54,4 +63,31 @@ interface SetDao {
      */
     @Query("DELETE FROM sets WHERE id = :setId")
     suspend fun deleteSetById(setId: Long): Int
+
+    /**
+     * Update a set's title and description.
+     *
+     * @param setId The ID of the set to update
+     * @param title The new title
+     * @param description The new description
+     * @param itemCount The new item count
+     * @param updatedAt The timestamp of the update
+     * @return The number of rows updated
+     */
+    @Query("UPDATE sets SET title = :title, description = :description, itemCount = :itemCount, updatedAt = :updatedAt WHERE id = :setId")
+    suspend fun updateSet(setId: Long, title: String, description: String?, itemCount: Int, updatedAt: Long): Int
+
+    /**
+     * Get sets for a specific activity through the activity_set junction table.
+     *
+     * @param activityId The ID of the activity
+     * @return Flow of sets belonging to the activity
+     */
+    @Query("""
+        SELECT s.* FROM sets s 
+        INNER JOIN activity_set act_set ON s.id = act_set.setId 
+        WHERE act_set.activityId = :activityId 
+        ORDER BY s.createdAt DESC
+    """)
+    fun getSetsForActivity(activityId: Long): Flow<List<Set>>
 }

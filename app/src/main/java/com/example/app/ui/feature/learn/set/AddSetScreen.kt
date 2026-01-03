@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddSetScreen(
     userId: Long = 0L,
+    activityId: Long? = null,
     onBackClick: () -> Unit = {},
     onAddWordsClick: () -> Unit = {},
     onCreateSet: (setTitle: String, setDescription: String, words: List<SetRepository.SelectedWordConfig>) -> Unit = { _, _, _ -> },
@@ -298,7 +299,8 @@ fun AddSetScreen(
                             title = setTitle,
                             description = setDescription,
                             selectedWords = internalWords,
-                            userId = userId
+                            userId = userId,
+                            activityId = activityId
                         )
                         
                         if (success) {

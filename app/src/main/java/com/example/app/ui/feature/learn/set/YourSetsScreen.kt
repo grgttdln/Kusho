@@ -29,12 +29,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.SetItemCard
-import com.example.app.ui.components.set.SetDetailsModal
 
 @Composable
 fun YourSetsScreen(
     modifier: Modifier = Modifier,
     userId: Long = 0L,
+    activityId: Long? = null,
+    activityTitle: String? = null,
     onNavigate: (Int) -> Unit,
     onBackClick: () -> Unit,
     onAddSetClick: () -> Unit = {},
@@ -43,19 +44,29 @@ fun YourSetsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Load sets only once when userId changes
-    LaunchedEffect(userId) {
-        if (userId > 0L) {
+    // Create stable callback references using rememberUpdatedState
+    // This ensures the lambda always has the latest callback reference
+    val currentOnEditSetClick by rememberUpdatedState(onEditSetClick)
+    val currentOnNavigate by rememberUpdatedState(onNavigate)
+    val currentOnBackClick by rememberUpdatedState(onBackClick)
+    val currentOnAddSetClick by rememberUpdatedState(onAddSetClick)
+
+    // Load sets when screen is displayed - either for activity or for user
+    LaunchedEffect(userId, activityId) {
+        if (activityId != null && activityId > 0L) {
+            // Load sets for specific activity
+            viewModel.loadSetsForActivity(activityId, activityTitle ?: "Activity Sets")
+        } else if (userId > 0L) {
+            // Load all sets for user
             viewModel.loadSets(userId)
         }
     }
 
-    // Handle error messages
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { _ ->
-            // You can show a Toast or Snackbar here if needed
-            viewModel.clearError()
-        }
+    // Determine the screen title
+    val screenTitle = if (activityId != null && activityTitle != null) {
+        "$activityTitle Sets"
+    } else {
+        "Your Activity Sets"
     }
 
     Box(
@@ -76,7 +87,7 @@ fun YourSetsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = onBackClick,
+                    onClick = { currentOnBackClick() },
                     modifier = Modifier.offset(x = (-12).dp)
                 ) {
                     Icon(
@@ -105,7 +116,7 @@ fun YourSetsScreen(
 
             // Title
             Text(
-                text = "Your Activity Sets",
+                text = screenTitle,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -156,7 +167,7 @@ fun YourSetsScreen(
                         SetItemCard(
                             title = set.title,
                             iconRes = R.drawable.ic_pencil,
-                            onClick = { viewModel.showSetDetails(set.id) }
+                            onClick = { currentOnEditSetClick(set.id) }
                         )
                     }
                 }
@@ -167,7 +178,7 @@ fun YourSetsScreen(
 
         // Floating "Add Sets" Button
         Button(
-            onClick = onAddSetClick,
+            onClick = { currentOnAddSetClick() },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 96.dp)
@@ -197,26 +208,9 @@ fun YourSetsScreen(
         // Bottom Navigation Bar
         BottomNavBar(
             selectedTab = 3,
-            onTabSelected = { onNavigate(it) },
+            onTabSelected = { currentOnNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
-    }
-
-    // Modal Display
-    if (uiState.showModal) {
-        uiState.selectedSetDetails?.let { setDetails ->
-            SetDetailsModal(
-                setDetails = setDetails,
-                onDismiss = { viewModel.closeModal() },
-                onEdit = {
-                    viewModel.closeModal()
-                    onEditSetClick(setDetails.set.id)
-                },
-                onDelete = {
-                    viewModel.deleteSet(setDetails.set.id)
-                }
-            )
-        }
     }
 }
 

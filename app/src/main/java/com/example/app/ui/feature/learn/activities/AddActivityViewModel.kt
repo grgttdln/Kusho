@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
  * Handles activity data collection and database persistence.
  */
 data class ChapterInfo(
+    val setId: Long,
     val title: String,
     val itemCount: Int
 )
@@ -78,13 +79,14 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /**
-     * Add a chapter to the activity
+     * Add a chapter (set) to the activity
      */
-    fun addChapter(chapterTitle: String, itemCount: Int = 0) {
+    fun addChapter(setId: Long, chapterTitle: String, itemCount: Int = 0) {
         if (chapterTitle.isNotBlank()) {
             _uiState.update {
                 it.copy(
                     selectedChapters = it.selectedChapters + ChapterInfo(
+                        setId = setId,
                         title = chapterTitle.trim(),
                         itemCount = itemCount
                     )
@@ -146,6 +148,11 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
             )
 
             result.onSuccess { activityId ->
+                // Link all selected sets to the activity
+                state.selectedChapters.forEach { chapter ->
+                    setRepository.linkSetToActivity(chapter.setId, activityId)
+                }
+
                 _uiState.update {
                     it.copy(
                         isLoading = false,

@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.app.data.dao.SetDao
 import com.example.app.data.dao.SetWordDao
 import com.example.app.data.dao.WordDao
+import com.example.app.data.entity.ActivitySet
 import com.example.app.data.entity.Set
 import com.example.app.data.entity.SetWord
 import kotlinx.coroutines.Dispatchers
@@ -160,6 +161,28 @@ class SetRepository(
     }
 
     /**
+     * Link a set to an activity.
+     *
+     * @param setId The ID of the set
+     * @param activityId The ID of the activity
+     * @return true if successful, false otherwise
+     */
+    suspend fun linkSetToActivity(setId: Long, activityId: Long): Boolean = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val activitySet = ActivitySet(
+                activityId = activityId,
+                setId = setId
+            )
+            setDao.insertActivitySet(activitySet)
+            Log.d(TAG_REPO, "✅ Linked set $setId to activity $activityId")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG_REPO, "❌ Failed to link set to activity: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Get all sets created by a specific user as a Flow.
      * Since sets are independent, all sets created by a user are returned.
      *
@@ -168,6 +191,16 @@ class SetRepository(
      */
     fun getSetsForUser(userId: Long): Flow<List<Set>> {
         return setDao.getSetsForUser(userId)
+    }
+
+    /**
+     * Get sets for a specific activity.
+     *
+     * @param activityId The activity ID
+     * @return Flow of sets belonging to the activity
+     */
+    fun getSetsForActivity(activityId: Long): Flow<List<Set>> {
+        return setDao.getSetsForActivity(activityId)
     }
 
     /**
@@ -232,6 +265,97 @@ class SetRepository(
             setDao.deleteSetById(setId) > 0
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /**
+     * Update an existing set with new title, description, and words.
+     *
+     * @param setId The ID of the set to update
+     * @param title The new title
+     * @param description The new description (can be null)
+     * @param userId The user ID (needed to lookup words)
+     * @param selectedWords List of selected words with their configuration types
+     * @return Result of the operation
+     */
+    suspend fun updateSetWithWords(
+        setId: Long,
+        title: String,
+        description: String?,
+        userId: Long,
+        selectedWords: List<SelectedWordConfig>
+    ): AddSetResult = withContext(Dispatchers.IO) {
+        Log.d(TAG_REPO, "🟢 updateSetWithWords() CALLED")
+        Log.d(TAG_REPO, "  - setId: $setId")
+        Log.d(TAG_REPO, "  - title: '$title'")
+        Log.d(TAG_REPO, "  - description: '$description'")
+        Log.d(TAG_REPO, "  - selectedWords count: ${selectedWords.size}")
+
+        return@withContext try {
+            if (title.isBlank()) {
+                Log.e(TAG_REPO, "❌ Validation error: Title is blank")
+                AddSetResult.Error("Set title cannot be empty")
+            } else if (selectedWords.isEmpty()) {
+                Log.e(TAG_REPO, "❌ Validation error: No words selected")
+                AddSetResult.Error("At least one word must be selected")
+            } else {
+                Log.d(TAG_REPO, "✅ Validation passed")
+
+                // Update the set
+                val updatedRows = setDao.updateSet(
+                    setId = setId,
+                    title = title.trim(),
+                    description = description?.trim(),
+                    itemCount = selectedWords.size,
+                    updatedAt = System.currentTimeMillis()
+                )
+                Log.d(TAG_REPO, "✅ Set updated, rows affected: $updatedRows")
+
+                // Delete existing set-word relationships
+                val deletedCount = setWordDao.deleteSetWords(setId)
+                Log.d(TAG_REPO, "✅ Deleted $deletedCount existing SetWord entries")
+
+                // Get all words for the user
+                Log.d(TAG_REPO, "📝 Loading words for userId: $userId")
+                val userWords = wordDao.getWordsByUserIdOnce(userId)
+                Log.d(TAG_REPO, "✅ Loaded ${userWords.size} words for user")
+
+                val wordMap = userWords.associateBy { it.word }
+
+                // Create new SetWord entries for each selected word
+                Log.d(TAG_REPO, "📝 Creating SetWord entries for ${selectedWords.size} selected words...")
+                val setWords = selectedWords.mapNotNull { selected ->
+                    val word = wordMap[selected.wordName]
+                    if (word != null) {
+                        Log.d(TAG_REPO, "  ✅ Found word '${selected.wordName}' with ID: ${word.id}")
+                        SetWord(
+                            setId = setId,
+                            wordId = word.id,
+                            configurationType = selected.configurationType
+                        )
+                    } else {
+                        Log.w(TAG_REPO, "  ⚠️ Word '${selected.wordName}' not found in user's words")
+                        null
+                    }
+                }
+
+                Log.d(TAG_REPO, "✅ Created ${setWords.size} SetWord entities")
+
+                // Insert all new set-word relationships
+                if (setWords.isNotEmpty()) {
+                    Log.d(TAG_REPO, "📝 Inserting ${setWords.size} SetWord entries...")
+                    setWordDao.insertSetWords(setWords)
+                    Log.d(TAG_REPO, "✅ SetWords inserted successfully")
+                } else {
+                    Log.w(TAG_REPO, "⚠️ No SetWords to insert")
+                }
+
+                Log.d(TAG_REPO, "✅ updateSetWithWords() SUCCESS")
+                AddSetResult.Success(setId)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG_REPO, "❌ Exception in updateSetWithWords: ${e.message}", e)
+            AddSetResult.Error(e.message ?: "Failed to update set with words")
         }
     }
 }

@@ -205,11 +205,11 @@ fun SelectSetsScreen(
         // Add Sets Button
         Button(
             onClick = {
-                // Add selected sets to ViewModel with their item counts
+                // Add selected sets to ViewModel with their IDs and item counts
                 filteredSets
                     .filter { selectedSets.contains(it.id) }
                     .forEach { set ->
-                        viewModel.addChapter(set.title, set.itemCount)
+                        viewModel.addChapter(set.id, set.title, set.itemCount)
                     }
                 onNavigate(8)
             },
