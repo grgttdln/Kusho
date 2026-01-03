@@ -204,6 +204,25 @@ class SetRepository(
     }
 
     /**
+     * Unlink a set from an activity.
+     * This only removes the link - the original set is NOT deleted.
+     *
+     * @param setId The ID of the set
+     * @param activityId The ID of the activity
+     * @return true if successful, false otherwise
+     */
+    suspend fun unlinkSetFromActivity(setId: Long, activityId: Long): Boolean = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val rowsDeleted = setDao.unlinkSetFromActivity(setId, activityId)
+            Log.d(TAG_REPO, "✅ Unlinked set $setId from activity $activityId (rows: $rowsDeleted)")
+            rowsDeleted > 0
+        } catch (e: Exception) {
+            Log.e(TAG_REPO, "❌ Failed to unlink set from activity: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Get all sets from the database as a Flow.
      *
      * @return Flow of all sets

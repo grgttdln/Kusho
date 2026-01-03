@@ -51,11 +51,11 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
 
     private val _uiState = MutableStateFlow(EditSetUiState())
     val uiState: StateFlow<EditSetUiState> = _uiState.asStateFlow()
-
+    
     // Channel for one-time events (navigation)
     private val _events = Channel<EditSetEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
-
+    
     private var currentLoadedSetId: Long? = null
 
     /**
@@ -76,13 +76,13 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             // Reset all state flags before loading
-            _uiState.update {
+            _uiState.update { 
                 it.copy(
-                    isLoading = true,
+                    isLoading = true, 
                     errorMessage = null,
                     isSaving = false,
                     isDeleting = false
-                )
+                ) 
             }
             try {
                 val setDetails = setRepository.getSetDetails(setId)

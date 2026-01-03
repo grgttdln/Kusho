@@ -90,4 +90,15 @@ interface SetDao {
         ORDER BY s.createdAt DESC
     """)
     fun getSetsForActivity(activityId: Long): Flow<List<Set>>
+
+    /**
+     * Remove a set from an activity (unlink).
+     * This only removes the link, not the actual set.
+     *
+     * @param setId The ID of the set
+     * @param activityId The ID of the activity
+     * @return The number of rows deleted
+     */
+    @Query("DELETE FROM activity_set WHERE setId = :setId AND activityId = :activityId")
+    suspend fun unlinkSetFromActivity(setId: Long, activityId: Long): Int
 }

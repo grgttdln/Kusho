@@ -16,6 +16,8 @@ import com.example.app.ui.feature.learn.TutorialModeScreen
 import com.example.app.ui.feature.learn.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
 import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
+import com.example.app.ui.feature.learn.activities.ActivitySetsScreen
+import com.example.app.ui.feature.learn.activities.LinkSetsToActivityScreen
 import com.example.app.ui.feature.learn.set.SelectSetsScreen
 import com.example.app.ui.feature.learn.set.YourSetsScreen
 import com.example.app.ui.feature.learn.set.AddSetScreen
@@ -87,31 +89,22 @@ fun MainNavigationContainer(
             onNavigateToSets = { activityId, activityTitle ->
                 selectedActivityId = activityId
                 selectedActivityTitle = activityTitle
-                currentScreen = 7
+                currentScreen = 16  // Navigate to ActivitySetsScreen
             },
             onBackClick = { currentScreen = 3 },
             modifier = modifier
         )
         7 -> {
-            // Use key to force refresh when returning from edit/add screens
-            key(yourSetsScreenKey, selectedActivityId) {
+            // YourSetsScreen - for viewing ALL user sets (from "Your Sets" menu)
+            key(yourSetsScreenKey) {
                 YourSetsScreen(
                     userId = userId,
-                    activityId = if (selectedActivityId > 0L) selectedActivityId else null,
-                    activityTitle = if (selectedActivityId > 0L) selectedActivityTitle else null,
                     onNavigate = { currentScreen = it },
-                    onBackClick = {
-                        // Go back to YourActivitiesScreen if coming from an activity, otherwise to LessonScreen
-                        if (selectedActivityId > 0L) {
-                            selectedActivityId = 0L
-                            selectedActivityTitle = ""
-                            currentScreen = 6
-                        } else {
-                            currentScreen = 3
-                        }
-                    },
+                    onBackClick = { currentScreen = 3 },
                     onAddSetClick = {
-                        // Reset words and navigate to AddSetScreen
+                        // Reset words and navigate to AddSetScreen (without activity link)
+                        selectedActivityId = 0L
+                        selectedActivityTitle = ""
                         wordsForCreation = emptyList()
                         selectedWordsWithConfigs = emptyList()
                         currentScreen = 11
@@ -150,7 +143,8 @@ fun MainNavigationContainer(
                 onBackClick = {
                     wordsForCreation = emptyList()
                     selectedWordsWithConfigs = emptyList()
-                    currentScreen = 7 
+                    // Go back to ActivitySetsScreen if from activity, otherwise YourSetsScreen
+                    currentScreen = if (selectedActivityId > 0L) 16 else 7
                 },
                 onAddWordsClick = { currentScreen = 12 },
                 selectedWords = wordsForCreation,
@@ -180,8 +174,9 @@ fun MainNavigationContainer(
             subtitle = createdSetTitle,
             onContinueClick = {
                 createdSetTitle = ""
-                yourSetsScreenKey++ // Force YourSetsScreen to refresh
-                currentScreen = 7
+                yourSetsScreenKey++ // Force screens to refresh
+                // Go back to ActivitySetsScreen if from activity, otherwise YourSetsScreen
+                currentScreen = if (selectedActivityId > 0L) 16 else 7
             },
             modifier = modifier
         )
@@ -191,19 +186,22 @@ fun MainNavigationContainer(
                 userId = userId,
                 onBackClick = {
                     wordsForEdit = emptyList()
-                    yourSetsScreenKey++ // Force YourSetsScreen to refresh
-                    currentScreen = 7
+                    yourSetsScreenKey++ // Force screens to refresh
+                    // Go back to ActivitySetsScreen if from activity, otherwise YourSetsScreen
+                    currentScreen = if (selectedActivityId > 0L) 16 else 7
                 },
                 onAddWordsClick = { currentScreen = 15 },
                 onUpdateSuccess = {
                     wordsForEdit = emptyList()
-                    yourSetsScreenKey++ // Force YourSetsScreen to refresh
-                    currentScreen = 7
+                    yourSetsScreenKey++ // Force screens to refresh
+                    // Go back to ActivitySetsScreen if from activity, otherwise YourSetsScreen
+                    currentScreen = if (selectedActivityId > 0L) 16 else 7
                 },
                 onDeleteSuccess = {
                     wordsForEdit = emptyList()
-                    yourSetsScreenKey++ // Force YourSetsScreen to refresh
-                    currentScreen = 7
+                    yourSetsScreenKey++ // Force screens to refresh
+                    // Go back to ActivitySetsScreen if from activity, otherwise YourSetsScreen
+                    currentScreen = if (selectedActivityId > 0L) 16 else 7
                 },
                 selectedWords = wordsForEdit,
                 modifier = modifier
@@ -219,6 +217,45 @@ fun MainNavigationContainer(
                 onWordsSelected = { selectedWords ->
                     wordsForEdit = selectedWords
                     currentScreen = 14
+                },
+                modifier = modifier
+            )
+        }
+        // ActivitySetsScreen - for viewing sets within a specific activity
+        16 -> {
+            key(yourSetsScreenKey) {
+                ActivitySetsScreen(
+                    activityId = selectedActivityId,
+                    activityTitle = selectedActivityTitle,
+                    onNavigate = { currentScreen = it },
+                    onBackClick = {
+                        selectedActivityId = 0L
+                        selectedActivityTitle = ""
+                        currentScreen = 6  // Back to YourActivitiesScreen
+                    },
+                    onAddSetClick = {
+                        // Navigate to screen to link existing sets to this activity
+                        currentScreen = 17
+                    },
+                    onViewSetClick = { setId ->
+                        // Navigate to EditSetScreen to view/edit the set
+                        selectedSetId = setId
+                        wordsForEdit = emptyList()
+                        currentScreen = 14
+                    },
+                    modifier = modifier
+                )
+            }
+        }
+        // LinkSetsToActivityScreen - for adding existing sets to an activity
+        17 -> {
+            LinkSetsToActivityScreen(
+                activityId = selectedActivityId,
+                userId = userId,
+                onBackClick = { currentScreen = 16 },
+                onSetsLinked = {
+                    yourSetsScreenKey++ // Force refresh
+                    currentScreen = 16
                 },
                 modifier = modifier
             )

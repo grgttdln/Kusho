@@ -34,8 +34,6 @@ import com.example.app.ui.components.SetItemCard
 fun YourSetsScreen(
     modifier: Modifier = Modifier,
     userId: Long = 0L,
-    activityId: Long? = null,
-    activityTitle: String? = null,
     onNavigate: (Int) -> Unit,
     onBackClick: () -> Unit,
     onAddSetClick: () -> Unit = {},
@@ -51,22 +49,11 @@ fun YourSetsScreen(
     val currentOnBackClick by rememberUpdatedState(onBackClick)
     val currentOnAddSetClick by rememberUpdatedState(onAddSetClick)
 
-    // Load sets when screen is displayed - either for activity or for user
-    LaunchedEffect(userId, activityId) {
-        if (activityId != null && activityId > 0L) {
-            // Load sets for specific activity
-            viewModel.loadSetsForActivity(activityId, activityTitle ?: "Activity Sets")
-        } else if (userId > 0L) {
-            // Load all sets for user
+    // Load sets when screen is displayed
+    LaunchedEffect(userId) {
+        if (userId > 0L) {
             viewModel.loadSets(userId)
         }
-    }
-
-    // Determine the screen title
-    val screenTitle = if (activityId != null && activityTitle != null) {
-        "$activityTitle Sets"
-    } else {
-        "Your Activity Sets"
     }
 
     Box(
@@ -116,7 +103,7 @@ fun YourSetsScreen(
 
             // Title
             Text(
-                text = screenTitle,
+                text = "Your Activity Sets",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)

@@ -51,16 +51,6 @@ fun EditSetScreen(
     val currentOnUpdateSuccess by rememberUpdatedState(onUpdateSuccess)
     val currentOnDeleteSuccess by rememberUpdatedState(onDeleteSuccess)
 
-    // Handle one-time navigation events
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is EditSetEvent.UpdateSuccess -> currentOnUpdateSuccess()
-                is EditSetEvent.DeleteSuccess -> currentOnDeleteSuccess()
-            }
-        }
-    }
-
     // Load the set when the screen is first displayed or when setId changes
     // The ViewModel will only reload if it's a different set
     LaunchedEffect(setId) {
@@ -78,6 +68,16 @@ fun EditSetScreen(
             val newWords = selectedWords.filter { it.wordName !in existingWordNames }
             if (newWords.isNotEmpty()) {
                 viewModel.setSelectedWords(currentWords + newWords)
+            }
+        }
+    }
+
+    // Handle navigation events (delete success, update success)
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is EditSetEvent.DeleteSuccess -> currentOnDeleteSuccess()
+                is EditSetEvent.UpdateSuccess -> currentOnUpdateSuccess()
             }
         }
     }
