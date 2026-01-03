@@ -11,7 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,42 +53,10 @@ fun ActivitySetsScreen(
         viewModel.loadSetsForActivity(activityId)
     }
 
-    // Show confirmation dialog for unlinking a set
-    var setToUnlink by remember { mutableStateOf<Long?>(null) }
-    var setTitleToUnlink by remember { mutableStateOf("") }
-
-    if (setToUnlink != null) {
-        AlertDialog(
-            onDismissRequest = { setToUnlink = null },
-            title = {
-                Text(
-                    text = "Remove Set from Activity",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    text = "Remove \"$setTitleToUnlink\" from this activity? The original set will not be deleted.",
-                    fontSize = 16.sp
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        setToUnlink?.let { viewModel.unlinkSetFromActivity(it, activityId) }
-                        setToUnlink = null
-                    }
-                ) {
-                    Text("Remove", color = Color(0xFFE53935))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { setToUnlink = null }) {
-                    Text("Cancel", color = Color(0xFF3FA9F8))
-                }
-            }
-        )
-    }
+    // Edit mode state for delete functionality
+    var isEditMode by remember { mutableStateOf(false) }
+    var setToUnlink by remember { mutableStateOf<Set?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -101,7 +70,7 @@ fun ActivitySetsScreen(
         ) {
             Spacer(Modifier.height(24.dp))
 
-            // Back Button and Kusho Logo
+            // Back Button, Kusho Logo, and Edit Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -123,13 +92,23 @@ fun ActivitySetsScreen(
                     modifier = Modifier
                         .height(54.dp)
                         .weight(1f)
-                        .padding(horizontal = 30.dp)
-                        .offset(x = 10.dp),
+                        .padding(horizontal = 30.dp),
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.Center
                 )
 
-                Spacer(modifier = Modifier.width(48.dp))
+                // Edit/Delete mode toggle button
+                IconButton(
+                    onClick = { isEditMode = !isEditMode },
+                    modifier = Modifier.offset(x = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isEditMode) Icons.Default.Delete else Icons.Default.Edit,
+                        contentDescription = if (isEditMode) "Exit Edit Mode" else "Edit Mode",
+                        tint = if (isEditMode) Color(0xFFFF6B6B) else Color(0xFF3FA9F8),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(32.dp))
@@ -187,15 +166,42 @@ fun ActivitySetsScreen(
                             items = uiState.sets,
                             key = { set: Set -> set.id }
                         ) { set: Set ->
-                            ActivitySetCard(
-                                title = set.title,
-                                itemCount = set.itemCount,
-                                onClick = { onViewSetClick(set.id) },
-                                onRemoveClick = {
-                                    setTitleToUnlink = set.title
-                                    setToUnlink = set.id
-                                }
-                            )
+                            // Check if this set is selected for deletion
+                            val isSelected = setToUnlink?.id == set.id
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (isSelected && isEditMode) {
+                                            Modifier
+                                                .border(
+                                                    width = 3.dp,
+                                                    color = Color(0xFF3FA9F8),
+                                                    shape = RoundedCornerShape(16.dp)
+                                                )
+                                                .background(
+                                                    color = Color(0x203FA9F8),
+                                                    shape = RoundedCornerShape(16.dp)
+                                                )
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                            ) {
+                                ActivitySetCard(
+                                    title = set.title,
+                                    itemCount = set.itemCount,
+                                    onClick = {
+                                        if (isEditMode) {
+                                            setToUnlink = set
+                                            showDeleteDialog = true
+                                        } else {
+                                            onViewSetClick(set.id)
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -239,20 +245,69 @@ fun ActivitySetsScreen(
             onTabSelected = { onNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // Delete Confirmation Dialog
+        if (showDeleteDialog && setToUnlink != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteDialog = false
+                    setToUnlink = null
+                },
+                title = {
+                    Text(
+                        text = "Remove Set from Activity",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to remove \"${setToUnlink?.title}\" from this activity? The original set will not be deleted."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            setToUnlink?.let { set ->
+                                viewModel.unlinkSetFromActivity(set.id, activityId)
+                            }
+                            showDeleteDialog = false
+                            setToUnlink = null
+                            isEditMode = false
+                        }
+                    ) {
+                        Text(
+                            text = "Remove",
+                            color = Color(0xFFFF6B6B)
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog = false
+                            setToUnlink = null
+                        }
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            color = Color(0xFF3FA9F8)
+                        )
+                    }
+                }
+            )
+        }
     }
 }
 
 /**
  * Beautiful card component for displaying a set within an activity.
- * Matches the SetItemCard design with title on the left, large pencil icon on the right,
- * and includes a remove button.
+ * Matches the SetItemCard design with title on the left, large pencil icon on the right.
  */
 @Composable
 private fun ActivitySetCard(
     title: String,
     itemCount: Int,
     onClick: () -> Unit,
-    onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -297,7 +352,7 @@ private fun ActivitySetCard(
                 )
             }
 
-            // Pencil icon on the right - large decorative icon
+            // Pencil icon on the right
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -314,22 +369,6 @@ private fun ActivitySetCard(
                     alignment = Alignment.Center
                 )
             }
-        }
-
-        // Remove button in top-right corner
-        IconButton(
-            onClick = onRemoveClick,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .size(32.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Remove from activity",
-                tint = Color(0xFFE53935),
-                modifier = Modifier.size(20.dp)
-            )
         }
     }
 }
