@@ -93,9 +93,8 @@ fun ActivitySetsScreen(
                     contentDescription = "Kusho Logo",
                     modifier = Modifier
                         .height(54.dp)
-                        .weight(1f)
-                        .padding(horizontal = 30.dp),
-                    contentScale = ContentScale.Fit,
+                        .offset(x = 10.dp)
+                        .weight(1f),
                     alignment = Alignment.Center
                 )
 

@@ -128,12 +128,12 @@ fun EditSetScreen(
                         contentDescription = "Kusho Logo",
                         modifier = Modifier
                             .height(54.dp)
-                            .offset(x = -10.dp)
                             .weight(1f),
                         alignment = Alignment.Center
                     )
 
-
+                    // Spacer to balance the back button and center the logo
+                    Spacer(modifier = Modifier.width(29.dp))
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
