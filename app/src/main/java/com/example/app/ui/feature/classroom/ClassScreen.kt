@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.classroom.ClassCard
@@ -25,8 +28,10 @@ fun ClassScreen(
     onNavigate: (Int) -> Unit,
     onNavigateToCreateClass: () -> Unit = {},
     onNavigateToClassDetails: (String) -> Unit = {},
+    viewModel: ClassroomViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
+    val uiState by viewModel.classListUiState.collectAsState()
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -61,22 +66,62 @@ fun ClassScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            // Class Cards
-            ClassCard(
-                classCode = "G1-YB",
-                className = "Grade 1 Young Builders",
-                imageRes = R.drawable.ic_class_abc,
-                onClick = { onNavigateToClassDetails("1") }
-            )
-
-            Spacer(Modifier.height(20.dp))
-
-            ClassCard(
-                classCode = "G1-BS",
-                className = "Grade 1 Bright Sparks",
-                imageRes = R.drawable.ic_class_stars,
-                onClick = { onNavigateToClassDetails("2") }
-            )
+            // Show loading indicator
+            if (uiState.isLoading) {
+                Spacer(Modifier.height(40.dp))
+                CircularProgressIndicator(color = Color(0xFF3FA9F8))
+                Spacer(Modifier.height(40.dp))
+            }
+            // Show error message
+            else if (uiState.error != null) {
+                Spacer(Modifier.height(40.dp))
+                Text(
+                    text = uiState.error!!,
+                    fontSize = 16.sp,
+                    color = Color.Red,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                )
+                Spacer(Modifier.height(40.dp))
+            }
+            // Show empty state
+            else if (uiState.classes.isEmpty()) {
+                Spacer(Modifier.height(40.dp))
+                
+                Text(
+                    text = "Start Building Your Classroom!",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF3FA9F8),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                
+                Spacer(Modifier.height(16.dp))
+                
+                Text(
+                    text = "Create your first class to begin managing students and tracking their progress.",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color(0xFF666666),
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    lineHeight = 24.sp
+                )
+                
+                Spacer(Modifier.height(40.dp))
+            }
+            // Show class list
+            else {
+                uiState.classes.forEach { classWithCount ->
+                    val classEntity = classWithCount.classEntity
+                    ClassCard(
+                        classCode = classEntity.classCode,
+                        className = classEntity.className,
+                        imageRes = R.drawable.ic_class_abc,
+                        imagePath = classEntity.bannerPath,
+                        onClick = { onNavigateToClassDetails(classEntity.classId.toString()) }
+                    )
+                    Spacer(Modifier.height(20.dp))
+                }
+            }
 
             Spacer(Modifier.height(28.dp))
 

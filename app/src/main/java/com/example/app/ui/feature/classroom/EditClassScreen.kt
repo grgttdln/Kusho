@@ -32,38 +32,66 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
+import com.example.app.ui.components.classroom.ArchiveClassDialog
+import com.example.app.util.ImageUtil
 
 @Composable
 fun EditClassScreen(
     classId: String,
     initialClassName: String,
     initialClassCode: String,
-    initialBannerRes: Int,
+    initialBannerPath: String? = null,
     onNavigateBack: () -> Unit,
     onSaveChanges: (String, String) -> Unit,
     onArchiveClass: () -> Unit,
+    viewModel: ClassroomViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var className by remember { mutableStateOf(initialClassName) }
     var classCode by remember { mutableStateOf(initialClassCode) }
-    var selectedBannerRes by remember { mutableStateOf<Int?>(initialBannerRes) }
+    
+    // Parse initial banner - check if it's a drawable resource, file path, or null
+    val (initBannerRes, initBannerPath) = remember(initialBannerPath) {
+        when {
+            initialBannerPath == null -> Pair(null, null)
+            initialBannerPath.startsWith("drawable://") -> {
+                val resName = initialBannerPath.removePrefix("drawable://")
+                val resId = when (resName) {
+                    "ic_class_abc" -> R.drawable.ic_class_abc
+                    "ic_class_stars" -> R.drawable.ic_class_stars
+                    else -> null
+                }
+                Pair(resId, null)
+            }
+            else -> Pair(null, initialBannerPath) // It's a file path
+        }
+    }
+    
+    var selectedBannerRes by remember { mutableStateOf<Int?>(initBannerRes) }
     var customBannerUri by remember { mutableStateOf<Uri?>(null) }
+    var customBannerPath by remember { mutableStateOf<String?>(initBannerPath) }
     var showBannerPicker by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
+    var showArchiveDialog by remember { mutableStateOf(false) }
     
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             customBannerUri = it
+            // Save image to internal storage
+            customBannerPath = ImageUtil.saveImageToInternalStorage(context, it, "banner")
             selectedBannerRes = null // Clear preset selection
         }
     }
@@ -129,6 +157,14 @@ fun EditClassScreen(
                         customBannerUri != null -> {
                             AsyncImage(
                                 model = customBannerUri,
+                                contentDescription = "Custom Class Banner",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        customBannerPath != null -> {
+                            AsyncImage(
+                                model = java.io.File(customBannerPath),
                                 contentDescription = "Custom Class Banner",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -239,8 +275,33 @@ fun EditClassScreen(
                 text = "Save Changes",
                 onClick = {
                     if (isFormValid) {
+                        // Determine banner path: saved file path, drawable resource, or null
+                        val bannerPath = when {
+                            customBannerPath != null -> customBannerPath
+                            selectedBannerRes != null -> {
+                                // Save drawable resource ID as special string format
+                                when (selectedBannerRes) {
+                                    R.drawable.ic_class_abc -> "drawable://ic_class_abc"
+                                    R.drawable.ic_class_stars -> "drawable://ic_class_stars"
+                                    else -> null
+                                }
+                            }
+                            else -> null
+                        }
+                        
+                        viewModel.updateClass(
+                            classId = classId.toLongOrNull() ?: 0L,
+                            className = className,
+                            classCode = classCode,
+                            bannerPath = bannerPath,
+                            onSuccess = {
+                                showSuccessDialog = true
+                            },
+                            onError = { error ->
+                                // TODO: Show error toast/snackbar
+                            }
+                        )
                         onSaveChanges(className, classCode)
-                        showSuccessDialog = true
                     }
                 },
                 enabled = isFormValid,
@@ -251,7 +312,9 @@ fun EditClassScreen(
 
             // Archive Class Button (Outlined)
             androidx.compose.material3.OutlinedButton(
-                onClick = onArchiveClass,
+                onClick = {
+                    showArchiveDialog = true
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(75.dp)
@@ -293,6 +356,29 @@ fun EditClassScreen(
             onDismiss = {
                 showSuccessDialog = false
                 onNavigateBack()
+            }
+        )
+    }
+    
+    // Archive Confirmation Dialog
+    if (showArchiveDialog) {
+        ArchiveClassDialog(
+            className = className,
+            onConfirm = {
+                viewModel.archiveClass(
+                    classId = classId.toLongOrNull() ?: 0L,
+                    onSuccess = {
+                        showArchiveDialog = false
+                        onArchiveClass()
+                    },
+                    onError = { error ->
+                        // TODO: Show error toast/snackbar
+                        showArchiveDialog = false
+                    }
+                )
+            },
+            onDismiss = {
+                showArchiveDialog = false
             }
         )
     }

@@ -16,12 +16,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.app.R
 
 @Composable
 fun ClassCard(
     classCode: String,
     className: String,
-    imageRes: Int,
+    imageRes: Int = R.drawable.ic_class_abc,
+    imagePath: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -37,14 +40,45 @@ fun ClassCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Image(
-                painter = painterResource(id = imageRes),
-                contentDescription = className,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(183.dp),
-                contentScale = ContentScale.Crop
-            )
+            when {
+                imagePath?.startsWith("drawable://") == true -> {
+                    val resName = imagePath.removePrefix("drawable://")
+                    val drawableRes = when (resName) {
+                        "ic_class_abc" -> R.drawable.ic_class_abc
+                        "ic_class_stars" -> R.drawable.ic_class_stars
+                        else -> imageRes
+                    }
+                    Image(
+                        painter = painterResource(id = drawableRes),
+                        contentDescription = className,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(183.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                imagePath != null -> {
+                    AsyncImage(
+                        model = java.io.File(imagePath),
+                        contentDescription = className,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(183.dp),
+                        contentScale = ContentScale.Crop,
+                        error = painterResource(id = imageRes)
+                    )
+                }
+                else -> {
+                    Image(
+                        painter = painterResource(id = imageRes),
+                        contentDescription = className,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(183.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
 
             Column(
                 modifier = Modifier

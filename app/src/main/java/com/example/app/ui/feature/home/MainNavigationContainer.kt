@@ -32,6 +32,7 @@ fun MainNavigationContainer(
     var selectedClassId by remember { mutableStateOf("") }
     var selectedClassName by remember { mutableStateOf("") }
     var selectedClassCode by remember { mutableStateOf("") }
+    var selectedClassBannerPath by remember { mutableStateOf<String?>(null) }
     var addedStudentName by remember { mutableStateOf("") }
     var selectedStudentId by remember { mutableStateOf("") }
     var selectedStudentName by remember { mutableStateOf("") }
@@ -97,12 +98,14 @@ fun MainNavigationContainer(
             onNavigateBack = { currentScreen = 2 },
             onNavigateToAddStudent = { className ->
                 selectedClassName = className
+                // selectedClassId is already set
                 currentScreen = 11
             },
-            onNavigateToEditClass = { classId, className, classCode ->
+            onNavigateToEditClass = { classId, className, classCode, bannerPath ->
                 selectedClassId = classId
                 selectedClassName = className
                 selectedClassCode = classCode
+                selectedClassBannerPath = bannerPath
                 currentScreen = 13
             },
             onNavigateToStudentDetails = { studentId, studentName, className ->
@@ -114,6 +117,7 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         11 -> AddStudentScreen(
+            classId = selectedClassId,
             className = selectedClassName,
             onNavigateBack = { currentScreen = 10 },
             onStudentAdded = { studentName ->
@@ -131,15 +135,13 @@ fun MainNavigationContainer(
             classId = selectedClassId,
             initialClassName = selectedClassName,
             initialClassCode = selectedClassCode,
-            initialBannerRes = com.example.app.R.drawable.ic_class_abc,
+            initialBannerPath = selectedClassBannerPath,
             onNavigateBack = { currentScreen = 10 },
             onSaveChanges = { newClassName, newClassCode ->
-                // TODO: Save to database
                 selectedClassName = newClassName
                 selectedClassCode = newClassCode
             },
             onArchiveClass = {
-                // TODO: Archive class in database
                 currentScreen = 2
             },
             modifier = modifier
@@ -148,6 +150,7 @@ fun MainNavigationContainer(
             studentId = selectedStudentId,
             studentName = selectedStudentName,
             className = selectedClassName,
+            classId = selectedClassId,
             onNavigateBack = { currentScreen = 10 },
             modifier = modifier
         )

@@ -64,6 +64,7 @@ fun DashboardScreen(
     // Request battery update every time Dashboard appears/resumes
     LaunchedEffect(Unit) {
         viewModel.requestBatteryUpdate()
+        viewModel.refreshAnalytics() // Refresh analytics data
     }
     
     // Also request when watch connection state changes to connected
@@ -365,7 +366,7 @@ fun DashboardScreen(
                     lineHeight = 30.sp
                 )
 
-                TextButton(onClick = { /* TODO */ }) {
+                TextButton(onClick = { onNavigate(2) }) {
                     Text(
                         text = "View More",
                         fontSize = 12.sp,
@@ -379,14 +380,55 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(9.dp))
 
-            // Class Card
-            ClassCard(
-                classCode = "G1-YB",
-                className = "Grade 1 Young Builders",
-                imageRes = R.drawable.ic_class_abc,
-                onClick = { /* TODO: Navigate to class details */ },
-                modifier = Modifier.padding(horizontal = 30.dp)
-            )
+            // Class Card or Empty State
+            val recentClass = uiState.recentClass
+            if (recentClass != null) {
+                ClassCard(
+                    classCode = recentClass.classCode,
+                    className = recentClass.className,
+                    imageRes = R.drawable.ic_class_abc,
+                    imagePath = recentClass.bannerPath,
+                    onClick = { /* TODO: Navigate to class details */ },
+                    modifier = Modifier.padding(horizontal = 30.dp)
+                )
+            } else {
+                // Empty state
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 30.dp)
+                        .height(150.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFF6F6F8)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "No Classes Yet",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF666666)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Create your first class to get started!",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color(0xFF999999)
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }

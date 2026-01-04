@@ -22,32 +22,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
+import com.example.app.util.ImageUtil
 
 @Composable
 fun AddStudentScreen(
+    classId: String,
     className: String = "Grade 1 Bright Sparks",
     onNavigateBack: () -> Unit,
     onStudentAdded: (studentName: String) -> Unit,
+    viewModel: ClassroomViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var studentName by remember { mutableStateOf("") }
     var gradeLevel by remember { mutableStateOf("") }
     var birthday by remember { mutableStateOf("") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
+    var profileImagePath by remember { mutableStateOf<String?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             profileImageUri = it
+            // Save image to internal storage
+            profileImagePath = ImageUtil.saveImageToInternalStorage(context, it, "profile")
         }
     }
 
@@ -259,7 +268,19 @@ fun AddStudentScreen(
                 text = "Add A New Student",
                 onClick = {
                     if (isFormValid) {
-                        onStudentAdded(studentName)
+                        viewModel.addStudentToClass(
+                            fullName = studentName,
+                            gradeLevel = gradeLevel,
+                            birthday = birthday,
+                            pfpPath = profileImagePath,
+                            classId = classId.toLongOrNull() ?: 0L,
+                            onSuccess = { studentId ->
+                                onStudentAdded(studentName)
+                            },
+                            onError = { error ->
+                                // TODO: Show error toast/snackbar
+                            }
+                        )
                     }
                 },
                 enabled = isFormValid,
@@ -275,6 +296,8 @@ fun AddStudentScreen(
 @Composable
 fun AddStudentScreenPreview() {
     AddStudentScreen(
+        classId = "1",
+        className = "Preview Class",
         onNavigateBack = {},
         onStudentAdded = {}
     )

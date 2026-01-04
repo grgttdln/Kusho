@@ -28,20 +28,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
+import com.example.app.util.ImageUtil
 
 @Composable
 fun CreateClassScreen(
     onNavigateBack: () -> Unit,
     onClassCreated: (className: String) -> Unit,
+    viewModel: ClassroomViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var className by remember { mutableStateOf("") }
     var classCode by remember { mutableStateOf("") }
     var selectedBannerRes by remember { mutableStateOf<Int?>(null) }
     var customBannerUri by remember { mutableStateOf<Uri?>(null) }
+    var customBannerPath by remember { mutableStateOf<String?>(null) }
     var showBannerPicker by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -49,6 +54,8 @@ fun CreateClassScreen(
     ) { uri: Uri? ->
         uri?.let {
             customBannerUri = it
+            // Save image to internal storage
+            customBannerPath = ImageUtil.saveImageToInternalStorage(context, it, "banner")
             selectedBannerRes = null // Clear preset selection
         }
     }
@@ -223,7 +230,31 @@ fun CreateClassScreen(
                 text = "Create New Class",
                 onClick = {
                     if (isFormValid) {
-                        onClassCreated(className)
+                        // Determine banner path: saved file path, drawable resource, or null
+                        val bannerPath = when {
+                            customBannerPath != null -> customBannerPath
+                            selectedBannerRes != null -> {
+                                // Save drawable resource ID as special string format
+                                when (selectedBannerRes) {
+                                    R.drawable.ic_class_abc -> "drawable://ic_class_abc"
+                                    R.drawable.ic_class_stars -> "drawable://ic_class_stars"
+                                    else -> null
+                                }
+                            }
+                            else -> null
+                        }
+                        
+                        viewModel.createClass(
+                            className = className,
+                            classCode = classCode,
+                            bannerPath = bannerPath,
+                            onSuccess = {
+                                onClassCreated(className)
+                            },
+                            onError = { error ->
+                                // TODO: Show error toast/snackbar
+                            }
+                        )
                     }
                 },
                 enabled = isFormValid,

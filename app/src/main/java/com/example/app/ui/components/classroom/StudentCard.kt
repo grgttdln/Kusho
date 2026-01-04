@@ -22,12 +22,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.app.R
 
 @Composable
 fun StudentCard(
     studentName: String,
     profileImageRes: Int = R.drawable.dis_default_pfp,
+    profileImagePath: String? = null,
     onClick: () -> Unit = {},
     isRemovalMode: Boolean = false,
     onRemove: () -> Unit = {},
@@ -45,14 +47,26 @@ fun StudentCard(
             modifier = Modifier.fillMaxSize()
         ) {
             // Profile Image
-            Image(
-                painter = painterResource(id = profileImageRes),
-                contentDescription = studentName,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
-            )
+            if (profileImagePath != null) {
+                AsyncImage(
+                    model = java.io.File(profileImagePath),
+                    contentDescription = studentName,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                    error = painterResource(id = profileImageRes)
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = profileImageRes),
+                    contentDescription = studentName,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             // Name overlay at bottom - centered
             Box(
