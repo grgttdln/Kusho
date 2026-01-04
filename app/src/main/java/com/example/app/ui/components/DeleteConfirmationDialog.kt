@@ -30,7 +30,8 @@ import com.example.app.R
 enum class DeleteType {
     SET,
     ACTIVITY,
-    SET_FROM_ACTIVITY
+    SET_FROM_ACTIVITY,
+    WORD
 }
 
 /**
@@ -55,6 +56,7 @@ fun DeleteConfirmationDialog(
         DeleteType.SET -> "Delete this Set?"
         DeleteType.ACTIVITY -> "Delete this Activity?"
         DeleteType.SET_FROM_ACTIVITY -> "Remove Set From this Activity?"
+        DeleteType.WORD -> "Delete this Word?"
     }
 
     Dialog(

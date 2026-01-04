@@ -210,7 +210,9 @@ private fun WordInputSection(
                 unfocusedContainerColor = Color.White,
                 cursorColor = Color(0xFF49A9FF),
                 disabledBorderColor = Color(0xFFE0E0E0),
-                disabledContainerColor = Color(0xFFF5F5F5)
+                disabledContainerColor = Color(0xFFF5F5F5),
+                focusedTextColor = Color(0xFF49A9FF),
+                unfocusedTextColor = if (wordInput.isNotEmpty()) Color(0xFF49A9FF) else Color.Gray
             ),
             singleLine = true,
             isError = inputError != null,
