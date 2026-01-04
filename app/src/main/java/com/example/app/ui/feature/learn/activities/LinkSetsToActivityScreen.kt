@@ -1,60 +1,59 @@
-package com.example.app.ui.feature.learn.set
+package com.example.app.ui.feature.learn.activities
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
+import com.example.app.data.entity.Set
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.SetItemCard
-import com.example.app.ui.feature.learn.activities.AddActivityViewModel
 
-
-
+/**
+ * Screen to link existing sets to an activity.
+ * Shows all user's sets and allows selecting which ones to add to the activity.
+ */
 @Composable
-fun SelectSetsScreen(
-    onNavigate: (Int) -> Unit,
+fun LinkSetsToActivityScreen(
+    activityId: Long,
+    userId: Long,
     onBackClick: () -> Unit,
+    onSetsLinked: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: AddActivityViewModel = viewModel()
+    viewModel: LinkSetsToActivityViewModel = viewModel()
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedSets by remember { mutableStateOf(setOf<Long>()) }
-    
     val uiState by viewModel.uiState.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedSetIds by remember { mutableStateOf(setOf<Long>()) }
 
-    // Load all available sets from the database
-    LaunchedEffect(Unit) {
-        viewModel.loadAllSets()
+    // Load user's sets and already linked sets
+    LaunchedEffect(activityId, userId) {
+        viewModel.loadData(userId, activityId)
     }
 
-    // Filter sets based on search query - memoized to prevent excessive filtering
+    // Filter sets based on search query
     val filteredSets = remember(searchQuery, uiState.availableSets) {
         uiState.availableSets.filter { set ->
             set.title.contains(searchQuery, ignoreCase = true)
         }
     }
+
+    // Check if a set is already linked to this activity
+    val alreadyLinkedIds = uiState.alreadyLinkedSetIds
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -62,7 +61,6 @@ fun SelectSetsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 160.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -94,7 +92,7 @@ fun SelectSetsScreen(
 
             // Title
             Text(
-                text = "Select Set/s",
+                text = "Add Sets to Activity",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF000000),
@@ -137,7 +135,7 @@ fun SelectSetsScreen(
                     unfocusedTextColor = Color(0xFF000000),
                     cursorColor = Color(0xFF3FA9F8)
                 ),
-                textStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 16.sp,
                     color = Color(0xFF000000)
                 ),
@@ -147,71 +145,81 @@ fun SelectSetsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Set Cards List or Loading State
-            if (uiState.availableSets.isEmpty() && !uiState.isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 15.dp)
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No sets available.\nCreate a set to get started!",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF808080),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 15.dp)
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        color = Color(0xFF3FA9F8)
-                    )
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 15.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    filteredSets.forEach { set ->
-                        SetItemCard(
-                            title = set.title,
-                            iconRes = R.drawable.ic_pencil,
-                            isSelected = selectedSets.contains(set.id),
-                            onClick = {
-                                selectedSets = if (selectedSets.contains(set.id)) {
-                                    selectedSets - set.id
-                                } else {
-                                    selectedSets + set.id
-                                }
-                            }
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 15.dp)
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF3FA9F8)
                         )
+                    }
+                }
+                uiState.availableSets.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 15.dp)
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No sets available.\nCreate sets first in 'Your Sets'!",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF808080),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 15.dp)
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(
+                            items = filteredSets,
+                            key = { set: Set -> set.id }
+                        ) { set: Set ->
+                            val isAlreadyLinked = alreadyLinkedIds.contains(set.id)
+                            val isSelected = selectedSetIds.contains(set.id)
+
+                            SetItemCard(
+                                title = set.title,
+                                iconRes = R.drawable.ic_pencil,
+                                isSelected = isSelected || isAlreadyLinked,
+                                onClick = {
+                                    if (!isAlreadyLinked) {
+                                        selectedSetIds = if (isSelected) {
+                                            selectedSetIds - set.id
+                                        } else {
+                                            selectedSetIds + set.id
+                                        }
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Add Sets Button
+        // Add Selected Sets Button
         Button(
             onClick = {
-                // Add selected sets to ViewModel with their IDs and item counts
-                filteredSets
-                    .filter { selectedSets.contains(it.id) }
-                    .forEach { set ->
-                        viewModel.addChapter(set.id, set.title, set.itemCount)
-                    }
-                onNavigate(8)
+                if (selectedSetIds.isNotEmpty()) {
+                    viewModel.linkSetsToActivity(selectedSetIds.toList(), activityId)
+                    onSetsLinked()
+                }
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -220,37 +228,32 @@ fun SelectSetsScreen(
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF3FA9F8),
-                disabledContainerColor = Color(0xFFB3E5FC),
-                disabledContentColor = Color.White
+                disabledContainerColor = Color(0xFFB3E5FC)
             ),
             shape = RoundedCornerShape(16.dp),
-            contentPadding = PaddingValues(0.dp),
-            enabled = selectedSets.isNotEmpty()
+            enabled = selectedSetIds.isNotEmpty() && !uiState.isLoading
         ) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Add ${selectedSets.size} Sets",
+                text = if (selectedSetIds.isEmpty()) "Select Sets" else "Add ${selectedSetIds.size} Set(s)",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                color = Color.White
             )
         }
 
         // Bottom Navigation Bar
         BottomNavBar(
             selectedTab = 3,
-            onTabSelected = { onNavigate(it) },
+            onTabSelected = { },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 }
 
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun SelectSetsScreenPreview() {
-    SelectSetsScreen(
-        onNavigate = {},
-        onBackClick = {}
-    )
-}

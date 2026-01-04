@@ -8,6 +8,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.app.ui.components.DeleteConfirmationDialog
+import com.example.app.ui.components.DeleteType
 import java.io.File
 
 /**
@@ -62,6 +68,18 @@ fun WordBankEditModal(
     if (!isVisible) return
 
     val focusManager = LocalFocusManager.current
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    // Delete confirmation dialog
+    DeleteConfirmationDialog(
+        isVisible = showDeleteConfirmation,
+        deleteType = DeleteType.WORD,
+        onConfirm = {
+            showDeleteConfirmation = false
+            onDeleteClick()
+        },
+        onDismiss = { showDeleteConfirmation = false }
+    )
 
     Dialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
@@ -118,7 +136,7 @@ fun WordBankEditModal(
                         focusManager.clearFocus()
                         onSaveClick()
                     },
-                    onDeleteClick = onDeleteClick
+                    onDeleteClick = { showDeleteConfirmation = true }
                 )
             }
         }
@@ -234,7 +252,9 @@ private fun EditWordInputSection(
                 unfocusedContainerColor = Color.White,
                 cursorColor = Color(0xFF49A9FF),
                 disabledBorderColor = Color(0xFFE0E0E0),
-                disabledContainerColor = Color(0xFFF5F5F5)
+                disabledContainerColor = Color(0xFFF5F5F5),
+                focusedTextColor = Color(0xFF49A9FF),
+                unfocusedTextColor = if (wordInput.isNotEmpty()) Color(0xFF49A9FF) else Color.Gray
             ),
             singleLine = true,
             isError = inputError != null,
