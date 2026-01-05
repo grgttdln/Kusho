@@ -86,11 +86,24 @@ fun RemoveStudentDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             // Confirm Button
-                            PrimaryButton(
-                                text = "Confirm",
+                            androidx.compose.material3.Button(
                                 onClick = onConfirm,
-                                modifier = Modifier.weight(1f)
-                            )
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(75.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF49A9FF)
+                                )
+                            ) {
+                                Text(
+                                    text = "Confirm",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
 
                             // Let Me Rethink Button (lighter style)
                             androidx.compose.material3.Button(
@@ -105,9 +118,10 @@ fun RemoveStudentDialog(
                             ) {
                                 Text(
                                     text = "Let Me Rethink",
-                                    fontSize = 16.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF49A9FF)
+                                    color = Color(0xFF49A9FF),
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }

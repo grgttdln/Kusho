@@ -44,20 +44,6 @@ fun ClassCreatedSuccessScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Kusho Logo
-                Image(
-                    painter = painterResource(id = R.drawable.ic_kusho),
-                    contentDescription = "Kusho Logo",
-                    modifier = Modifier
-                        .height(54.dp)
-                        .fillMaxWidth()
-                        .padding(horizontal = 30.dp),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.Center
-                )
-
-                Spacer(Modifier.height(40.dp))
-
                 // Success Mascot - Bigger
                 Image(
                     painter = painterResource(id = R.drawable.dis_onb1),
