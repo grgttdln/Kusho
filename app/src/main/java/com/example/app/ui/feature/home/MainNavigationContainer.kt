@@ -1,33 +1,38 @@
 package com.example.app.ui.feature.home
 
+import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.example.app.data.SessionManager
+import com.example.app.data.repository.WordRepository
+import com.example.app.data.repository.SetRepository
+import com.example.app.data.AppDatabase
 import com.example.app.ui.feature.dashboard.DashboardScreen
 import com.example.app.ui.feature.learn.LearnScreen
-import com.example.app.ui.feature.classroom.ClassScreen
-import com.example.app.ui.feature.classroom.CreateClassScreen
-import com.example.app.ui.feature.classroom.EditClassScreen
-import com.example.app.ui.feature.classroom.ClassDetailsScreen
-import com.example.app.ui.feature.classroom.AddStudentScreen
-import com.example.app.ui.feature.classroom.ClassCreatedSuccessScreen
-import com.example.app.ui.feature.classroom.StudentAddedSuccessScreen
-import com.example.app.ui.feature.classroom.StudentDetailsScreen
+import com.example.app.ui.feature.classroom.*
 import com.example.app.ui.feature.learn.LessonScreen
 import com.example.app.ui.feature.learn.TutorialModeScreen
 import com.example.app.ui.feature.learn.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
+import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
+import com.example.app.ui.feature.learn.activities.ActivitySetsScreen
+import com.example.app.ui.feature.learn.activities.LinkSetsToActivityScreen
+import com.example.app.ui.feature.learn.set.SelectSetsScreen
 import com.example.app.ui.feature.learn.set.YourSetsScreen
+import com.example.app.ui.feature.learn.set.AddSetScreen
+import com.example.app.ui.feature.learn.set.EditSetScreen
+import com.example.app.ui.feature.learn.set.SelectWordsScreen
+import com.example.app.ui.feature.learn.ConfirmationScreen
 
-/**
- * Main navigation container for the home section of the app.
- * Manages navigation between Dashboard, Learn, Class, and Lesson screens.
- */
 @Composable
 fun MainNavigationContainer(
     onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentScreen by remember { mutableStateOf(0) }
+
+    // --- CLASS SECTION STATE ---
     var createdClassName by remember { mutableStateOf("") }
     var selectedClassId by remember { mutableStateOf("") }
     var selectedClassName by remember { mutableStateOf("") }
@@ -37,6 +42,22 @@ fun MainNavigationContainer(
     var selectedStudentId by remember { mutableStateOf("") }
     var selectedStudentName by remember { mutableStateOf("") }
 
+    // --- ACTIVITIES & SETS STATE ---
+    var selectedActivityId by remember { mutableStateOf(0L) }
+    var selectedActivityTitle by remember { mutableStateOf("") }
+    var availableWords by remember { mutableStateOf(listOf<String>()) }
+    var createdSetTitle by remember { mutableStateOf("") }
+    var selectedSetId by remember { mutableStateOf(0L) }
+    var yourSetsScreenKey by remember { mutableStateOf(0) }
+    var wordsForCreation by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
+    var wordsForEdit by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
+
+    // --- REPOSITORY & CONTEXT HELPERS ---
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager.getInstance(context) }
+    val userId = remember { sessionManager.getUserId() }
+    val wordRepository = remember { WordRepository(AppDatabase.getInstance(context).wordDao()) }
+
     when (currentScreen) {
         0 -> DashboardScreen(
             onNavigate = { currentScreen = it },
@@ -45,20 +66,17 @@ fun MainNavigationContainer(
                 selectedClassId = classId
                 selectedClassName = className
                 selectedClassBannerPath = bannerPath
-                currentScreen = 10
+                currentScreen = 22 
             },
             modifier = modifier
         )
-        1 -> LearnScreen(
-            onNavigate = { currentScreen = it },
-            modifier = modifier
-        )
+        1 -> LearnScreen(onNavigate = { currentScreen = it }, modifier = modifier)
         2 -> ClassScreen(
             onNavigate = { currentScreen = it },
-            onNavigateToCreateClass = { currentScreen = 8 },
+            onNavigateToCreateClass = { currentScreen = 20 },
             onNavigateToClassDetails = { classId ->
                 selectedClassId = classId
-                currentScreen = 10
+                currentScreen = 22
             },
             modifier = modifier
         )
@@ -68,98 +86,218 @@ fun MainNavigationContainer(
             onNavigateToSets = { currentScreen = 7 },
             modifier = modifier
         )
-        4 -> TutorialModeScreen(
-            onBack = { currentScreen = 1 },
-            modifier = modifier
-        )
-        5 -> LearnModeScreen(
-            onBack = { currentScreen = 1 },
-            modifier = modifier
-        )
+        4 -> TutorialModeScreen(onBack = { currentScreen = 1 }, modifier = modifier)
+        5 -> LearnModeScreen(onBack = { currentScreen = 1 }, modifier = modifier)
         6 -> YourActivitiesScreen(
             onNavigate = { currentScreen = it },
+            onNavigateToSets = { activityId, activityTitle ->
+                selectedActivityId = activityId
+                selectedActivityTitle = activityTitle
+                currentScreen = 16 
+            },
             onBackClick = { currentScreen = 3 },
             modifier = modifier
         )
-        7 -> YourSetsScreen(
+        7 -> {
+            key(yourSetsScreenKey) {
+                YourSetsScreen(
+                    userId = userId,
+                    onNavigate = { currentScreen = it },
+                    onBackClick = { currentScreen = 3 },
+                    onAddSetClick = {
+                        selectedActivityId = 0L
+                        wordsForCreation = emptyList()
+                        currentScreen = 11
+                    },
+                    onEditSetClick = { setId ->
+                        selectedSetId = setId
+                        wordsForEdit = emptyList()
+                        currentScreen = 14
+                    },
+                    modifier = modifier
+                )
+            }
+        }
+        8 -> AddNewActivityScreen(
+            userId = userId,
             onNavigate = { currentScreen = it },
-            onBackClick = { currentScreen = 3 },
+            onBackClick = { currentScreen = 6 },
+            onActivityCreated = { currentScreen = 10 },
             modifier = modifier
         )
-        8 -> CreateClassScreen(
-            onNavigateBack = { currentScreen = 2 },
-            onClassCreated = { className ->
-                createdClassName = className
-                currentScreen = 9
+        9 -> SelectSetsScreen(
+            onNavigate = { currentScreen = it },
+            onBackClick = { currentScreen = 8 },
+            modifier = modifier
+        )
+        10 -> ConfirmationScreen(
+            title = "Activity Created!",
+            onContinueClick = { currentScreen = 6 },
+            modifier = modifier
+        )
+        11 -> AddSetScreen(
+            userId = userId,
+            activityId = if (selectedActivityId > 0L) selectedActivityId else null,
+            onBackClick = { currentScreen = if (selectedActivityId > 0L) 16 else 7 },
+            onAddWordsClick = { currentScreen = 12 },
+            selectedWords = wordsForCreation,
+            onCreateSet = { title, _, _ ->
+                createdSetTitle = title
+                currentScreen = 13
             },
             modifier = modifier
         )
-        9 -> ClassCreatedSuccessScreen(
+        12 -> {
+            LaunchedEffect(Unit) {
+                availableWords = wordRepository.getWordsForUserOnce(userId).map { it.word }
+            }
+            SelectWordsScreen(
+                availableWords = availableWords,
+                onBackClick = { currentScreen = 11 },
+                onWordsSelected = { words ->
+                    wordsForCreation = words
+                    currentScreen = 11
+                },
+                modifier = modifier
+            )
+        }
+        13 -> ConfirmationScreen(
+            title = "Set Created!",
+            subtitle = createdSetTitle,
+            onContinueClick = {
+                yourSetsScreenKey++
+                currentScreen = if (selectedActivityId > 0L) 16 else 7
+            },
+            modifier = modifier
+        )
+        14 -> EditSetScreen(
+            setId = selectedSetId,
+            userId = userId,
+            onBackClick = { currentScreen = if (selectedActivityId > 0L) 16 else 7 },
+            onAddWordsClick = { currentScreen = 15 },
+            onUpdateSuccess = {
+                yourSetsScreenKey++
+                currentScreen = if (selectedActivityId > 0L) 16 else 7
+            },
+            onDeleteSuccess = {
+                yourSetsScreenKey++
+                currentScreen = if (selectedActivityId > 0L) 16 else 7
+            },
+            selectedWords = wordsForEdit,
+            modifier = modifier
+        )
+        15 -> {
+            LaunchedEffect(Unit) {
+                availableWords = wordRepository.getWordsForUserOnce(userId).map { it.word }
+            }
+            SelectWordsScreen(
+                availableWords = availableWords,
+                onBackClick = { currentScreen = 14 },
+                onWordsSelected = { words ->
+                    wordsForEdit = words
+                    currentScreen = 14
+                },
+                modifier = modifier
+            )
+        }
+        16 -> {
+            key(yourSetsScreenKey) {
+                ActivitySetsScreen(
+                    activityId = selectedActivityId,
+                    activityTitle = selectedActivityTitle,
+                    onNavigate = { currentScreen = it },
+                    onBackClick = { currentScreen = 6 },
+                    onAddSetClick = { currentScreen = 17 },
+                    onViewSetClick = { setId ->
+                        selectedSetId = setId
+                        currentScreen = 14
+                    },
+                    modifier = modifier
+                )
+            }
+        }
+        17 -> LinkSetsToActivityScreen(
+            activityId = selectedActivityId,
+            userId = userId,
+            onBackClick = { currentScreen = 16 },
+            onSetsLinked = {
+                yourSetsScreenKey++
+                currentScreen = 16
+            },
+            modifier = modifier
+        )
+
+        // --- Classroom Flow (20-26) ---
+        20 -> CreateClassScreen(
+            onNavigateBack = { currentScreen = 2 },
+            onClassCreated = { className ->
+                createdClassName = className
+                currentScreen = 21
+            },
+            modifier = modifier
+        )
+        21 -> ClassCreatedSuccessScreen(
             className = createdClassName,
             onContinue = { currentScreen = 2 },
             modifier = modifier
         )
-        10 -> ClassDetailsScreen(
+        22 -> ClassDetailsScreen(
             classId = selectedClassId,
             onNavigateBack = { currentScreen = 2 },
             onNavigateToAddStudent = { className ->
                 selectedClassName = className
-                // selectedClassId is already set
-                currentScreen = 11
+                currentScreen = 23
             },
-            onNavigateToEditClass = { classId, className, classCode, bannerPath ->
-                selectedClassId = classId
-                selectedClassName = className
-                selectedClassCode = classCode
-                selectedClassBannerPath = bannerPath
-                currentScreen = 13
+            onNavigateToEditClass = { id, name, code, banner ->
+                selectedClassId = id
+                selectedClassName = name
+                selectedClassCode = code
+                selectedClassBannerPath = banner
+                currentScreen = 25
             },
-            onNavigateToStudentDetails = { studentId, studentName, className ->
-                selectedStudentId = studentId
-                selectedStudentName = studentName
-                selectedClassName = className
-                currentScreen = 14
+            onNavigateToStudentDetails = { sId, sName, cName ->
+                selectedStudentId = sId
+                selectedStudentName = sName
+                selectedClassName = cName
+                currentScreen = 26
             },
             modifier = modifier
         )
-        11 -> AddStudentScreen(
+        23 -> AddStudentScreen(
             classId = selectedClassId,
             className = selectedClassName,
-            onNavigateBack = { currentScreen = 10 },
+            onNavigateBack = { currentScreen = 22 },
             onStudentAdded = { studentName ->
                 addedStudentName = studentName
-                currentScreen = 12
+                currentScreen = 24
             },
             modifier = modifier
         )
-        12 -> StudentAddedSuccessScreen(
+        24 -> StudentAddedSuccessScreen(
             studentName = addedStudentName,
-            onContinue = { currentScreen = 10 },
+            onContinue = { currentScreen = 22 },
             modifier = modifier
         )
-        13 -> EditClassScreen(
+        25 -> EditClassScreen(
             classId = selectedClassId,
             initialClassName = selectedClassName,
             initialClassCode = selectedClassCode,
             initialBannerPath = selectedClassBannerPath,
-            onNavigateBack = { currentScreen = 10 },
-            onSaveChanges = { newClassName, newClassCode ->
-                selectedClassName = newClassName
-                selectedClassCode = newClassCode
+            onNavigateBack = { currentScreen = 22 },
+            onSaveChanges = { newName, newCode ->
+                selectedClassName = newName
+                selectedClassCode = newCode
             },
-            onArchiveClass = {
-                currentScreen = 2
-            },
+            onArchiveClass = { currentScreen = 2 },
             modifier = modifier
         )
-        14 -> StudentDetailsScreen(
+        26 -> StudentDetailsScreen(
             studentId = selectedStudentId,
             studentName = selectedStudentName,
             className = selectedClassName,
             classId = selectedClassId,
-            onNavigateBack = { currentScreen = 10 },
+            onNavigateBack = { currentScreen = 22 },
             modifier = modifier
         )
     }
 }
-

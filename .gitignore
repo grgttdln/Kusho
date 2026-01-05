@@ -1,18 +1,16 @@
+# --- Android / Gradle ---
+.gradle/
+**/build/
+
+# --- IntelliJ / Android Studio ---
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+
+# --- macOS ---
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# --- local configs (optional) ---
 local.properties
 
-# Project exclude paths
-/common/build/.idea/
+# --- logs ---
+*.log

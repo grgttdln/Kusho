@@ -2,6 +2,7 @@ package com.example.app.ui.components.wordbank
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -48,65 +49,84 @@ fun WordAddedConfirmationModal(
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
-                .wrapContentHeight()
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color.White)
-                .padding(32.dp)
+                .wrapContentHeight(),
+            contentAlignment = Alignment.TopCenter
         ) {
+            // Main card content (positioned below the mascot)
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .padding(top = 80.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White)
             ) {
-                // Confirmation mascot image
-                androidx.compose.foundation.Image(
-                    painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_confirmation),
-                    contentDescription = "Success",
-                    modifier = Modifier.size(120.dp),
-                    contentScale = ContentScale.Fit
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Success message
-                Text(
-                    text = "Word Added!",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0B0B0B)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Display the added word
-                Text(
-                    text = addedWord,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF49A9FF),
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Great! button
-                Button(
-                    onClick = onDismiss,
+                // Blue header section
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF49A9FF)
-                    )
+                        .height(70.dp)
+                        .background(Color(0xFF49A9FF))
+                )
+
+                // White content section
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp)
+                        .padding(top = 24.dp, bottom = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Success message
                     Text(
-                        text = "Great!",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
+                        text = "Word Added!",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0B0B0B)
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Display the added word
+                    Text(
+                        text = addedWord,
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF49A9FF),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Great button
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF49A9FF)
+                        )
+                    ) {
+                        Text(
+                            text = "Great",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
+
+            // Mascot image overlapping the top
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_confirmation),
+                contentDescription = "Success",
+                modifier = Modifier
+                    .size(160.dp)
+                    .offset(y = 0.dp),
+                contentScale = ContentScale.Fit
+            )
         }
     }
 }

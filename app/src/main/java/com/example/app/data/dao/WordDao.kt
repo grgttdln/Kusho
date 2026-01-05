@@ -49,6 +49,15 @@ interface WordDao {
     suspend fun getWordsByUserIdOnce(userId: Long): List<Word>
 
     /**
+     * Get a word by its ID.
+     *
+     * @param wordId The ID of the word
+     * @return The word entity or null if not found
+     */
+    @Query("SELECT * FROM words WHERE id = :wordId")
+    suspend fun getWordById(wordId: Long): Word?
+
+    /**
      * Check if a word already exists for a specific user.
      *
      * @param userId The user's ID
@@ -66,6 +75,29 @@ interface WordDao {
      */
     @Query("DELETE FROM words WHERE id = :wordId")
     suspend fun deleteWordById(wordId: Long): Int
+
+    /**
+     * Update a word's text and image path.
+     *
+     * @param wordId The ID of the word to update
+     * @param word The new word text
+     * @param imagePath The new image path (can be null)
+     * @return The number of rows updated
+     */
+    @Query("UPDATE words SET word = :word, imagePath = :imagePath WHERE id = :wordId")
+    suspend fun updateWord(wordId: Long, word: String, imagePath: String?): Int
+
+    /**
+     * Check if a word already exists for a specific user, excluding a specific word ID.
+     * Used for validation when updating a word.
+     *
+     * @param userId The user's ID
+     * @param word The word to check (case-insensitive)
+     * @param excludeWordId The word ID to exclude from the check
+     * @return true if the word exists, false otherwise
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM words WHERE userId = :userId AND LOWER(word) = LOWER(:word) AND id != :excludeWordId LIMIT 1)")
+    suspend fun wordExistsForUserExcluding(userId: Long, word: String, excludeWordId: Long): Boolean
 
     /**
      * Delete all words for a specific user.

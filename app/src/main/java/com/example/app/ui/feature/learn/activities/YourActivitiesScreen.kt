@@ -2,63 +2,108 @@ package com.example.app.ui.feature.learn.activities
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
+import com.example.app.data.SessionManager
+import com.example.app.data.entity.Activity
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.DeleteConfirmationDialog
+import com.example.app.ui.components.DeleteType
+import com.example.app.ui.components.activities.ActivityItemCard
 
 @Composable
 fun YourActivitiesScreen(
     onNavigate: (Int) -> Unit,
+    onNavigateToSets: (activityId: Long, activityTitle: String) -> Unit = { _, _ -> },
     onBackClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: YourActivitiesViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager.getInstance(context) }
+    val userId = remember { sessionManager.getUserId() }
+    val uiState by viewModel.uiState.collectAsState()
+
+    // Edit mode state for delete functionality
+    var isEditMode by remember { mutableStateOf(false) }
+    var activityToDelete by remember { mutableStateOf<Activity?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(userId) {
+        if (userId > 0) {
+            viewModel.loadActivities(userId)
+        }
+    }
+
+    // Default icons for activities (persistent assignment based on activity ID)
+    val allIcons = remember {
+        listOf(
+            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
+            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
+            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
+            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
+            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
+            R.drawable.ic_activity_21, R.drawable.ic_activity_22
+        )
+    }
+
+    // Function to get persistent icon for an activity based on its ID
+    fun getIconForActivity(activityId: Long): Int {
+        // Adjust for 1-based IDs to ensure ic_activity_1 is used
+        // Activity ID 1 → Index 0 → ic_activity_1
+        // Activity ID 2 → Index 1 → ic_activity_2, etc.
+        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
+        return allIcons[iconIndex]
+    }
+
     Box(
         modifier = modifier.fillMaxSize()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 160.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Back Button and Kusho Logo - Same Level
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Back Button, Kusho Logo (centered), and Edit Button
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                // Back Button (left)
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.offset(x = (-12).dp)
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -67,19 +112,30 @@ fun YourActivitiesScreen(
                     )
                 }
 
+                // Kusho Logo (centered)
                 Image(
                     painter = painterResource(id = R.drawable.ic_kusho),
                     contentDescription = "Kusho Logo",
                     modifier = Modifier
+                        .fillMaxWidth()
                         .height(54.dp)
-                        .weight(1f)
-                        .padding(horizontal = 30.dp)
-                        .offset(x = 10.dp),
-                    contentScale = ContentScale.Fit,
+                        .offset(x = 10.dp)
+                        .align(Alignment.Center),
                     alignment = Alignment.Center
                 )
 
-                Spacer(modifier = Modifier.width(48.dp))
+                // Edit Mode Button (right) - switches between Edit and Delete icons
+                IconButton(
+                    onClick = { isEditMode = !isEditMode },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
+                    Icon(
+                        imageVector = if (isEditMode) Icons.Default.Delete else Icons.Default.Edit,
+                        contentDescription = if (isEditMode) "Exit Edit Mode" else "Edit Mode",
+                        tint = if (isEditMode) Color(0xFFFF6B6B) else Color(0xFF3FA9F8),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -94,39 +150,88 @@ fun YourActivitiesScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Activity Cards
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 15.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                // Vowels Activity Card
-                ActivityItemCard(
-                    title = "Vowels",
-                    iconRes = R.drawable.ic_apple,
-                    backgroundColor = Color(0xFF3FA9F8),
-                    iconBackgroundColor = Color(0xFF3FA9F8),
-                    onClick = { /* Navigate to Vowels activity */ }
-                )
+            // Activity Cards or Loading/Empty State
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 15.dp)
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFF3FA9F8)
+                    )
+                }
+            } else if (uiState.activities.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 15.dp)
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No activities yet.\nCreate one to get started!",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF808080),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 15.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    items(
+                        items = uiState.activities,
+                        key = { it.id }
+                    ) { activity ->
+                        // Get persistent icon for this activity based on its ID
+                        val activityIcon = getIconForActivity(activity.id)
 
-                // Consonants Activity Card
-                ActivityItemCard(
-                    title = "Consonants",
-                    iconRes = R.drawable.ic_ball,
-                    backgroundColor = Color(0xFF3FA9F8),
-                    iconBackgroundColor = Color(0xFF3FA9F8),
-                    onClick = { /* Navigate to Consonants activity */ }
-                )
+                        // Check if this activity is selected for deletion
+                        val isSelected = activityToDelete?.id == activity.id
 
-                // Stops Activity Card
-                ActivityItemCard(
-                    title = "Stops",
-                    iconRes = R.drawable.ic_flower,
-                    backgroundColor = Color(0xFF3FA9F8),
-                    iconBackgroundColor = Color(0xFF3FA9F8),
-                    onClick = { /* Navigate to Stops activity */ }
-                )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (isSelected && isEditMode) {
+                                        Modifier
+                                            .border(
+                                                width = 3.dp,
+                                                color = Color(0xFF3FA9F8),
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                            .background(
+                                                color = Color(0x203FA9F8),
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            ActivityItemCard(
+                                title = activity.title,
+                                description = activity.description,
+                                iconRes = activityIcon,
+                                onClick = {
+                                    if (isEditMode) {
+                                        activityToDelete = activity
+                                        showDeleteDialog = true
+                                    } else {
+                                        onNavigateToSets(activity.id, activity.title)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -134,10 +239,10 @@ fun YourActivitiesScreen(
 
         // Floating Add Activity Button
         Button(
-            onClick = { /* Add new activity */ },
+            onClick = { onNavigate(8) },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 100.dp)
+                .padding(bottom = 96.dp)
                 .width(207.dp)
                 .height(75.dp),
             colors = ButtonDefaults.buttonColors(
@@ -154,7 +259,7 @@ fun YourActivitiesScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Add Activity",
+                text = "Add an Activity",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.White
@@ -167,92 +272,24 @@ fun YourActivitiesScreen(
             onTabSelected = { onNavigate(it) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
-    }
-}
 
-@Composable
-private fun ActivityItemCard(
-    title: String,
-    iconRes: Int,
-    backgroundColor: Color,
-    iconBackgroundColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(175.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color.Transparent)
-            .clickable { onClick() }
-            .padding(3.dp)
-    ) {
-        // Border
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color.Transparent)
-                .then(
-                    Modifier.drawBehind {
-                        drawRoundRect(
-                            color = androidx.compose.ui.graphics.Color(0xFFC5E5FD),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 9f),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx())
-                        )
-                    }
-                )
-        )
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Icon Circle with Border
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(Color.Transparent)
-                    .then(
-                        Modifier.drawBehind {
-                            drawCircle(
-                                color = androidx.compose.ui.graphics.Color(0x803FA9F8),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14f)
-                            )
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF3FA9F8)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = iconRes),
-                        contentDescription = title,
-                        modifier = Modifier.size(52.dp),
-                        contentScale = ContentScale.Fit
-                    )
+        // Delete Confirmation Dialog
+        DeleteConfirmationDialog(
+            isVisible = showDeleteDialog && activityToDelete != null,
+            deleteType = DeleteType.ACTIVITY,
+            onConfirm = {
+                activityToDelete?.let { activity ->
+                    viewModel.deleteActivity(activity.id, userId)
                 }
+                showDeleteDialog = false
+                activityToDelete = null
+                isEditMode = false
+            },
+            onDismiss = {
+                showDeleteDialog = false
+                activityToDelete = null
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Title
-            Text(
-                text = title,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF3FA9F8),
-                textAlign = TextAlign.Center
-            )
-        }
+        )
     }
 }
 
