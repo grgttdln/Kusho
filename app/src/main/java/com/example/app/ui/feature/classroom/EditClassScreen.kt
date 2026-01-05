@@ -15,9 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -111,16 +112,17 @@ fun EditClassScreen(
             ) {
                 Spacer(Modifier.height(45.dp))
 
-                // Back Button - positioned like Kusho logo
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowLeft,
-                    contentDescription = "Back",
-                    tint = Color(0xFF3FA9F8),
-                    modifier = Modifier
-                        .size(32.dp)
-                        .offset(x = 10.dp)
-                        .clickable { onNavigateBack() }
-                )
+                // Back Button - matching YourActivitiesScreen style
+                IconButton(
+                    onClick = onNavigateBack,
+                    modifier = Modifier.offset(x = (-12).dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF3FA9F8)
+                    )
+                }
 
                 Spacer(Modifier.height(28.dp))
 
@@ -324,8 +326,7 @@ fun EditClassScreen(
             ) {
                 Text(
                     text = "Archive Class",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
                     color = Color(0xFF49A9FF)
                 )
             }
@@ -340,7 +341,8 @@ fun EditClassScreen(
             onDismiss = { showBannerPicker = false },
             onBannerSelected = { bannerRes: Int ->
                 selectedBannerRes = bannerRes
-                customBannerUri = null // Clear custom image
+                customBannerUri = null // Clear custom image URI
+                customBannerPath = null // Clear custom image path so default banner displays
                 showBannerPicker = false
             },
             onUploadCustom = {

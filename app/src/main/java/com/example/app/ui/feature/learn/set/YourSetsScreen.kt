@@ -101,10 +101,11 @@ fun YourSetsScreen(
                     painter = painterResource(id = R.drawable.ic_kusho),
                     contentDescription = "Kusho Logo",
                     modifier = Modifier
+                        .fillMaxWidth()
                         .height(54.dp)
                         .offset(x = 10.dp)
                         .align(Alignment.Center),
-                    contentScale = ContentScale.Fit
+                    alignment = Alignment.Center
                 )
 
                 // Edit/Delete Mode Button (right)
