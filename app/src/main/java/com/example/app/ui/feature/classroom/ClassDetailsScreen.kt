@@ -7,11 +7,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditOff
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -62,20 +63,21 @@ fun ClassDetailsScreen(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 140.dp)
         ) {
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(24.dp))
 
             // Back Button
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowLeft,
-                contentDescription = "Back",
-                tint = Color(0xFF3FA9F8),
-                modifier = Modifier
-                    .size(32.dp)
-                    .offset(x = 10.dp)
-                    .clickable { onNavigateBack() }
-            )
+            IconButton(
+                onClick = { onNavigateBack() },
+                modifier = Modifier.offset(x = (-12).dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color(0xFF3FA9F8)
+                )
+            }
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(12.dp))
 
             // Show loading or error state
             if (uiState.isLoading) {
