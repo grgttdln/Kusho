@@ -41,6 +41,12 @@ fun MainNavigationContainer(
         0 -> DashboardScreen(
             onNavigate = { currentScreen = it },
             onLogout = onLogout,
+            onNavigateToClassDetails = { classId, className, bannerPath ->
+                selectedClassId = classId
+                selectedClassName = className
+                selectedClassBannerPath = bannerPath
+                currentScreen = 10
+            },
             modifier = modifier
         )
         1 -> LearnScreen(

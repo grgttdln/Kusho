@@ -510,6 +510,11 @@ fun StudentDetailsScreen(
                     if (uiState.pfpPath != null) {
                         OutlinedButton(
                             onClick = {
+                                // Delete the old image file
+                                uiState.pfpPath?.let { path ->
+                                    ImageUtil.deleteImage(path)
+                                }
+                                
                                 viewModel.updateStudent(
                                     studentId = studentId.toLongOrNull() ?: 0L,
                                     fullName = uiState.studentName,

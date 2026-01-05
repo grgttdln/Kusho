@@ -49,6 +49,7 @@ import com.example.app.ui.components.classroom.ClassCard
 fun DashboardScreen(
     onNavigate: (Int) -> Unit,
     onLogout: () -> Unit,
+    onNavigateToClassDetails: (String, String, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier,
     viewModel: DashboardViewModel = viewModel()
 ) {
@@ -388,7 +389,13 @@ fun DashboardScreen(
                     className = recentClass.className,
                     imageRes = R.drawable.ic_class_abc,
                     imagePath = recentClass.bannerPath,
-                    onClick = { /* TODO: Navigate to class details */ },
+                    onClick = { 
+                        onNavigateToClassDetails(
+                            recentClass.classId.toString(),
+                            recentClass.className,
+                            recentClass.bannerPath ?: ""
+                        )
+                    },
                     modifier = Modifier.padding(horizontal = 30.dp)
                 )
             } else {

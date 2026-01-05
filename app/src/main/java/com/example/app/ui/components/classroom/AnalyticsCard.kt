@@ -50,7 +50,7 @@ fun AnalyticsCard(
 
             Text(
                 text = value,
-                fontSize = 32.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF3FA9F8)
             )
@@ -59,7 +59,7 @@ fun AnalyticsCard(
 
             Text(
                 text = label,
-                fontSize = 14.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color(0xFF3FA9F8)
             )
