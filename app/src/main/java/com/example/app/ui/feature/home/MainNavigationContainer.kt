@@ -12,8 +12,8 @@ import com.example.app.ui.feature.dashboard.DashboardScreen
 import com.example.app.ui.feature.learn.LearnScreen
 import com.example.app.ui.feature.classroom.*
 import com.example.app.ui.feature.learn.LessonScreen
-import com.example.app.ui.feature.learn.TutorialModeScreen
-import com.example.app.ui.feature.learn.LearnModeScreen
+import com.example.app.ui.feature.learn.tutorialmode.TutorialModeScreen
+import com.example.app.ui.feature.learn.learnmode.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
 import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
 import com.example.app.ui.feature.learn.activities.ActivitySetsScreen
