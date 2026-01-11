@@ -13,6 +13,7 @@ import com.example.app.ui.feature.learn.LearnScreen
 import com.example.app.ui.feature.classroom.*
 import com.example.app.ui.feature.learn.LessonScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialModeScreen
+import com.example.app.ui.feature.learn.tutorialmode.TutorialModeStudentScreen
 import com.example.app.ui.feature.learn.learnmode.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
 import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
@@ -41,6 +42,10 @@ fun MainNavigationContainer(
     var addedStudentName by remember { mutableStateOf("") }
     var selectedStudentId by remember { mutableStateOf("") }
     var selectedStudentName by remember { mutableStateOf("") }
+
+    // --- TUTORIAL MODE STATE ---
+    var tutorialModeStudentId by remember { mutableStateOf(0L) }
+    var tutorialModeClassId by remember { mutableStateOf(0L) }
 
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
@@ -86,7 +91,15 @@ fun MainNavigationContainer(
             onNavigateToSets = { currentScreen = 7 },
             modifier = modifier
         )
-        4 -> TutorialModeScreen(onBack = { currentScreen = 1 }, modifier = modifier)
+        4 -> TutorialModeScreen(
+            onBack = { currentScreen = 1 },
+            onStudentSelected = { studentId, classId ->
+                tutorialModeStudentId = studentId
+                tutorialModeClassId = classId
+                currentScreen = 27
+            },
+            modifier = modifier
+        )
         5 -> LearnModeScreen(onBack = { currentScreen = 1 }, modifier = modifier)
         6 -> YourActivitiesScreen(
             onNavigate = { currentScreen = it },
@@ -297,6 +310,12 @@ fun MainNavigationContainer(
             className = selectedClassName,
             classId = selectedClassId,
             onNavigateBack = { currentScreen = 22 },
+            modifier = modifier
+        )
+        27 -> TutorialModeStudentScreen(
+            studentId = tutorialModeStudentId,
+            classId = tutorialModeClassId,
+            onBack = { currentScreen = 4 },
             modifier = modifier
         )
     }
