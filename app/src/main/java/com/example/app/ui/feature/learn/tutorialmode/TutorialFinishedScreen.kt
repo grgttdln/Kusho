@@ -33,16 +33,7 @@ fun TutorialFinishedScreen(
             .padding(top = 40.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Kusho Logo
-        Image(
-            painter = painterResource(id = R.drawable.ic_kusho),
-            contentDescription = "Kusho Logo",
-            modifier = Modifier
-                .height(54.dp)
-                .fillMaxWidth()
-                .padding(horizontal = 30.dp),
-            contentScale = ContentScale.Fit
-        )
+
 
         Spacer(Modifier.weight(0.5f))
 
