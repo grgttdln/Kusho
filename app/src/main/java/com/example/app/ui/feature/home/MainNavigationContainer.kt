@@ -12,8 +12,12 @@ import com.example.app.ui.feature.dashboard.DashboardScreen
 import com.example.app.ui.feature.learn.LearnScreen
 import com.example.app.ui.feature.classroom.*
 import com.example.app.ui.feature.learn.LessonScreen
-import com.example.app.ui.feature.learn.TutorialModeScreen
-import com.example.app.ui.feature.learn.LearnModeScreen
+import com.example.app.ui.feature.learn.tutorialmode.TutorialModeScreen
+import com.example.app.ui.feature.learn.tutorialmode.TutorialModeStudentScreen
+import com.example.app.ui.feature.learn.tutorialmode.TutorialSessionScreen
+import com.example.app.ui.feature.learn.tutorialmode.SessionAnalyticsScreen
+import com.example.app.ui.feature.learn.tutorialmode.TutorialFinishedScreen
+import com.example.app.ui.feature.learn.learnmode.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
 import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
 import com.example.app.ui.feature.learn.activities.ActivitySetsScreen
@@ -41,6 +45,11 @@ fun MainNavigationContainer(
     var addedStudentName by remember { mutableStateOf("") }
     var selectedStudentId by remember { mutableStateOf("") }
     var selectedStudentName by remember { mutableStateOf("") }
+
+    // --- TUTORIAL MODE STATE ---
+    var tutorialModeStudentId by remember { mutableStateOf(0L) }
+    var tutorialModeClassId by remember { mutableStateOf(0L) }
+    var tutorialSessionTitle by remember { mutableStateOf("") }
 
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
@@ -86,7 +95,15 @@ fun MainNavigationContainer(
             onNavigateToSets = { currentScreen = 7 },
             modifier = modifier
         )
-        4 -> TutorialModeScreen(onBack = { currentScreen = 1 }, modifier = modifier)
+        4 -> TutorialModeScreen(
+            onBack = { currentScreen = 1 },
+            onStudentSelected = { studentId, classId ->
+                tutorialModeStudentId = studentId
+                tutorialModeClassId = classId
+                currentScreen = 27
+            },
+            modifier = modifier
+        )
         5 -> LearnModeScreen(onBack = { currentScreen = 1 }, modifier = modifier)
         6 -> YourActivitiesScreen(
             onNavigate = { currentScreen = it },
@@ -297,6 +314,30 @@ fun MainNavigationContainer(
             className = selectedClassName,
             classId = selectedClassId,
             onNavigateBack = { currentScreen = 22 },
+            modifier = modifier
+        )
+        27 -> TutorialModeStudentScreen(
+            studentId = tutorialModeStudentId,
+            classId = tutorialModeClassId,
+            onBack = { currentScreen = 4 },
+            onStartSession = { title ->
+                tutorialSessionTitle = title
+                currentScreen = 28
+            },
+            modifier = modifier
+        )
+        28 -> TutorialSessionScreen(
+            title = tutorialSessionTitle,
+            onEndSession = { currentScreen = 29 },
+            modifier = modifier
+        )
+        29 -> SessionAnalyticsScreen(
+            onPracticeAgain = { currentScreen = 28 },
+            onContinue = { currentScreen = 30 },
+            modifier = modifier
+        )
+        30 -> TutorialFinishedScreen(
+            onEndSession = { currentScreen = 4 },
             modifier = modifier
         )
     }

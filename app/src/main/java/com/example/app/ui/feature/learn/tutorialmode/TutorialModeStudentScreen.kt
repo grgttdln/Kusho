@@ -1,13 +1,20 @@
-package com.example.app.ui.feature.learn
+package com.example.app.ui.feature.learn.tutorialmode
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,12 +25,18 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.R
+import com.example.app.ui.components.tutorial.TutorialActivityCard
 
 @Composable
-fun LearnModeScreen(
+fun TutorialModeStudentScreen(
+    studentId: Long,
+    classId: Long,
     onBack: () -> Unit,
+    onStartSession: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isVowelsSelected by remember { mutableStateOf(false) }
+    
     Box(modifier = modifier.fillMaxSize()) {
         IconButton(
             onClick = onBack,
@@ -58,35 +71,53 @@ fun LearnModeScreen(
                 alignment = Alignment.Center
             )
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(40.dp))
 
-            Text(
-                text = "Learn Mode",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF0B0B0B)
+            // Tutorial Activity Card
+            TutorialActivityCard(
+                title = "Vowels",
+                iconRes = R.drawable.ic_apple,
+                isSelected = isVowelsSelected,
+                onClick = { isVowelsSelected = !isVowelsSelected }
             )
+        }
 
-            Spacer(Modifier.height(16.dp))
-
+        // Start Session Button at the bottom
+        Button(
+            onClick = {
+                if (isVowelsSelected) {
+                    onStartSession("Vowels")
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 24.dp)
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF3FA9F8)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            enabled = isVowelsSelected
+        ) {
             Text(
-                text = "Test what you know!",
-                fontSize = 16.sp,
-                color = Color(0xFF4A4A4A)
+                text = "Start Session",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
             )
-
-            Spacer(Modifier.weight(1f))
-
-            // Add learn mode content here
-
-            Spacer(Modifier.weight(1f))
         }
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-fun LearnModeScreenPreview() {
-    LearnModeScreen(onBack = {})
+fun TutorialModeStudentScreenPreview() {
+    TutorialModeStudentScreen(
+        studentId = 1L,
+        classId = 1L,
+        onBack = {},
+        onStartSession = {}
+    )
 }
 
