@@ -19,7 +19,7 @@ data class ModelConfig(
          */
         val MODELS = listOf(
             ModelConfig(
-                fileName = "complete_model_1.tflite",
+                fileName = "tcn_multihead_model.tflite",
                 displayName = "Complete Alphabet Model",
                 windowSize = 295,  // 3 seconds at 100Hz (Model expects 100Hz)
                 channels = 6,      // ax, ay, az, gx, gy, gz
