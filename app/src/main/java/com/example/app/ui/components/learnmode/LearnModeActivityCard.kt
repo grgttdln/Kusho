@@ -39,7 +39,6 @@ fun LearnModeActivityCard(
 ) {
     val borderColor = Color(0xFFB8B2F2) // Light purple
     val fillColor = Color(0xFFBA9BFF) // Purple
-    val blueColor = Color(0xFF3FA9F8)
     val greenColor = Color(0xFF4CAF50)
 
     Box(
@@ -47,12 +46,7 @@ fun LearnModeActivityCard(
             .fillMaxWidth()
             .height(175.dp)
             .clip(RoundedCornerShape(28.dp))
-            .background(
-                when {
-                    isSelected -> Color(0xFFBA9BFF) // Purple when selected
-                    else -> Color.Transparent
-                }
-            )
+            .background(if (isSelected) fillColor else Color.Transparent)
             .clickable { onClick() }
             .then(
                 if (!isSelected) {
@@ -139,7 +133,7 @@ fun LearnModeActivityCard(
                 text = title,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Normal,
-                color = if (isSelected) Color.White else blueColor,
+                color = if (isSelected) Color.White else fillColor,
                 textAlign = TextAlign.Center
             )
         }

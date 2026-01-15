@@ -33,15 +33,16 @@ import com.example.app.R
 fun LearnModeStatusCard(
     title: String,
     status: String = "Not Started",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSelected: Boolean = false
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(32.dp))
-            .background(Color(0xFFF8F5FF))
+            .background(if (isSelected) Color(0xFFAE8EFB) else Color(0xFFF8F5FF))
             .padding(10.dp)
             .fillMaxWidth()
-            .height(820.dp)
+            .height(420.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -54,8 +55,6 @@ fun LearnModeStatusCard(
                 modifier = Modifier.size(120.dp)
             )
 
-
-
             Text(
                 text = title,
                 fontSize = 18.sp,
@@ -63,8 +62,6 @@ fun LearnModeStatusCard(
                 color = Color(0xFF181818),
                 textAlign = TextAlign.Center
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             Box(
                 modifier = Modifier
@@ -74,13 +71,17 @@ fun LearnModeStatusCard(
                         color = Color(0xFFBA9BFF),
                         shape = RoundedCornerShape(12.dp)
                     )
+                    .background(
+                        if (isSelected) Color.White else Color.Transparent,
+                        RoundedCornerShape(12.dp)
+                    )
                     .padding(horizontal = 30.dp, vertical = 5.dp)
             ) {
                 Text(
                     text = status,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFFBA9BFF),
+                    color = if (isSelected) Color(0xFFAE8EFB) else Color(0xFFBA9BFF),
                     textAlign = TextAlign.Center
                 )
             }
@@ -91,7 +92,7 @@ fun LearnModeStatusCard(
 @Preview(
     name = "LearnModeStatusCard",
     showBackground = true,
-    backgroundColor = 0xFFFFFFFF
+    backgroundColor = 0xFFFFFFFF,
 )
 @Composable
 fun LearnModeStatusCardPreview() {
@@ -106,6 +107,27 @@ fun LearnModeStatusCardPreview() {
                 LearnModeStatusCard(
                     title = "Short Vowels",
                     status = "Not Started"
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "LearnModeStatusCard Selected", showBackground = true, backgroundColor = 0xFFFFFFFF)
+@Composable
+fun LearnModeStatusCardSelectedPreview() {
+    MaterialTheme {
+        Surface(color = Color.White) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                LearnModeStatusCard(
+                    title = "Short Vowels",
+                    status = "Not Started",
+                    isSelected = true
                 )
             }
         }

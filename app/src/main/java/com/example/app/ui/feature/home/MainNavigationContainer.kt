@@ -383,10 +383,16 @@ fun MainNavigationContainer(
                 sets = activitySetStatuses,
                 onBack = { currentScreen = 31 },
                 onStartSet = { set ->
-                    // TODO: Handle start set logic
+                    // Navigate to LearnModeSessionScreen and pass the set title
+                    tutorialSessionTitle = set.title
+                    currentScreen = 33
                 },
                 modifier = modifier
             )
         }
+        33 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
+            title = tutorialSessionTitle,
+            modifier = modifier
+        )
     }
 }
