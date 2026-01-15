@@ -38,7 +38,8 @@ fun LearnModeSessionScreen(
     initialStep: Int = 1,
     totalSteps: Int = 5,
     onSkip: () -> Unit = {},
-    onAudioClick: () -> Unit = {}
+    onAudioClick: () -> Unit = {},
+    onSessionComplete: () -> Unit = {}
 ) {
     var currentStep by remember { mutableIntStateOf(initialStep) }
 
@@ -78,8 +79,10 @@ fun LearnModeSessionScreen(
             TextButton(onClick = {
                 if (currentStep < totalSteps) {
                     currentStep++
+                    onSkip()
+                } else {
+                    onSessionComplete()
                 }
-                onSkip()
             }) {
                 Text(
                     text = "Skip",

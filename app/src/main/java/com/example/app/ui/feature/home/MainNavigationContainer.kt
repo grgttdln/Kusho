@@ -360,10 +360,10 @@ fun MainNavigationContainer(
             studentId = selectedStudentId.toLongOrNull() ?: 0L,
             classId = selectedClassId.toLongOrNull() ?: 0L,
             onBack = { currentScreen = 5 },
-            onSelectActivity = { activityId: Long, activityTitle: String, activityIconRes: Int ->
+            onSelectActivity = { activityId: Long, activityTitle: String ->
                 selectedActivityId = activityId
                 selectedActivityTitle = activityTitle
-                selectedActivityIconRes = activityIconRes
+                // Optionally set a default icon or handle icon selection elsewhere
                 currentScreen = 32 // Navigate to LearnModeSetStatusScreen
             },
             modifier = modifier
@@ -392,6 +392,16 @@ fun MainNavigationContainer(
         }
         33 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
             title = tutorialSessionTitle,
+            modifier = modifier,
+            onSessionComplete = { currentScreen = 34 }
+        )
+        34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
+            onPracticeAgain = { currentScreen = 31 },
+            onContinue = { currentScreen = 35 },
+            modifier = modifier
+        )
+        35 -> com.example.app.ui.feature.learn.learnmode.LearnModeFinishedScreen(
+            onEndSession = { currentScreen = 1 },
             modifier = modifier
         )
     }

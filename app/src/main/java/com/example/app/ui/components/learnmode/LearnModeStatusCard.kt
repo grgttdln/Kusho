@@ -38,7 +38,7 @@ fun LearnModeStatusCard(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(32.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(if (isSelected) Color(0xFFAE8EFB) else Color(0xFFF8F5FF))
             .padding(10.dp)
             .fillMaxWidth()
@@ -52,7 +52,7 @@ fun LearnModeStatusCard(
             Image(
                 painter = painterResource(id = R.drawable.ic_star_notstarted),
                 contentDescription = "Status Icon",
-                modifier = Modifier.size(120.dp)
+                modifier = Modifier.size(125.dp)
             )
 
             Text(
@@ -62,6 +62,8 @@ fun LearnModeStatusCard(
                 color = Color(0xFF181818),
                 textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Box(
                 modifier = Modifier
@@ -75,11 +77,11 @@ fun LearnModeStatusCard(
                         if (isSelected) Color.White else Color.Transparent,
                         RoundedCornerShape(12.dp)
                     )
-                    .padding(horizontal = 30.dp, vertical = 5.dp)
+                    .padding(horizontal = 45.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = status,
-                    fontSize = 9.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (isSelected) Color(0xFFAE8EFB) else Color(0xFFBA9BFF),
                     textAlign = TextAlign.Center

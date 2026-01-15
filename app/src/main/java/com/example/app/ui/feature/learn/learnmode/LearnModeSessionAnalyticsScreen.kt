@@ -1,4 +1,4 @@
-package com.example.app.ui.feature.learn.tutorialmode
+package com.example.app.ui.feature.learn.learnmode
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -27,12 +27,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.R
 
-private val YellowColor = Color(0xFFEDBB00)
-private val LightYellowBg = Color(0xFFFFF9E6)
-private val BlueButtonColor = Color(0xFF3FA9F8)
+private val PurpleColor = Color(0xFFAE8EFB)
+private val LightPurpleBg = Color(0xFFE7DDFE)
+private val PurpleButtonColor = Color(0xFFAE8EFB)
 
 @Composable
-fun SessionAnalyticsScreen(
+fun LearnModeSessionAnalyticsScreen(
     onPracticeAgain: () -> Unit,
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
@@ -55,7 +55,7 @@ fun SessionAnalyticsScreen(
         )
 
         Text(
-            text = "Congratulations!",
+            text = "Great Job!",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black
@@ -64,10 +64,10 @@ fun SessionAnalyticsScreen(
         Spacer(Modifier.height(4.dp))
 
         Text(
-            text = "Tutorial Completed!",
+            text = "Learn Mode Completed!",
             fontSize = 18.sp,
             fontWeight = FontWeight.Normal,
-            color = Color.Gray
+            color = Color.Black
         )
 
         Spacer(Modifier.height(24.dp))
@@ -84,7 +84,7 @@ fun SessionAnalyticsScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = LightYellowBg),
+            colors = CardDefaults.cardColors(containerColor = LightPurpleBg),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
@@ -94,19 +94,19 @@ fun SessionAnalyticsScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                StatItem(
+                StatItemPurple(
                     value = score,
                     label = "Score",
                     progress = 0.9f
                 )
 
-                StatItem(
+                StatItemPurple(
                     value = gestureAccuracy,
                     label = "Gesture Accuracy",
                     progress = 0.786f
                 )
 
-                StatItem(
+                StatItemPurple(
                     value = timeSpent,
                     label = "Time Spent",
                     progress = 1f
@@ -122,8 +122,8 @@ fun SessionAnalyticsScreen(
                 .fillMaxWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(2.dp, BlueButtonColor),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = BlueButtonColor)
+            border = BorderStroke(2.dp, Color(0xFF3FA9F8)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3FA9F8))
         ) {
             Text(
                 text = "Practice Again",
@@ -139,7 +139,7 @@ fun SessionAnalyticsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BlueButtonColor),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3FA9F8)),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(
@@ -153,7 +153,7 @@ fun SessionAnalyticsScreen(
 }
 
 @Composable
-private fun StatItem(
+private fun StatItemPurple(
     value: String,
     label: String,
     progress: Float,
@@ -180,7 +180,7 @@ private fun StatItem(
                 )
 
                 drawArc(
-                    color = YellowColor,
+                    color = PurpleColor,
                     startAngle = -90f,
                     sweepAngle = 360f * progress,
                     useCenter = false,
@@ -194,7 +194,7 @@ private fun StatItem(
                 text = value,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = YellowColor
+                color = PurpleColor
             )
         }
 
@@ -204,15 +204,15 @@ private fun StatItem(
             text = label,
             fontSize = 12.sp,
             fontWeight = FontWeight.Normal,
-            color = YellowColor
+            color = PurpleColor
         )
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-fun SessionAnalyticsScreenPreview() {
-    SessionAnalyticsScreen(
+fun LearnModeSessionAnalyticsScreenPreview() {
+    LearnModeSessionAnalyticsScreen(
         score = "9/10",
         gestureAccuracy = "78.6%",
         timeSpent = "2m 4s",

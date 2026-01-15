@@ -38,7 +38,7 @@ fun LearnModeActivitySelectionScreen(
     studentId: Long,
     classId: Long,
     onBack: () -> Unit,
-    onSelectActivity: (activityId: Long, activityTitle: String, activityIconRes: Int) -> Unit,
+    onSelectActivity: (activityId: Long, activityTitle: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LearnModeActivitySelectionViewModel = viewModel()
 ) {
@@ -174,7 +174,7 @@ fun LearnModeActivitySelectionScreen(
         Button(
             onClick = {
                 uiState.selectedActivity?.let { activity ->
-                    onSelectActivity(activity.id, activity.title, getIconForActivity(activity.id))
+                    onSelectActivity(activity.id, activity.title)
                 }
             },
             modifier = Modifier
@@ -205,6 +205,6 @@ fun LearnModeActivitySelectionScreenPreview() {
         studentId = 1L,
         classId = 1L,
         onBack = {},
-        onSelectActivity = { _, _, _ -> }
+        onSelectActivity = { _, _ -> }
     )
 }
