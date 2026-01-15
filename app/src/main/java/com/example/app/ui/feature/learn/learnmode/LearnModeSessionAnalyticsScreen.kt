@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,7 +30,6 @@ import com.example.app.R
 
 private val PurpleColor = Color(0xFFAE8EFB)
 private val LightPurpleBg = Color(0xFFE7DDFE)
-private val PurpleButtonColor = Color(0xFFAE8EFB)
 
 @Composable
 fun LearnModeSessionAnalyticsScreen(
@@ -43,111 +43,131 @@ fun LearnModeSessionAnalyticsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp)
             .padding(top = 10.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
             painter = painterResource(id = R.drawable.ic_kusho),
             contentDescription = "Kusho Logo",
-            modifier = Modifier.size(120.dp),
-            contentScale = ContentScale.Fit
+            modifier = Modifier
+                .height(54.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 30.dp)
+                .offset(x = 10.dp),
+            contentScale = ContentScale.Fit,
+            alignment = Alignment.Center
         )
 
-        Text(
-            text = "Great Job!",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        Text(
-            text = "Learn Mode Completed!",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Normal,
-            color = Color.Black
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        Image(
-            painter = painterResource(id = R.drawable.dis_champion),
-            contentDescription = "Champion",
-            modifier = Modifier.size(300.dp),
-            contentScale = ContentScale.Fit
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = LightPurpleBg),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 20.dp, horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+            Text(
+                text = "Great Job!",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text = "Learn Mode Completed!",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.Black,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Image(
+                painter = painterResource(id = R.drawable.dis_champion),
+                contentDescription = "Champion",
+                modifier = Modifier.size(300.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = LightPurpleBg),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                StatItemPurple(
-                    value = score,
-                    label = "Score",
-                    progress = 0.9f
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 20.dp, horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatItemPurple(
+                        value = score,
+                        label = "Score",
+                        progress = 0.9f
+                    )
 
-                StatItemPurple(
-                    value = gestureAccuracy,
-                    label = "Gesture Accuracy",
-                    progress = 0.786f
-                )
+                    StatItemPurple(
+                        value = gestureAccuracy,
+                        label = "Gesture Accuracy",
+                        progress = 0.786f
+                    )
 
-                StatItemPurple(
-                    value = timeSpent,
-                    label = "Time Spent",
-                    progress = 1f
-                )
+                    StatItemPurple(
+                        value = timeSpent,
+                        label = "Time Spent",
+                        progress = 1f
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.weight(1f))
-
-        OutlinedButton(
-            onClick = onPracticeAgain,
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(2.dp, Color(0xFF3FA9F8)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3FA9F8))
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "Practice Again",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+            OutlinedButton(
+                onClick = onPracticeAgain,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(2.dp, Color(0xFF3FA9F8)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3FA9F8))
+            ) {
+                Text(
+                    text = "Practice Again",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
-        Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
-        Button(
-            onClick = onContinue,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3FA9F8)),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                text = "Continue",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Button(
+                onClick = onContinue,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3FA9F8)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Continue",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -204,7 +224,8 @@ private fun StatItemPurple(
             text = label,
             fontSize = 12.sp,
             fontWeight = FontWeight.Normal,
-            color = PurpleColor
+            color = PurpleColor,
+            textAlign = TextAlign.Center
         )
     }
 }
