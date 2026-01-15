@@ -183,4 +183,3 @@ fun LearnModeScreen(
 fun LearnModeScreenPreview() {
     LearnModeScreen(onBack = {})
 }
-
