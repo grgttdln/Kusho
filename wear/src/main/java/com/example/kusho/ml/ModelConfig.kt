@@ -15,19 +15,23 @@ data class ModelConfig(
     companion object {
         /**
          * Available model configurations.
-         * The model file must exist in assets folder.
-         * 
-         * Note: model.tflite appears to use Flex ops (TensorListReserve), 
-         * so the app must include 'org.tensorflow:tensorflow-lite-select-tf-ops'.
+         * The model file must exist in assets folder
          */
         val MODELS = listOf(
             ModelConfig(
-                fileName = "model2.tflite",
-                displayName = "CNN-LSTM v1",
+                fileName = "tcn_multihead_model.tflite",
+                displayName = "Complete Alphabet Model",
                 windowSize = 295,  // 3 seconds at 100Hz (Model expects 100Hz)
                 channels = 6,      // ax, ay, az, gx, gy, gz
-                labels = listOf("a", "e", "i", "o", "u"),
-                description = "Main vowel recognition model"
+                labels = listOf(
+                    // Lowercase letters a-z (indices 0-25)
+                    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+                    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+                    // Uppercase letters A-Z (indices 26-51)
+                    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+                    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+                ),
+                description = "Complete uppercase and lowercase alphabet recognition model"
             )
         )
 
