@@ -95,6 +95,16 @@ fun MainNavigationContainer(
                 selectedClassId = classId
                 currentScreen = 22
             },
+            onNavigateToStudentDetails = { sId, sName, cName ->
+                selectedStudentId = sId
+                selectedStudentName = sName
+                selectedClassName = cName
+                currentScreen = 26
+            },
+            onNavigateToAddStudent = {
+                // Open Add Student flow from the top-level Class screen
+                currentScreen = 23
+            },
             modifier = modifier
         )
         3 -> LessonScreen(
@@ -297,8 +307,6 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         23 -> AddStudentScreen(
-            classId = selectedClassId,
-            className = selectedClassName,
             onNavigateBack = { currentScreen = 22 },
             onStudentAdded = { studentName ->
                 addedStudentName = studentName
@@ -308,7 +316,7 @@ fun MainNavigationContainer(
         )
         24 -> StudentAddedSuccessScreen(
             studentName = addedStudentName,
-            onContinue = { currentScreen = 22 },
+            onContinue = { currentScreen = 2 },
             modifier = modifier
         )
         25 -> EditClassScreen(
@@ -329,7 +337,7 @@ fun MainNavigationContainer(
             studentName = selectedStudentName,
             className = selectedClassName,
             classId = selectedClassId,
-            onNavigateBack = { currentScreen = 22 },
+            onNavigateBack = { currentScreen = 2 },
             modifier = modifier
         )
         27 -> TutorialModeStudentScreen(

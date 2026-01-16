@@ -29,6 +29,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
@@ -36,17 +38,14 @@ import com.example.app.util.ImageUtil
 
 @Composable
 fun AddStudentScreen(
-    classId: String,
-    className: String = "Grade 1 Bright Sparks",
     onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier,
     onStudentAdded: (studentName: String) -> Unit,
-    viewModel: ClassroomViewModel = viewModel(),
-    modifier: Modifier = Modifier
+    viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
     var studentName by remember { mutableStateOf("") }
     var gradeLevel by remember { mutableStateOf("") }
-    var birthday by remember { mutableStateOf("") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
     var profileImagePath by remember { mutableStateOf<String?>(null) }
 
@@ -60,7 +59,10 @@ fun AddStudentScreen(
         }
     }
 
-    val isFormValid = studentName.isNotBlank() && gradeLevel.isNotBlank() && birthday.isNotBlank()
+    val isFormValid = studentName.isNotBlank() && gradeLevel.isNotBlank()
+    var isAdding by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -174,22 +176,6 @@ fun AddStudentScreen(
 
                 Spacer(Modifier.height(28.dp))
 
-                // Class Name TextField (Read-only)
-                TextField(
-                    value = className,
-                    onValueChange = {},
-                    enabled = false,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        disabledIndicatorColor = Color(0xFF3FA9F8),
-                        disabledContainerColor = Color.Transparent,
-                        disabledTextColor = Color(0xFF666666)
-                    ),
-                    singleLine = true
-                )
-
-                Spacer(Modifier.height(20.dp))
-
                 // Student Name TextField
                 TextField(
                     value = studentName,
@@ -236,54 +222,37 @@ fun AddStudentScreen(
                     singleLine = true
                 )
 
-                Spacer(Modifier.height(20.dp))
-
-                // Birthday TextField
-                TextField(
-                    value = birthday,
-                    onValueChange = { birthday = it },
-                    placeholder = {
-                        Text(
-                            text = "Enter Student's Birthday",
-                            color = Color(0xFF999999)
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color(0xFF3FA9F8),
-                        unfocusedIndicatorColor = Color(0xFF3FA9F8),
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black
-                    ),
-                    singleLine = true
-                )
-
                 Spacer(Modifier.height(24.dp))
             }
 
-            // Add A New Student Button - At Bottom
+            // Snackbar host for errors
+            Box(modifier = Modifier.fillMaxWidth()) {
+                SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.TopCenter))
+            }
+
             PrimaryButton(
-                text = "Add A New Student",
+                text = if (isAdding) "Adding..." else "Add A New Student",
                 onClick = {
-                    if (isFormValid) {
-                        viewModel.addStudentToClass(
-                            fullName = studentName,
-                            gradeLevel = gradeLevel,
-                            birthday = birthday,
-                            pfpPath = profileImagePath,
-                            classId = classId.toLongOrNull() ?: 0L,
-                            onSuccess = { studentId ->
-                                onStudentAdded(studentName)
-                            },
-                            onError = { error ->
-                                // TODO: Show error toast/snackbar
+                    if (!isFormValid || isAdding) return@PrimaryButton
+                    isAdding = true
+                    viewModel.addStudent(
+                        fullName = studentName,
+                        gradeLevel = gradeLevel,
+                        pfpPath = profileImagePath,
+                        onSuccess = { studentId: Long ->
+                            isAdding = false
+                            // Notify parent so it can navigate to the StudentAddedSuccessScreen (screen 24)
+                            onStudentAdded(studentName)
+                        },
+                        onError = { error: String ->
+                            isAdding = false
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(error)
                             }
-                        )
-                    }
+                        }
+                    )
                 },
-                enabled = isFormValid,
+                enabled = isFormValid && !isAdding,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 16.dp, horizontal = 8.dp)
@@ -296,8 +265,6 @@ fun AddStudentScreen(
 @Composable
 fun AddStudentScreenPreview() {
     AddStudentScreen(
-        classId = "1",
-        className = "Preview Class",
         onNavigateBack = {},
         onStudentAdded = {}
     )

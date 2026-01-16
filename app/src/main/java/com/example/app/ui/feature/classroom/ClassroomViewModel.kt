@@ -96,8 +96,13 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     private val _studentDetailsUiState = MutableStateFlow(StudentDetailsUiState())
     val studentDetailsUiState: StateFlow<StudentDetailsUiState> = _studentDetailsUiState.asStateFlow()
 
+    // New: expose all students as a simple StateFlow of RosterStudent (enrollmentId = 0 when not applicable)
+    private val _allStudents = MutableStateFlow<List<RosterStudent>>(emptyList())
+    val allStudents: StateFlow<List<RosterStudent>> = _allStudents.asStateFlow()
+
     init {
         loadClasses()
+        loadAllStudents()
     }
 
     /**
@@ -122,6 +127,25 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Load all students in the database and expose them as RosterStudent.
+     */
+    private fun loadAllStudents() {
+        viewModelScope.launch {
+            studentRepository.getAllStudentsFlow().collect { students ->
+                val roster = students.map {
+                    RosterStudent(
+                        studentId = it.studentId,
+                        fullName = it.fullName,
+                        pfpPath = it.pfpPath,
+                        enrollmentId = 0L
+                    )
+                }
+                _allStudents.value = roster
             }
         }
     }
@@ -171,46 +195,61 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
-     * Load details for a specific student in a class.
+     * Load details for a specific student in a class (classId optional).
      *
      * @param studentId The student ID
-     * @param classId The class ID
+     * @param classId The class ID (nullable). When null, load student-only details without enrollment.
      */
-    fun loadStudentDetails(studentId: Long, classId: Long) {
+    fun loadStudentDetails(studentId: Long, classId: Long? = null) {
         viewModelScope.launch {
             _studentDetailsUiState.value = _studentDetailsUiState.value.copy(isLoading = true)
-            
+
             try {
                 val student = studentRepository.getStudentById(studentId)
-                val classEntity = classRepository.getClassById(classId)
-                val enrollment = enrollmentRepository.getEnrollmentByStudentAndClass(studentId, classId)
-                
-                if (student != null && classEntity != null && enrollment != null) {
+
+                if (student == null) {
                     _studentDetailsUiState.value = StudentDetailsUiState(
-                        studentName = student.fullName,
-                        className = classEntity.className,
-                        pfpPath = student.pfpPath,
-                        gradeLevel = student.gradeLevel,
-                        birthday = student.birthday,
-                        totalPracticeMinutes = enrollment.totalPracticeMinutes,
-                        sessionsCompleted = enrollment.sessionsCompleted,
-                        vowelsProgress = enrollment.vowelsProgress,
-                        consonantsProgress = enrollment.consonantsProgress,
-                        stopsProgress = enrollment.stopsProgress,
-                        firstTipTitle = enrollment.firstTipTitle,
-                        firstTipDescription = enrollment.firstTipDescription,
-                        firstTipSubtitle = enrollment.firstTipSubtitle,
-                        secondTipTitle = enrollment.secondTipTitle,
-                        secondTipDescription = enrollment.secondTipDescription,
-                        secondTipSubtitle = enrollment.secondTipSubtitle,
+                        error = "Student not found",
                         isLoading = false
                     )
-                } else {
-                    _studentDetailsUiState.value = StudentDetailsUiState(
-                        error = "Student or enrollment not found",
-                        isLoading = false
-                    )
+                    return@launch
                 }
+
+                // Base state populated from student record
+                var uiState = StudentDetailsUiState(
+                    studentName = student.fullName,
+                    className = "",
+                    pfpPath = student.pfpPath,
+                    gradeLevel = student.gradeLevel,
+                    birthday = student.birthday,
+                    isLoading = false
+                )
+
+                // If a classId is provided, try to load class and enrollment details
+                if (classId != null && classId > 0L) {
+                    val classEntity = classRepository.getClassById(classId)
+                    val enrollment = enrollmentRepository.getEnrollmentByStudentAndClass(studentId, classId)
+
+                    if (classEntity != null) uiState = uiState.copy(className = classEntity.className)
+
+                    if (enrollment != null) {
+                        uiState = uiState.copy(
+                            totalPracticeMinutes = enrollment.totalPracticeMinutes,
+                            sessionsCompleted = enrollment.sessionsCompleted,
+                            vowelsProgress = enrollment.vowelsProgress,
+                            consonantsProgress = enrollment.consonantsProgress,
+                            stopsProgress = enrollment.stopsProgress,
+                            firstTipTitle = enrollment.firstTipTitle,
+                            firstTipDescription = enrollment.firstTipDescription,
+                            firstTipSubtitle = enrollment.firstTipSubtitle,
+                            secondTipTitle = enrollment.secondTipTitle,
+                            secondTipDescription = enrollment.secondTipDescription,
+                            secondTipSubtitle = enrollment.secondTipSubtitle
+                        )
+                    }
+                }
+
+                _studentDetailsUiState.value = uiState
             } catch (e: Exception) {
                 _studentDetailsUiState.value = StudentDetailsUiState(
                     error = "Failed to load student details: ${e.message}",
@@ -219,6 +258,7 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
     }
+
 
     /**
      * Create a new class.
@@ -372,6 +412,30 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
             when (val result = studentRepository.updateStudent(studentId, fullName, gradeLevel, birthday, pfpPath)) {
                 is StudentRepository.StudentOperationResult.Success -> onSuccess()
                 is StudentRepository.StudentOperationResult.Error -> onError(result.message)
+            }
+        }
+    }
+
+    /**
+     * Add a student without enrolling in a class.
+     *
+     * @param fullName Student's full name
+     * @param gradeLevel Student's grade level
+     * @param pfpPath Optional profile picture path
+     * @param onSuccess Callback on success with student ID
+     * @param onError Callback on error
+     */
+    fun addStudent(
+        fullName: String,
+        gradeLevel: String,
+        pfpPath: String?,
+        onSuccess: (Long) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            when (val studentResult = studentRepository.addStudent(fullName, gradeLevel, "", pfpPath)) {
+                is StudentRepository.StudentOperationResult.Success -> onSuccess(studentResult.studentId)
+                is StudentRepository.StudentOperationResult.Error -> onError(studentResult.message)
             }
         }
     }

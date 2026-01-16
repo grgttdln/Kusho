@@ -63,9 +63,6 @@ class StudentRepository(private val studentDao: StudentDao) {
             if (gradeLevel.isBlank()) {
                 return@withContext StudentOperationResult.Error("Grade level cannot be empty")
             }
-            if (birthday.isBlank()) {
-                return@withContext StudentOperationResult.Error("Birthday cannot be empty")
-            }
 
             val newStudent = Student(
                 fullName = fullName.trim(),
@@ -104,9 +101,6 @@ class StudentRepository(private val studentDao: StudentDao) {
             }
             if (gradeLevel.isBlank()) {
                 return@withContext StudentOperationResult.Error("Grade level cannot be empty")
-            }
-            if (birthday.isBlank()) {
-                return@withContext StudentOperationResult.Error("Birthday cannot be empty")
             }
 
             val existingStudent = studentDao.getStudentById(studentId)
