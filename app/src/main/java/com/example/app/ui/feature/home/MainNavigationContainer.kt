@@ -1,6 +1,5 @@
 package com.example.app.ui.feature.home
 
-import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,11 +27,12 @@ import com.example.app.ui.feature.learn.set.AddSetScreen
 import com.example.app.ui.feature.learn.set.EditSetScreen
 import com.example.app.ui.feature.learn.set.SelectWordsScreen
 import com.example.app.ui.feature.learn.ConfirmationScreen
+import com.example.app.ui.feature.learn.learnmode.LearnModeActivitySelectionScreen
 
 @Composable
 fun MainNavigationContainer(
-    onLogout: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLogout: () -> Unit = {}
 ) {
     var currentScreen by remember { mutableStateOf(0) }
 
@@ -54,6 +54,7 @@ fun MainNavigationContainer(
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
     var selectedActivityTitle by remember { mutableStateOf("") }
+    var selectedActivityIconRes by remember { mutableStateOf(com.example.app.R.drawable.ic_apple) }
     var availableWords by remember { mutableStateOf(listOf<String>()) }
     var createdSetTitle by remember { mutableStateOf("") }
     var selectedSetId by remember { mutableStateOf(0L) }
@@ -66,6 +67,13 @@ fun MainNavigationContainer(
     val sessionManager = remember { SessionManager.getInstance(context) }
     val userId = remember { sessionManager.getUserId() }
     val wordRepository = remember { WordRepository(AppDatabase.getInstance(context).wordDao()) }
+    val setRepository = remember {
+        SetRepository(
+            AppDatabase.getInstance(context).setDao(),
+            AppDatabase.getInstance(context).setWordDao(),
+            AppDatabase.getInstance(context).wordDao()
+        )
+    }
 
     when (currentScreen) {
         0 -> DashboardScreen(
@@ -104,7 +112,15 @@ fun MainNavigationContainer(
             },
             modifier = modifier
         )
-        5 -> LearnModeScreen(onBack = { currentScreen = 1 }, modifier = modifier)
+        5 -> LearnModeScreen(
+            onBack = { currentScreen = 1 },
+            onStudentSelected = { studentId, classId ->
+                selectedStudentId = studentId.toString()
+                selectedClassId = classId.toString()
+                currentScreen = 31 // Navigate to activity selection screen
+            },
+            modifier = modifier
+        )
         6 -> YourActivitiesScreen(
             onNavigate = { currentScreen = it },
             onNavigateToSets = { activityId, activityTitle ->
@@ -338,6 +354,54 @@ fun MainNavigationContainer(
         )
         30 -> TutorialFinishedScreen(
             onEndSession = { currentScreen = 4 },
+            modifier = modifier
+        )
+        31 -> LearnModeActivitySelectionScreen(
+            studentId = selectedStudentId.toLongOrNull() ?: 0L,
+            classId = selectedClassId.toLongOrNull() ?: 0L,
+            onBack = { currentScreen = 5 },
+            onSelectActivity = { activityId: Long, activityTitle: String ->
+                selectedActivityId = activityId
+                selectedActivityTitle = activityTitle
+                // Optionally set a default icon or handle icon selection elsewhere
+                currentScreen = 32 // Navigate to LearnModeSetStatusScreen
+            },
+            modifier = modifier
+        )
+        32 -> {
+            val setsFlow = remember(selectedActivityId) { setRepository.getSetsForActivity(selectedActivityId) }
+            val sets by setsFlow.collectAsState(initial = emptyList())
+            val activitySetStatuses = sets.map {
+                com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
+                    title = it.title,
+                    status = "Not Started" // TODO: Replace with real status if available
+                )
+            }
+            com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
+                activityIconRes = selectedActivityIconRes,
+                activityTitle = selectedActivityTitle,
+                sets = activitySetStatuses,
+                onBack = { currentScreen = 31 },
+                onStartSet = { set ->
+                    // Navigate to LearnModeSessionScreen and pass the set title
+                    tutorialSessionTitle = set.title
+                    currentScreen = 33
+                },
+                modifier = modifier
+            )
+        }
+        33 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
+            title = tutorialSessionTitle,
+            modifier = modifier,
+            onSessionComplete = { currentScreen = 34 }
+        )
+        34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
+            onPracticeAgain = { currentScreen = 31 },
+            onContinue = { currentScreen = 35 },
+            modifier = modifier
+        )
+        35 -> com.example.app.ui.feature.learn.learnmode.LearnModeFinishedScreen(
+            onEndSession = { currentScreen = 1 },
             modifier = modifier
         )
     }

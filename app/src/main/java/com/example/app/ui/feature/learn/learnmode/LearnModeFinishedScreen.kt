@@ -1,4 +1,4 @@
-package com.example.app.ui.feature.learn.tutorialmode
+package com.example.app.ui.feature.learn.learnmode
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -23,7 +23,7 @@ import com.example.app.ui.feature.classroom.ConfettiAnimationStudent
 private val BlueButtonColor = Color(0xFF3FA9F8)
 
 @Composable
-fun TutorialFinishedScreen(
+fun LearnModeFinishedScreen(
     onEndSession: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -61,22 +61,22 @@ fun TutorialFinishedScreen(
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.dis_hooray),
-                    contentDescription = "Hooray",
+                    contentDescription = "Champion",
                     modifier = Modifier.size(380.dp),
                     contentScale = ContentScale.Fit
                 )
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "Tutorial Finished!",
+                    text = "Learn Mode Finished!",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
                     text = "Way to go!",
@@ -117,6 +117,6 @@ fun TutorialFinishedScreen(
 
 @Preview(showBackground = true)
 @Composable
-fun TutorialFinishedScreenPreview() {
-    TutorialFinishedScreen(onEndSession = {})
+fun LearnModeFinishedScreenPreview() {
+    LearnModeFinishedScreen(onEndSession = {})
 }
