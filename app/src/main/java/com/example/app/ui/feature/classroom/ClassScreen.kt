@@ -107,7 +107,7 @@ fun ClassScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Your Students",
+                        text = "Your Class",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = textDark,

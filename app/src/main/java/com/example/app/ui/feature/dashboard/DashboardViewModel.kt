@@ -7,6 +7,7 @@ import com.example.app.data.AppDatabase
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Class
 import com.example.app.data.repository.ClassRepository
+import com.example.app.data.repository.ActivityRepository
 import com.example.app.data.repository.EnrollmentRepository
 import com.example.app.data.repository.StudentRepository
 import com.example.app.service.WatchConnectionManager
@@ -22,7 +23,7 @@ data class DashboardUiState(
     val watchDevice: WatchDeviceInfo = WatchDeviceInfo(),
     val isLoading: Boolean = false,
     val totalStudents: Int = 0,
-    val totalClassrooms: Int = 0,
+    val totalActivities: Int = 0,
     val recentClass: Class? = null
 )
 
@@ -35,6 +36,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val classRepository = ClassRepository(database.classDao())
     private val enrollmentRepository = EnrollmentRepository(database.enrollmentDao(), database.studentDao())
     private val studentRepository = StudentRepository(database.studentDao())
+    private val activityRepository = ActivityRepository(database.activityDao())
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
@@ -87,29 +89,27 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             try {
                 // Get all active (non-archived) classes for the user
                 classRepository.getActiveClassesByUserId(userId).collect { activeClasses ->
-                    // Count active classrooms
+                    // Count active classrooms (kept for possible future use)
                     val classroomCount = activeClasses.size
                     
-                    // Get unique student IDs enrolled in active classes
-                    val uniqueStudentIds = mutableSetOf<Long>()
-                    
-                    // Use first() to get a snapshot instead of collect
-                    activeClasses.forEach { classEntity ->
-                        val enrollments = enrollmentRepository.getEnrollmentsByClassId(classEntity.classId).first()
-                        enrollments.forEach { enrollment ->
-                            uniqueStudentIds.add(enrollment.studentId)
-                        }
-                    }
-                    
-                    // Get most recent class (highest classId = most recently created)
-                    val recentClass = activeClasses.maxByOrNull { it.classId }
-                    
-                    _uiState.value = _uiState.value.copy(
-                        totalStudents = uniqueStudentIds.size,
-                        totalClassrooms = classroomCount,
-                        recentClass = recentClass
-                    )
-                }
+                    // Count all students in the database (so "Total Students" reflects the students table)
+                    // This covers students not yet enrolled in any class as well as enrolled students.
+                    val allStudentsList = studentRepository.getAllStudentsFlow().first()
+                    val totalStudentsCount = allStudentsList.size
+
+                    // Get total activities for the user
+                    val activityCountResult = activityRepository.getActivityCount(userId)
+                    val totalActivitiesCount = activityCountResult.getOrNull() ?: 0
+
+                     // Get most recent class (highest classId = most recently created)
+                     val recentClass = activeClasses.maxByOrNull { it.classId }
+
+                     _uiState.value = _uiState.value.copy(
+                        totalStudents = totalStudentsCount,
+                        totalActivities = totalActivitiesCount,
+                         recentClass = recentClass
+                     )
+                 }
             } catch (e: Exception) {
                 // Handle error silently or log it
                 e.printStackTrace()

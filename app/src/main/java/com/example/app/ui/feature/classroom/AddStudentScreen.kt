@@ -44,7 +44,8 @@ fun AddStudentScreen(
     viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    var studentName by remember { mutableStateOf("") }
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
     var gradeLevel by remember { mutableStateOf("") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
     var profileImagePath by remember { mutableStateOf<String?>(null) }
@@ -59,7 +60,7 @@ fun AddStudentScreen(
         }
     }
 
-    val isFormValid = studentName.isNotBlank() && gradeLevel.isNotBlank()
+    val isFormValid = firstName.isNotBlank() && lastName.isNotBlank() && gradeLevel.isNotBlank()
     var isAdding by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -176,13 +177,37 @@ fun AddStudentScreen(
 
                 Spacer(Modifier.height(28.dp))
 
-                // Student Name TextField
+                // Student First Name TextField
                 TextField(
-                    value = studentName,
-                    onValueChange = { studentName = it },
+                    value = firstName,
+                    onValueChange = { firstName = it },
                     placeholder = {
                         Text(
-                            text = "Enter Student's Name",
+                            text = "Enter Student's First Name",
+                            color = Color(0xFF999999)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = TextFieldDefaults.colors(
+                        focusedIndicatorColor = Color(0xFF3FA9F8),
+                        unfocusedIndicatorColor = Color(0xFF3FA9F8),
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black
+                    ),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Student Last Name TextField
+                TextField(
+                    value = lastName,
+                    onValueChange = { lastName = it },
+                    placeholder = {
+                        Text(
+                            text = "Enter Student's Last Name",
                             color = Color(0xFF999999)
                         )
                     },
@@ -235,14 +260,15 @@ fun AddStudentScreen(
                 onClick = {
                     if (!isFormValid || isAdding) return@PrimaryButton
                     isAdding = true
+                    val fullName = "${firstName.trim()} ${lastName.trim()}"
                     viewModel.addStudent(
-                        fullName = studentName,
+                        fullName = fullName,
                         gradeLevel = gradeLevel,
                         pfpPath = profileImagePath,
                         onSuccess = { studentId: Long ->
                             isAdding = false
                             // Notify parent so it can navigate to the StudentAddedSuccessScreen (screen 24)
-                            onStudentAdded(studentName)
+                            onStudentAdded(fullName)
                         },
                         onError = { error: String ->
                             isAdding = false

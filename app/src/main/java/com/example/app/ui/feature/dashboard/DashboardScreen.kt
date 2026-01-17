@@ -33,7 +33,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,15 +41,13 @@ import com.example.app.R
 import com.example.app.data.SessionManager
 import com.example.app.service.ConnectionState
 import com.example.app.ui.components.BottomNavBar
-import com.example.app.ui.components.classroom.ClassCard
 
 
 @Composable
 fun DashboardScreen(
+    modifier: Modifier = Modifier,
     onNavigate: (Int) -> Unit,
     onLogout: () -> Unit,
-    onNavigateToClassDetails: (String, String, String) -> Unit = { _, _, _ -> },
-    modifier: Modifier = Modifier,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -61,19 +58,23 @@ fun DashboardScreen(
     // State for logout confirmation dialog
     var showLogoutDialog by remember { mutableStateOf(false) }
     val greeting = viewModel.getGreeting()
-    
+
     // Request battery update every time Dashboard appears/resumes
     LaunchedEffect(Unit) {
         viewModel.requestBatteryUpdate()
         viewModel.refreshAnalytics() // Refresh analytics data
     }
-    
+
     // Also request when watch connection state changes to connected
     LaunchedEffect(watchDevice.isConnected) {
         if (watchDevice.isConnected) {
             viewModel.requestBatteryUpdate()
         }
     }
+
+    // Labels with singular/plural handling
+    val studentsLabel = if (uiState.totalStudents == 1) "Total Student" else "Total Students"
+    val activitiesLabel = if (uiState.totalActivities == 1) "Total Activity" else "Total Activities"
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -213,7 +214,7 @@ fun DashboardScreen(
                     // Refresh button
                     if (watchDevice.isConnected) {
                         IconButton(
-                            onClick = { 
+                            onClick = {
                                 viewModel.checkWatchConnection()
                                 viewModel.requestBatteryUpdate() // Also request fresh battery data
                             },
@@ -238,7 +239,7 @@ fun DashboardScreen(
                             }
                         }
                     }
-                    
+
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
@@ -338,103 +339,15 @@ fun DashboardScreen(
             ) {
                 AnalyticsCard(
                     number = uiState.totalStudents.toString(),
-                    label = "Total Students",
+                    label = studentsLabel,
                     modifier = Modifier.weight(1f)
                 )
 
                 AnalyticsCard(
-                    number = uiState.totalClassrooms.toString(),
-                    label = "Classrooms",
+                    number = uiState.totalActivities.toString(),
+                    label = activitiesLabel,
                     modifier = Modifier.weight(1f)
                 )
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Your Recent Class - 20sp, Medium weight
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 30.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Your Recent Class",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black,
-                    lineHeight = 30.sp
-                )
-
-                TextButton(onClick = { onNavigate(2) }) {
-                    Text(
-                        text = "View More",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF3FA9F8),
-                        lineHeight = 18.sp,
-                        textDecoration = TextDecoration.Underline
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(9.dp))
-
-            // Class Card or Empty State
-            val recentClass = uiState.recentClass
-            if (recentClass != null) {
-                ClassCard(
-                    classCode = recentClass.classCode,
-                    className = recentClass.className,
-                    imageRes = R.drawable.ic_class_abc,
-                    imagePath = recentClass.bannerPath,
-                    onClick = { 
-                        onNavigateToClassDetails(
-                            recentClass.classId.toString(),
-                            recentClass.className,
-                            recentClass.bannerPath ?: ""
-                        )
-                    },
-                    modifier = Modifier.padding(horizontal = 30.dp)
-                )
-            } else {
-                // Empty state
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 30.dp)
-                        .height(150.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFF6F6F8)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "No Classes Yet",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF666666)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Create your first class to get started!",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = Color(0xFF999999)
-                            )
-                        }
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
