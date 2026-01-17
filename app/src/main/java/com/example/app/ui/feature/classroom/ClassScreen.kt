@@ -381,18 +381,18 @@ fun ClassScreen(
                 studentName = student.fullName,
                 onConfirm = {
                     vm.deleteStudent(
-                              studentId = student.studentId,
-                              onSuccess = {
-                                  studentToRemove = null
-                                  isRemovalMode = false
-                                  // refresh lists
-                                 vm.loadClasses()
-                              },
-                             onError = { _errorMsg: String ->
-                                  // TODO: show snackbar/toast. For now just dismiss the dialog.
-                                  studentToRemove = null
-                              }
-                          )
+                        studentId = student.studentId,
+                        onSuccess = {
+                            studentToRemove = null
+                            isRemovalMode = false
+                            // refresh lists
+                            vm.loadClasses()
+                        },
+                        onError = { _errorMsg: String ->
+                            // TODO: show snackbar/toast. For now just dismiss the dialog.
+                            studentToRemove = null
+                        }
+                    )
                 },
                 onDismiss = { studentToRemove = null }
             )

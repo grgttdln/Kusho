@@ -3,6 +3,7 @@ package com.example.app.data.repository
 import com.example.app.data.dao.StudentTeacherDao
 import com.example.app.data.entity.StudentTeacher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 
 class StudentTeacherRepository(private val dao: StudentTeacherDao) {
@@ -53,4 +54,9 @@ class StudentTeacherRepository(private val dao: StudentTeacherDao) {
         if (ids.isEmpty()) return@withContext emptyList()
         studentDao.getStudentsByIds(ids)
     }
+
+    /**
+     * Observe count of distinct students assigned to a teacher.
+     */
+    fun getStudentCountForTeacherFlow(userId: Long): Flow<Int> = dao.getStudentCountForTeacherFlow(userId)
 }

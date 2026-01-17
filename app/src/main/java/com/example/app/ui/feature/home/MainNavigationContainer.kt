@@ -301,7 +301,7 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         23 -> AddStudentScreen(
-            onNavigateBack = { currentScreen = 22 },
+            onNavigateBack = { currentScreen = 2 },
             onStudentAdded = { studentName ->
                 addedStudentName = studentName
                 currentScreen = 24

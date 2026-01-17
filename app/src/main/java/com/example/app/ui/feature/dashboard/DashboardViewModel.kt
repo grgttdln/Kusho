@@ -8,15 +8,12 @@ import com.example.app.data.SessionManager
 import com.example.app.data.entity.Class
 import com.example.app.data.repository.ClassRepository
 import com.example.app.data.repository.ActivityRepository
-import com.example.app.data.repository.EnrollmentRepository
-import com.example.app.data.repository.StudentRepository
 import com.example.app.data.repository.StudentTeacherRepository
 import com.example.app.service.WatchConnectionManager
 import com.example.app.service.WatchDeviceInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class DashboardUiState(
@@ -35,10 +32,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     
     private val database = AppDatabase.getInstance(application)
     private val classRepository = ClassRepository(database.classDao())
-    private val enrollmentRepository = EnrollmentRepository(database.enrollmentDao(), database.studentDao())
-    private val studentRepository = StudentRepository(database.studentDao())
-    private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
     private val activityRepository = ActivityRepository(database.activityDao())
+    private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
@@ -89,30 +84,29 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private fun loadAnalytics(userId: Long) {
         viewModelScope.launch {
             try {
-                // Get all active (non-archived) classes for the user
-                classRepository.getActiveClassesByUserId(userId).collect { activeClasses ->
-                    // Count active classrooms (kept for possible future use)
-                    val classroomCount = activeClasses.size
-                    
-                    // Count students assigned to this teacher via the student_teachers join table
-                    val teacherStudentIds = studentTeacherRepository.getStudentIdsForTeacher(userId)
-                    val totalStudentsCount = teacherStudentIds.distinct().size
+                // Collect active classes (updates recentClass and totalActivities)
+                launch {
+                    classRepository.getActiveClassesByUserId(userId).collect { activeClasses ->
+                        val classroomCount = activeClasses.size
+                        val activityCountResult = activityRepository.getActivityCount(userId)
+                        val totalActivitiesCount = activityCountResult.getOrNull() ?: 0
+                        val recentClass = activeClasses.maxByOrNull { it.classId }
 
-                    // Get total activities for the user
-                    val activityCountResult = activityRepository.getActivityCount(userId)
-                    val totalActivitiesCount = activityCountResult.getOrNull() ?: 0
-                     
-                     // Get most recent class (highest classId = most recently created)
-                     val recentClass = activeClasses.maxByOrNull { it.classId }
-                     
-                     _uiState.value = _uiState.value.copy(
-                        totalStudents = totalStudentsCount,
-                        totalActivities = totalActivitiesCount,
-                         recentClass = recentClass
-                     )
-                 }
+                        _uiState.value = _uiState.value.copy(
+                            totalActivities = totalActivitiesCount,
+                            recentClass = recentClass
+                        )
+                    }
+                }
+
+                // Collect the number of distinct students assigned to this teacher reactively
+                launch {
+                    studentTeacherRepository.getStudentCountForTeacherFlow(userId).collect { count ->
+                        _uiState.value = _uiState.value.copy(totalStudents = count)
+                    }
+                }
+
             } catch (e: Exception) {
-                // Handle error silently or log it
                 e.printStackTrace()
             }
         }

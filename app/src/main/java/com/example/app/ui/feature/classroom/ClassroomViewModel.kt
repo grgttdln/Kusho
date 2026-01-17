@@ -104,9 +104,14 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     private val _allStudents = MutableStateFlow<List<RosterStudent>>(emptyList())
     val allStudents: StateFlow<List<RosterStudent>> = _allStudents.asStateFlow()
 
+    // Global student directory (all students in DB)
+    private val _studentDirectory = MutableStateFlow<List<RosterStudent>>(emptyList())
+    val studentDirectory: StateFlow<List<RosterStudent>> = _studentDirectory.asStateFlow()
+
     init {
         loadClasses()
         loadAllStudents()
+        loadStudentDirectory()
     }
 
     /**
@@ -163,6 +168,18 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                         _allStudents.value = roster
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Load the global student directory (all students in DB). This is used by AddExistingStudentsScreen.
+     */
+    fun loadStudentDirectory() {
+        viewModelScope.launch {
+            database.studentDao().getAllStudentsFlow().collect { students ->
+                val list = students.map { RosterStudent(studentId = it.studentId, fullName = it.fullName, pfpPath = it.pfpPath, enrollmentId = 0L) }
+                _studentDirectory.value = list
             }
         }
     }
@@ -518,4 +535,40 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Add an existing student to a class (create class enrollment only).
+     */
+    fun addExistingStudentToClass(studentId: Long, classId: Long, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            when (val result = enrollmentRepository.enrollStudent(studentId, classId)) {
+                is com.example.app.data.repository.EnrollmentRepository.EnrollmentOperationResult.Success -> {
+                    // refresh class details and roster
+                    loadClassDetails(classId)
+                    onSuccess()
+                }
+                is com.example.app.data.repository.EnrollmentRepository.EnrollmentOperationResult.Error -> onError(result.message)
+            }
+        }
+    }
+
+    /**
+     * Create a new student and add them to a class.
+     */
+    fun createStudentAndAddToClass(fullName: String, gradeLevel: String, birthday: String, pfpPath: String?, classId: Long, onSuccess: (Long) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            when (val studentResult = studentRepository.addStudent(fullName, gradeLevel, birthday, pfpPath)) {
+                is StudentRepository.StudentOperationResult.Success -> {
+                    val studentId = studentResult.studentId
+                    when (val enrollResult = enrollmentRepository.enrollStudent(studentId, classId)) {
+                        is com.example.app.data.repository.EnrollmentRepository.EnrollmentOperationResult.Success -> {
+                            loadClassDetails(classId)
+                            onSuccess(studentId)
+                        }
+                        is com.example.app.data.repository.EnrollmentRepository.EnrollmentOperationResult.Error -> onError(enrollResult.message)
+                    }
+                }
+                is StudentRepository.StudentOperationResult.Error -> onError(studentResult.message)
+            }
+        }
+    }
 }
