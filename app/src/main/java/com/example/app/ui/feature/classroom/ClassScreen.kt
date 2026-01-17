@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.PrimaryButton
 import com.example.app.ui.components.classroom.StudentCard
+import com.example.app.ui.components.classroom.RemoveStudentDialog
 import androidx.compose.ui.text.style.TextAlign
 
 
@@ -39,14 +41,16 @@ fun ClassScreen(
     onNavigateToClassDetails: (String) -> Unit = {},
     onNavigateToStudentDetails: (String, String, String) -> Unit = { _, _, _ -> },
     onNavigateToAddStudent: () -> Unit = {},
-    viewModel: ClassroomViewModel = viewModel()
+    vm: ClassroomViewModel = viewModel<ClassroomViewModel>()
 ) {
-    val classUiState by viewModel.classListUiState.collectAsState()
-    val students by viewModel.allStudents.collectAsState()
+    val classUiState by vm.classListUiState.collectAsState()
+    val students by vm.allStudents.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var isSortMenuExpanded by remember { mutableStateOf(false) }
     var sortOption by remember { mutableStateOf("Name (A-Z)") }
+    var isRemovalMode by remember { mutableStateOf(false) }
+    var studentToRemove by remember { mutableStateOf<RosterStudent?>(null) }
 
     val accentBlue = Color(0xFF3FA9F8)
     val textDark = Color(0xFF0B0B0B)
@@ -68,13 +72,11 @@ fun ClassScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
 
-        // Scrollable content area (everything ABOVE the pinned bottom actions)
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                // Reserve space so content doesn't go behind the pinned button + nav
                 .padding(bottom = 170.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -94,23 +96,46 @@ fun ClassScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            Text(
-                text = "Your Students",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = textDark
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Spacer(modifier = Modifier.size(36.dp))
+
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Your Students",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = textDark,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                IconButton(
+                    onClick = { isRemovalMode = !isRemovalMode },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        tint = accentBlue
+                    )
+                }
+            }
+
 
             Spacer(Modifier.height(16.dp))
 
-            // ----------- Search + Sort UI -----------
             val pillShape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Search pill
                 Surface(
                     color = surfaceWhite,
                     tonalElevation = 0.dp,
@@ -182,7 +207,6 @@ fun ClassScreen(
 
                 Spacer(Modifier.width(12.dp))
 
-                // Sort pill
                 Surface(
                     color = surfaceWhite,
                     tonalElevation = 0.dp,
@@ -239,7 +263,6 @@ fun ClassScreen(
                     )
                 }
             }
-            // ----------- End Search + Sort UI -----------
 
             Spacer(Modifier.height(16.dp))
 
@@ -305,8 +328,8 @@ fun ClassScreen(
                                             ""
                                         )
                                     },
-                                    isRemovalMode = false,
-                                    onRemove = {},
+                                    isRemovalMode = isRemovalMode,
+                                    onRemove = { studentToRemove = student },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -350,6 +373,28 @@ fun ClassScreen(
                 selectedTab = 2,
                 onTabSelected = { onNavigate(it) },
                 modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        studentToRemove?.let { student ->
+            RemoveStudentDialog(
+                studentName = student.fullName,
+                onConfirm = {
+                    vm.deleteStudent(
+                              studentId = student.studentId,
+                              onSuccess = {
+                                  studentToRemove = null
+                                  isRemovalMode = false
+                                  // refresh lists
+                                 vm.loadClasses()
+                              },
+                             onError = { _errorMsg: String ->
+                                  // TODO: show snackbar/toast. For now just dismiss the dialog.
+                                  studentToRemove = null
+                              }
+                          )
+                },
+                onDismiss = { studentToRemove = null }
             )
         }
     }
