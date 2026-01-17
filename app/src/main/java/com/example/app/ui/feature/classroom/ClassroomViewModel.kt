@@ -9,6 +9,7 @@ import com.example.app.data.entity.Class
 import com.example.app.data.repository.ClassRepository
 import com.example.app.data.repository.EnrollmentRepository
 import com.example.app.data.repository.StudentRepository
+import com.example.app.data.repository.StudentTeacherRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +87,7 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     private val studentRepository = StudentRepository(database.studentDao())
     private val enrollmentRepository =
         EnrollmentRepository(database.enrollmentDao(), database.studentDao())
+    private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
     private val sessionManager = SessionManager.getInstance(application)
 
     private val _classListUiState = MutableStateFlow(ClassListUiState())
@@ -139,16 +141,28 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
      */
     private fun loadAllStudents() {
         viewModelScope.launch {
-            studentRepository.getAllStudentsFlow().collect { students ->
-                val roster = students.map {
-                    RosterStudent(
-                        studentId = it.studentId,
-                        fullName = it.fullName,
-                        pfpPath = it.pfpPath,
-                        enrollmentId = 0L
-                    )
+            sessionManager.currentUser.collect { user ->
+                if (user != null) {
+                    database.studentDao().getStudentsForTeacherFlow(user.id).collect { studentsForTeacher ->
+                        val roster = studentsForTeacher.map {
+                            RosterStudent(studentId = it.studentId, fullName = it.fullName, pfpPath = it.pfpPath, enrollmentId = 0L)
+                        }
+                        _allStudents.value = roster
+                    }
+                } else {
+                    // No user logged in — expose all students
+                    studentRepository.getAllStudentsFlow().collect { students ->
+                        val roster = students.map {
+                            RosterStudent(
+                                studentId = it.studentId,
+                                fullName = it.fullName,
+                                pfpPath = it.pfpPath,
+                                enrollmentId = 0L
+                            )
+                        }
+                        _allStudents.value = roster
+                    }
                 }
-                _allStudents.value = roster
             }
         }
     }
@@ -456,6 +470,36 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                 is StudentRepository.StudentOperationResult.Error -> onError(studentResult.message)
             }
         }
+    }
+
+    /**
+     * Add a student and link to multiple teacher users.
+     */
+    fun addStudentWithTeachers(
+        fullName: String,
+        gradeLevel: String,
+        pfpPath: String?,
+        teacherIds: List<Long>,
+        onSuccess: (Long) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            when (val studentResult = studentRepository.addStudent(fullName, gradeLevel, "", pfpPath)) {
+                is StudentRepository.StudentOperationResult.Success -> {
+                    val studentId = studentResult.studentId
+                    val linkResult = studentTeacherRepository.linkStudentToTeachers(studentId, teacherIds)
+                    if (linkResult.isSuccess) onSuccess(studentId) else onError(linkResult.exceptionOrNull()?.message ?: "Failed to link teachers")
+                }
+                is StudentRepository.StudentOperationResult.Error -> onError(studentResult.message)
+            }
+        }
+    }
+
+    /**
+     * Helper to get current user ID: prefers in-memory session currentUser, falls back to persisted prefs.
+     */
+    fun getCurrentUserId(): Long {
+        return sessionManager.currentUser.value?.id ?: sessionManager.getUserId()
     }
 
     /**

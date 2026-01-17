@@ -35,6 +35,7 @@ import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
 import com.example.app.util.ImageUtil
+import com.example.app.data.SessionManager
 
 @Composable
 fun AddStudentScreen(
@@ -261,13 +262,18 @@ fun AddStudentScreen(
                     if (!isFormValid || isAdding) return@PrimaryButton
                     isAdding = true
                     val fullName = "${firstName.trim()} ${lastName.trim()}"
-                    viewModel.addStudent(
+                    // Auto-assign current logged-in user as a teacher for this student
+                    val sessionManager = SessionManager.getInstance(context)
+                    val currentUserId = sessionManager.currentUser.value?.id ?: sessionManager.getUserId()
+                    val teacherIds = if (currentUserId > 0L) listOf(currentUserId) else emptyList()
+
+                    viewModel.addStudentWithTeachers(
                         fullName = fullName,
                         gradeLevel = gradeLevel,
                         pfpPath = profileImagePath,
+                        teacherIds = teacherIds,
                         onSuccess = { studentId: Long ->
                             isAdding = false
-                            // Notify parent so it can navigate to the StudentAddedSuccessScreen (screen 24)
                             onStudentAdded(fullName)
                         },
                         onError = { error: String ->

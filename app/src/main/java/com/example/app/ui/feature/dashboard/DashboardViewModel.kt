@@ -10,6 +10,7 @@ import com.example.app.data.repository.ClassRepository
 import com.example.app.data.repository.ActivityRepository
 import com.example.app.data.repository.EnrollmentRepository
 import com.example.app.data.repository.StudentRepository
+import com.example.app.data.repository.StudentTeacherRepository
 import com.example.app.service.WatchConnectionManager
 import com.example.app.service.WatchDeviceInfo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val classRepository = ClassRepository(database.classDao())
     private val enrollmentRepository = EnrollmentRepository(database.enrollmentDao(), database.studentDao())
     private val studentRepository = StudentRepository(database.studentDao())
+    private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
     private val activityRepository = ActivityRepository(database.activityDao())
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -92,18 +94,17 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     // Count active classrooms (kept for possible future use)
                     val classroomCount = activeClasses.size
                     
-                    // Count all students in the database (so "Total Students" reflects the students table)
-                    // This covers students not yet enrolled in any class as well as enrolled students.
-                    val allStudentsList = studentRepository.getAllStudentsFlow().first()
-                    val totalStudentsCount = allStudentsList.size
+                    // Count students assigned to this teacher via the student_teachers join table
+                    val teacherStudentIds = studentTeacherRepository.getStudentIdsForTeacher(userId)
+                    val totalStudentsCount = teacherStudentIds.distinct().size
 
                     // Get total activities for the user
                     val activityCountResult = activityRepository.getActivityCount(userId)
                     val totalActivitiesCount = activityCountResult.getOrNull() ?: 0
-
+                     
                      // Get most recent class (highest classId = most recently created)
                      val recentClass = activeClasses.maxByOrNull { it.classId }
-
+                     
                      _uiState.value = _uiState.value.copy(
                         totalStudents = totalStudentsCount,
                         totalActivities = totalActivitiesCount,

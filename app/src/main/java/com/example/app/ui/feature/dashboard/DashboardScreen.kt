@@ -72,10 +72,6 @@ fun DashboardScreen(
         }
     }
 
-    // Labels with singular/plural handling
-    val studentsLabel = if (uiState.totalStudents == 1) "Total Student" else "Total Students"
-    val activitiesLabel = if (uiState.totalActivities == 1) "Total Activity" else "Total Activities"
-
     Box(
         modifier = modifier.fillMaxSize()
     ) {
@@ -339,13 +335,13 @@ fun DashboardScreen(
             ) {
                 AnalyticsCard(
                     number = uiState.totalStudents.toString(),
-                    label = studentsLabel,
+                    label = "Total Students",
                     modifier = Modifier.weight(1f)
                 )
 
                 AnalyticsCard(
                     number = uiState.totalActivities.toString(),
-                    label = activitiesLabel,
+                    label = "Activities",
                     modifier = Modifier.weight(1f)
                 )
             }
