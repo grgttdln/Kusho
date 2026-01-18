@@ -18,9 +18,10 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
         private const val TAG = "TextToSpeechManager"
         private const val DEFAULT_VOLUME = 1.0f // Range: 0.0 to 1.0
 
-        // Kid-friendly voice settings
-        private const val KID_FRIENDLY_PITCH = 1.5f    // Higher pitch (1.0 is normal, max ~2.0)
-        private const val KID_FRIENDLY_SPEED = 0.9f    // Slightly slower for clarity (1.0 is normal)
+        // Voice settings tuned to match ElevenLabs "Cassidy" characteristics:
+        // Crisp, Direct, Clear, Confident female voice
+        private const val KID_FRIENDLY_PITCH = 1.08f   // Slightly higher than normal, confident tone (1.0 is normal)
+        private const val KID_FRIENDLY_SPEED = 1.0f    // Normal speed for crisp, direct delivery (1.0 is normal)
     }
 
     private var tts: TextToSpeech? = null
@@ -102,8 +103,8 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             }
 
             // Priority order for voice selection:
-            // 1. Female US English voice with high quality
-            // 2. Any female English voice
+            // 1. Neural/high-quality female US English voice (most natural)
+            // 2. Any female English voice with high quality
             // 3. High quality US English voice
             // 4. Keep default
 
@@ -113,9 +114,27 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
                 it.features?.contains("notInstalled") != true
             }
 
-            // Try to find a female voice (names often contain "female" or specific names)
-            val femaleVoice = usEnglishVoices.find { voice ->
+            // Prioritize high-quality voices first (neural voices sound most natural)
+            val veryHighQualityVoices = usEnglishVoices.filter { 
+                it.quality >= Voice.QUALITY_VERY_HIGH // Best quality voices
+            }
+            
+            val highQualityVoices = usEnglishVoices.filter { 
+                it.quality >= Voice.QUALITY_HIGH 
+            }
+
+            // Try to find a female neural voice from highest quality voices first
+            val voicePool = when {
+                veryHighQualityVoices.isNotEmpty() -> veryHighQualityVoices
+                highQualityVoices.isNotEmpty() -> highQualityVoices
+                else -> usEnglishVoices
+            }
+
+            // Try to find a female neural voice (most natural for children)
+            val femaleVoice = voicePool.find { voice ->
                 voice.name.lowercase().let { name ->
+                    name.contains("neural") ||     // Neural voices are most natural
+                    name.contains("wavenet") ||    // Google's WaveNet voices
                     name.contains("female") ||
                     name.contains("samantha") ||
                     name.contains("karen") ||
@@ -124,12 +143,13 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
                     name.contains("fiona") ||
                     name.contains("en-us-x-sfg") || // Google's female voice
                     name.contains("en-us-x-tpf") || // Another female variant
+                    name.contains("en-us-x-iob") || // Google Assistant female
                     name.contains("-f-") // Common female indicator
                 }
             }
 
             // If no female voice found, pick the highest quality English voice
-            val selectedVoice = femaleVoice ?: usEnglishVoices.maxByOrNull { it.quality }
+            val selectedVoice = femaleVoice ?: voicePool.maxByOrNull { it.quality }
 
             selectedVoice?.let { voice ->
                 val result = tts?.setVoice(voice)
@@ -156,9 +176,8 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
-     * Speak the predicted letter.
-     * For single letters, it speaks the letter name (e.g., "A" -> "A").
-     * For lowercase letters, it says "lowercase" followed by the letter.
+     * Speak the predicted letter with encouraging, child-friendly phrasing.
+     * Designed to be engaging and natural for young learners.
      */
     fun speakLetter(letter: String) {
         if (!isInitialized) {
@@ -170,13 +189,15 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             return
         }
 
-        // Determine what to speak
+        // Determine what to speak - keep it simple and natural
         val textToSpeak = when {
             letter.length == 1 && letter[0].isLetter() -> {
                 if (letter[0].isUpperCase()) {
-                    "Big ${letter.uppercase()}"
+                    // For uppercase: Just say "Capital A" or simply "A"
+                    "Capital ${letter.uppercase()}"
                 } else {
-                    "Small ${letter.uppercase()}"
+                    // For lowercase: Just say the letter naturally "a", "b", "c"
+                    letter.lowercase()
                 }
             }
             else -> letter
@@ -188,6 +209,46 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
         }
         tts?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, params, "prediction_${System.currentTimeMillis()}")
+    }
+
+    /**
+     * Speak a word naturally (e.g., "cat", "dog", "ball").
+     * Perfect for when multiple letters form a word.
+     */
+    fun speakWord(word: String) {
+        if (!isInitialized) {
+            Log.w(TAG, "TTS not initialized, cannot speak")
+            return
+        }
+
+        if (word.isBlank()) return
+
+        Log.d(TAG, "Speaking word: $word (volume: $volume)")
+
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
+        }
+        tts?.speak(word.lowercase(), TextToSpeech.QUEUE_FLUSH, params, "word_${System.currentTimeMillis()}")
+    }
+
+    /**
+     * Speak encouraging phrases to motivate children.
+     * Examples: "Great job!", "Keep going!", "You're doing amazing!"
+     */
+    fun speakEncouragement(phrase: String) {
+        if (!isInitialized) {
+            Log.w(TAG, "TTS not initialized, cannot speak")
+            return
+        }
+
+        if (phrase.isBlank()) return
+
+        Log.d(TAG, "Speaking encouragement: $phrase (volume: $volume)")
+
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
+        }
+        tts?.speak(phrase, TextToSpeech.QUEUE_FLUSH, params, "encourage_${System.currentTimeMillis()}")
     }
 
     /**
