@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Class
+import com.example.app.data.entity.Activity
 import com.example.app.data.repository.ClassRepository
 import com.example.app.data.repository.ActivityRepository
 import com.example.app.data.repository.StudentTeacherRepository
+import com.example.app.data.repository.WordRepository
 import com.example.app.service.WatchConnectionManager
 import com.example.app.service.WatchDeviceInfo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +24,7 @@ data class DashboardUiState(
     val isLoading: Boolean = false,
     val totalStudents: Int = 0,
     val totalActivities: Int = 0,
+    val totalWords: Int = 0,
     val recentClass: Class? = null
 )
 
@@ -33,8 +36,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val database = AppDatabase.getInstance(application)
     private val classRepository = ClassRepository(database.classDao())
     private val activityRepository = ActivityRepository(database.activityDao())
+    private val wordRepository = WordRepository(database.wordDao())
     private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
 
+    // Activities flow exposed to the UI
+    private val _activities = MutableStateFlow<List<Activity>>(emptyList())
+    val activities: StateFlow<List<Activity>> = _activities.asStateFlow()
+    
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
     
@@ -106,6 +114,24 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
 
+                // Load total words for this user (one-shot)
+                launch {
+                    try {
+                        val wordCount = wordRepository.getWordCount(userId)
+                        _uiState.value = _uiState.value.copy(totalWords = wordCount)
+                    } catch (e: Exception) {
+                        // fallback to 0 on error
+                        _uiState.value = _uiState.value.copy(totalWords = 0)
+                    }
+                }
+
+                // Collect activities for this user reactively and expose to UI
+                launch {
+                    activityRepository.getActivitiesForUser(userId).collect { activities ->
+                        _activities.value = activities
+                    }
+                }
+                
             } catch (e: Exception) {
                 e.printStackTrace()
             }

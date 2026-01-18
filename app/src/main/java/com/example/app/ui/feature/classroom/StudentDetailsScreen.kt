@@ -71,7 +71,7 @@ fun StudentDetailsScreen(
     var showEditNameDialog by remember { mutableStateOf(false) }
     var showEditPfpDialog by remember { mutableStateOf(false) }
     var editedName by remember { mutableStateOf("") }
-
+    
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()

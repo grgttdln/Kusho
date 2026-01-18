@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,9 +32,11 @@ import com.example.app.ui.components.PrimaryButton
 import com.example.app.ui.components.classroom.StudentCard
 import com.example.app.ui.components.classroom.RemoveStudentDialog
 import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.launch
 
 
 @Suppress("UNUSED_PARAMETER", "DEPRECATION")
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClassScreen(
     onNavigate: (Int) -> Unit,
@@ -40,7 +44,11 @@ fun ClassScreen(
     onNavigateToCreateClass: () -> Unit = {},
     onNavigateToClassDetails: (String) -> Unit = {},
     onNavigateToStudentDetails: (String, String, String) -> Unit = { _, _, _ -> },
+    // backward-compatible single handler (kept for callers that still use it)
     onNavigateToAddStudent: () -> Unit = {},
+    // new split navigation callbacks (defaults delegate to the legacy handler)
+    onNavigateToAddExistingStudents: (Long?) -> Unit = { onNavigateToAddStudent() },
+    onNavigateToCreateStudent: (Long?) -> Unit = { onNavigateToAddStudent() },
     vm: ClassroomViewModel = viewModel<ClassroomViewModel>()
 ) {
     val classUiState by vm.classListUiState.collectAsState()
@@ -51,6 +59,11 @@ fun ClassScreen(
     var sortOption by remember { mutableStateOf("Name (A-Z)") }
     var isRemovalMode by remember { mutableStateOf(false) }
     var studentToRemove by remember { mutableStateOf<RosterStudent?>(null) }
+
+    // bottom sheet state
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val coroutineScope = rememberCoroutineScope()
+    var isSheetVisible by remember { mutableStateOf(false) }
 
     val accentBlue = Color(0xFF3FA9F8)
     val textDark = Color(0xFF0B0B0B)
@@ -67,6 +80,36 @@ fun ClassScreen(
             "Name (A-Z)" -> filtered.sortedBy { it.fullName }
             "Name (Z-A)" -> filtered.sortedByDescending { it.fullName }
             else -> filtered
+        }
+    }
+
+    // Show modal bottom sheet when requested
+    if (isSheetVisible) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                coroutineScope.launch { sheetState.hide() }
+                isSheetVisible = false
+            },
+            sheetState = sheetState
+        ) {
+            AddStudentBottomSheetContent(
+                onAddExisting = {
+                    // dismiss and navigate afterwards
+                    coroutineScope.launch {
+                        sheetState.hide()
+                        isSheetVisible = false
+                        // pass null classId since ClassScreen doesn't represent a single class
+                        onNavigateToAddExistingStudents(null)
+                    }
+                },
+                onCreateNew = {
+                    coroutineScope.launch {
+                        sheetState.hide()
+                        isSheetVisible = false
+                        onNavigateToCreateStudent(null)
+                    }
+                }
+            )
         }
     }
 
@@ -363,7 +406,13 @@ fun ClassScreen(
                 ) {
                     PrimaryButton(
                         text = "Add a Student",
-                        onClick = onNavigateToAddStudent,
+                        onClick = {
+                            // show the modal bottom sheet with options
+                            coroutineScope.launch {
+                                isSheetVisible = true
+                                sheetState.show()
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -381,22 +430,59 @@ fun ClassScreen(
                 studentName = student.fullName,
                 onConfirm = {
                     vm.deleteStudent(
-                        studentId = student.studentId,
-                        onSuccess = {
-                            studentToRemove = null
-                            isRemovalMode = false
-                            // refresh lists
-                            vm.loadClasses()
-                        },
-                        onError = { _errorMsg: String ->
-                            // TODO: show snackbar/toast. For now just dismiss the dialog.
-                            studentToRemove = null
-                        }
-                    )
+                              studentId = student.studentId,
+                              onSuccess = {
+                                  studentToRemove = null
+                                  isRemovalMode = false
+                                  // refresh lists
+                                 vm.loadClasses()
+                              },
+                             onError = { _errorMsg: String ->
+                                  // TODO: show snackbar/toast. For now just dismiss the dialog.
+                                  studentToRemove = null
+                              }
+                          )
                 },
                 onDismiss = { studentToRemove = null }
             )
         }
+    }
+}
+
+
+// -------------------------
+// Bottom sheet content
+// -------------------------
+
+@Composable
+fun AddStudentBottomSheetContent(
+    onAddExisting: () -> Unit,
+    onCreateNew: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.padding(vertical = 12.dp)) {
+        Text(
+            text = "Add student",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+        )
+
+        HorizontalDivider()
+
+        ListItem(
+            headlineContent = { Text("Add existing student") },
+            supportingContent = { Text("Select a student from the directory") },
+            leadingContent = { Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color(0xFF3FA9F8)) },
+            trailingContent = { Icon(Icons.Default.Add, contentDescription = null) },
+            modifier = Modifier.clickable { onAddExisting() }
+        )
+
+        ListItem(
+            headlineContent = { Text("Create new student") },
+            supportingContent = { Text("Create a new student and add to class") },
+            leadingContent = { Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF3FA9F8)) },
+            modifier = Modifier.clickable { onCreateNew() }
+        )
     }
 }
 

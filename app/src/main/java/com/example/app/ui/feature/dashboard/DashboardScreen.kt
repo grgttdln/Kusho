@@ -1,7 +1,5 @@
 package com.example.app.ui.feature.dashboard
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,11 +10,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TypeSpecimen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -30,13 +28,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -49,6 +42,11 @@ import com.example.app.R
 import com.example.app.data.SessionManager
 import com.example.app.service.ConnectionState
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.dashboard.AnalyticsCard
+import com.example.app.ui.components.dashboard.BatteryIcon
+import com.example.app.ui.components.dashboard.getWatchImageResource
+import com.example.app.ui.components.dashboard.ActivityProgressSection
+import com.example.app.ui.components.dashboard.ActivityProgress
 
 @Composable
 fun DashboardScreen(
@@ -75,6 +73,72 @@ fun DashboardScreen(
             viewModel.requestBatteryUpdate()
         }
     }
+
+    // Collect activities from ViewModel and map into ActivityProgress UI model.
+    val activities by viewModel.activities.collectAsState()
+
+    val activityProgressList: List<ActivityProgress> = remember(activities) {
+        if (activities.isEmpty()) {
+            // Provide a single placeholder row with zeros when no activities exist
+            listOf(
+                ActivityProgress(
+                    activityId = "0",
+                    activityName = "No activities",
+                    accuracyDeltaPercent = 0,
+                    timeDeltaSeconds = 0,
+                    masteryPercent = 0f,
+                    masteryLabel = "Beginner",
+                    avgAttempts = 0f,
+                    avgAccuracyPercent = 0,
+                    avgScoreText = "",
+                    avgTimeSeconds = 0
+                )
+            )
+        } else {
+            // prepare same icon pool as LearnModeActivitySelectionScreen for consistent assignment
+            val allIcons = listOf(
+                R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
+                R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
+                R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
+                R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
+                R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
+                R.drawable.ic_activity_21, R.drawable.ic_activity_22
+            )
+
+            fun getIconForActivity(activityId: Long): Int {
+                val iconIndex = ((activityId - 1) % allIcons.size).toInt()
+                return allIcons[iconIndex]
+            }
+
+            activities.map { act ->
+                 // If the activity doesn't have a coverImagePath, try to resolve a drawable named ic_<slugified title>
+                 val resolvedCover = act.coverImagePath?.takeIf { it.isNotBlank() } ?: run {
+                     val slug = act.title
+                         .lowercase()
+                         .replace(Regex("[^a-z0-9]+"), "_")
+                         .trim('_')
+                     val candidate = "ic_$slug"
+                     val resId = context.resources.getIdentifier(candidate, "drawable", context.packageName)
+                     if (resId != 0) candidate else null
+                 }
+
+                ActivityProgress(
+                    activityId = act.id.toString(),
+                    activityName = act.title,
+                    coverImagePath = resolvedCover,
+                    iconRes = getIconForActivity(act.id),
+                    accuracyDeltaPercent = 0,
+                    timeDeltaSeconds = 0,
+                    masteryPercent = 0f,
+                    masteryLabel = "Beginner",
+                    avgAttempts = 0f,
+                    avgAccuracyPercent = 0,
+                    avgScoreText = "",
+                    avgTimeSeconds = 0
+                )
+             }
+         }
+     }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -306,7 +370,7 @@ fun DashboardScreen(
                     icon = Icons.Filled.Group,
                     number = uiState.totalStudents.toString(),
                     label = "Total Students",
-                    badgeText = null // e.g. "vs 1,114 last month"
+                    badgeText = null
                 )
 
                 AnalyticsCard(
@@ -318,7 +382,7 @@ fun DashboardScreen(
 
                 AnalyticsCard(
                     icon = Icons.Filled.TypeSpecimen,
-                    number = "50",
+                    number = uiState.totalWords.toString(),
                     label = "Total Words",
                     badgeText = null
                 )
@@ -331,7 +395,7 @@ fun DashboardScreen(
                 )
 
                 AnalyticsCard(
-                    icon = Icons.Filled.TrendingDown,
+                    icon = Icons.AutoMirrored.Filled.TrendingDown,
                     number = "5",
                     label = "Students Below Target",
                     badgeText = "< 70% accuracy"
@@ -339,6 +403,14 @@ fun DashboardScreen(
 
                 Spacer(modifier = Modifier.width(30.dp))
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Activity Progress Section (previous accordion design)
+            ActivityProgressSection(
+                activities = activityProgressList,
+                onActivityClick = { /* TODO */ }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -351,163 +423,55 @@ fun DashboardScreen(
     }
 }
 
+// ---------------------- Preview ----------------------
+
+@Preview(showBackground = true)
 @Composable
-fun BatteryIcon(
-    percentage: Int?,
-    modifier: Modifier = Modifier
-) {
-    val batteryColor = Color(0xFF14FF1E)
+fun ActivityProgressSectionPreview() {
+    val sample = listOf(
+        ActivityProgress(
+            activityId = "a1",
+            activityName = "Alphabet Gestures",
+            coverImagePath = "ic_apple",
+            accuracyDeltaPercent = 12,
+            timeDeltaSeconds = 0,
+            masteryPercent = 0.78f,
+            masteryLabel = "Intermediate",
+            avgAttempts = 1.9f,
+            avgAccuracyPercent = 79,
+            avgScoreText = "8/10",
+            avgTimeSeconds = 124
+        ),
+        ActivityProgress(
+            activityId = "a2",
+            activityName = "Word Practice",
+            coverImagePath = "ic_apple",
+            accuracyDeltaPercent = 0,
+            timeDeltaSeconds = -20,
+            masteryPercent = 0.92f,
+            masteryLabel = "Advanced",
+            avgAttempts = 1.3f,
+            avgAccuracyPercent = 92,
+            avgScoreText = "9/10",
+            avgTimeSeconds = 80
+        ),
+        ActivityProgress(
+            activityId = "a3",
+            activityName = "Shape Matching",
+            coverImagePath = "ic_apple",
+            accuracyDeltaPercent = 0,
+            timeDeltaSeconds = 0,
+            masteryPercent = 0.45f,
+            masteryLabel = "Beginner",
+            avgAttempts = 2.4f,
+            avgAccuracyPercent = 45,
+            avgScoreText = "5/10",
+            avgTimeSeconds = 165
+        )
+    )
 
-    Box(modifier = modifier.size(24.dp)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val bodyWidth = size.width * 0.75f
-            val bodyHeight = size.height * 0.65f
-            val strokeWidth = 1.dp.toPx()
-
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.35f),
-                topLeft = Offset(0f, (size.height - bodyHeight) / 2),
-                size = Size(bodyWidth, bodyHeight),
-                cornerRadius = CornerRadius(4.3.dp.toPx()),
-                style = Stroke(width = strokeWidth)
-            )
-
-            drawRect(
-                color = Color.Black.copy(alpha = 0.4f),
-                topLeft = Offset(bodyWidth, size.height * 0.35f),
-                size = Size(size.width * 0.25f, size.height * 0.3f)
-            )
-
-            percentage?.let {
-                val fillWidth = (bodyWidth - strokeWidth * 2) * (it / 100f)
-                val fillHeight = bodyHeight - strokeWidth * 2
-                drawRoundRect(
-                    color = batteryColor,
-                    topLeft = Offset(strokeWidth, (size.height - bodyHeight) / 2 + strokeWidth),
-                    size = Size(fillWidth, fillHeight),
-                    cornerRadius = CornerRadius(2.5.dp.toPx())
-                )
-            }
-        }
-    }
-}
-
-
-@Composable
-fun AnalyticsCard(
-    icon: ImageVector,
-    number: String,
-    label: String,
-    modifier: Modifier = Modifier,
-    badgeText: String? = null
-) {
-    val kushoBlue = Color(0xFF3FA9F8)
-    val bg = Color(0xFFE9FCFF)
-    val border = kushoBlue.copy(alpha = 0.22f)
-    val iconBg = Color.White
-
-    Card(
-        modifier = modifier
-            .height(128.dp)
-            .width(168.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = bg),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, border)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.Start
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Start)
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(iconBg),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = kushoBlue,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-
-            Text(
-                text = number,
-                modifier = Modifier.align(Alignment.Start),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = kushoBlue,
-                lineHeight = 30.sp,
-                maxLines = 1
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = label,
-                modifier = Modifier.align(Alignment.Start),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = kushoBlue.copy(alpha = 0.80f),
-                letterSpacing = 0.6.sp,
-                lineHeight = 14.sp,
-                maxLines = 1
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            if (!badgeText.isNullOrBlank()) {
-                Text(
-                    text = badgeText,
-                    modifier = Modifier.align(Alignment.Start),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = kushoBlue.copy(alpha = 0.65f),
-                    lineHeight = 14.sp,
-                    maxLines = 1
-                )
-            } else {
-                Spacer(modifier = Modifier.height(14.dp))
-            }
-        }
-    }
-}
-
-
-/**
- * Map watch model name to corresponding drawable resource
- */
-fun getWatchImageResource(watchName: String): Int {
-    return when {
-        watchName.contains("Watch8", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8_classic
-        watchName.contains("Watch 8", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8_classic
-        watchName.contains("Watch8", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8
-        watchName.contains("Watch 8", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8
-        watchName.contains("Watch7", ignoreCase = true) -> R.drawable.ic_galaxy_watch_7
-        watchName.contains("Watch 7", ignoreCase = true) -> R.drawable.ic_galaxy_watch_7
-        watchName.contains("Watch6", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6_classic
-        watchName.contains("Watch 6", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6_classic
-        watchName.contains("Watch6", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6
-        watchName.contains("Watch 6", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6
-        watchName.contains("Watch5", ignoreCase = true) && watchName.contains("Pro", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5_pro
-        watchName.contains("Watch 5", ignoreCase = true) && watchName.contains("Pro", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5_pro
-        watchName.contains("Watch5", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5
-        watchName.contains("Watch 5", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5
-        watchName.contains("Watch4", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4_classic
-        watchName.contains("Watch 4", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4_classic
-        watchName.contains("Watch4", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4
-        watchName.contains("Watch 4", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4
-        watchName.contains("Ultra", ignoreCase = true) -> R.drawable.ic_galaxy_ultra
-        else -> R.drawable.ic_watch_generic
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        ActivityProgressSection(activities = sample, onActivityClick = {})
     }
 }
 

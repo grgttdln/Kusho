@@ -264,7 +264,7 @@ fun AddStudentScreen(
                     val fullName = "${firstName.trim()} ${lastName.trim()}"
                     // Auto-assign current logged-in user as a teacher for this student
                     val sessionManager = SessionManager.getInstance(context)
-                    val currentUserId = sessionManager.currentUser.value?.id ?: sessionManager.getUserId()
+                    val currentUserId = sessionManager.getUserId()
                     val teacherIds = if (currentUserId > 0L) listOf(currentUserId) else emptyList()
 
                     viewModel.addStudentWithTeachers(
