@@ -1,0 +1,313 @@
+package com.example.kusho.presentation.pairing
+
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.wear.compose.material.CircularProgressIndicator
+import androidx.wear.compose.material.Text
+import com.example.kusho.R
+import com.example.kusho.presentation.service.ConnectionMonitor
+import kotlinx.coroutines.delay
+
+/**
+ * Watch Pairing Screen
+ * Shows different states: Prompt, Checking, Success, Error
+ */
+@Composable
+fun PairingScreen(
+    onPairingComplete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val viewModel: PairingViewModel = viewModel(
+        factory = PairingViewModelFactory(context)
+    )
+    
+    // Get connection monitor and stop global monitoring while on pairing screen
+    val connectionMonitor = ConnectionMonitor.getInstance(context)
+    
+    val pairingState by viewModel.pairingState.collectAsState()
+    
+    // Start pairing-specific monitoring when screen appears
+    LaunchedEffect(Unit) {
+        // Stop global monitoring while we're on pairing screen
+        connectionMonitor.stopMonitoring()
+        viewModel.startMonitoring()
+    }
+    
+    // Navigate to home when pairing is successful
+    LaunchedEffect(pairingState) {
+        if (pairingState is PairingState.Success) {
+            // Wait a bit to show success animation
+            delay(3000)
+            // Start global monitoring after successful pairing
+            connectionMonitor.startMonitoring()
+            onPairingComplete()
+        }
+    }
+    
+    // Stop monitoring when screen is disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopMonitoring()
+        }
+    }
+    
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        when (pairingState) {
+            is PairingState.Prompt -> {
+                PromptContent()
+            }
+            is PairingState.Checking -> {
+                CheckingContent()
+            }
+            is PairingState.Success -> {
+                SuccessContent()
+            }
+            is PairingState.Error -> {
+                ErrorContent(
+                    message = (pairingState as PairingState.Error).message,
+                    onRetry = { viewModel.retry() }
+                )
+            }
+            is PairingState.BluetoothOff -> {
+                BluetoothOffContent()
+            }
+        }
+    }
+}
+
+/**
+ * Prompt state - "Open Kusho' app for Pairing"
+ */
+@Composable
+private fun PromptContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Phone icon with mascot
+        Image(
+            painter = painterResource(id = R.drawable.dis_pairing_m),
+            contentDescription = "Pairing prompt",
+            modifier = Modifier
+                .size(100.dp)
+                .padding(bottom = 16.dp),
+            contentScale = ContentScale.Fit
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Instructions
+        Text(
+            text = "Open Kusho' app\nfor Pairing",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+/**
+ * Checking state - Loading animation
+ */
+@Composable
+private fun CheckingContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Circular progress indicator
+        CircularProgressIndicator(
+            modifier = Modifier.size(60.dp),
+            strokeWidth = 4.dp,
+            indicatorColor = Color(0xFF49A9FF)
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Connecting...",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color.White,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Success state - "Paired Successfully!"
+ */
+@Composable
+private fun SuccessContent() {
+    // Create sparkle animation
+    val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Success mascot with sparkles
+        Box(
+            contentAlignment = Alignment.Center
+        ) {
+            // Sparkles background (you can add actual sparkle decorations here)
+            Image(
+                painter = painterResource(id = R.drawable.dis_success),
+                contentDescription = "Success",
+                modifier = Modifier
+                    .size(120.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                contentScale = ContentScale.Fit
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Paired\nSuccessfully!",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF49A9FF),
+            textAlign = TextAlign.Center,
+            lineHeight = 22.sp
+        )
+    }
+}
+
+/**
+ * Error state - Connection lost or error
+ */
+@Composable
+private fun ErrorContent(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .clickable { onRetry() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Error icon
+        Image(
+            painter = painterResource(id = R.drawable.dis_remove),
+            contentDescription = "Error",
+            modifier = Modifier
+                .size(100.dp)
+                .padding(bottom = 16.dp),
+            contentScale = ContentScale.Fit
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Connection Lost",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFF6B6B),
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Tap to retry",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color.White,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Bluetooth Off state
+ */
+@Composable
+private fun BluetoothOffContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.dis_remove),
+            contentDescription = "Bluetooth Off",
+            modifier = Modifier
+                .size(100.dp)
+                .padding(bottom = 16.dp),
+            contentScale = ContentScale.Fit
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Bluetooth is Off",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFF6B6B),
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Turn on Bluetooth\nto connect",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            lineHeight = 16.sp
+        )
+    }
+}

@@ -1,0 +1,21 @@
+package com.example.kusho.presentation.pairing
+
+/**
+ * Represents the different states of the watch-phone pairing process
+ */
+sealed class PairingState {
+    /** Initial state - prompting user to open mobile app */
+    object Prompt : PairingState()
+    
+    /** Checking connection with phone */
+    object Checking : PairingState()
+    
+    /** Successfully connected to phone */
+    object Success : PairingState()
+    
+    /** Connection lost or error occurred */
+    data class Error(val message: String) : PairingState()
+    
+    /** Bluetooth is turned off */
+    object BluetoothOff : PairingState()
+}
