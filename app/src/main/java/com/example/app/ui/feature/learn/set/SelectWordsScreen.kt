@@ -31,12 +31,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.app.data.entity.Word
 import com.example.app.data.repository.SetRepository
 import com.example.app.ui.components.BottomNavBar
 
 @Composable
 fun SelectWordsScreen(
-    availableWords: List<String> = emptyList(),
+    availableWords: List<Word> = emptyList(),
     onBackClick: () -> Unit = {},
     onWordsSelected: (selectedWords: List<SetRepository.SelectedWordConfig>) -> Unit = {},
     modifier: Modifier = Modifier
@@ -51,7 +52,7 @@ fun SelectWordsScreen(
             availableWords
         } else {
             val query = searchQuery.lowercase()
-            availableWords.filter { it.lowercase().contains(query) }
+            availableWords.filter { it.word.lowercase().contains(query) }
         }
     }
 
@@ -147,17 +148,32 @@ fun SelectWordsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // "Select Word/s" label
-            Text(
-                text = "Select Word/s",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF0B0B0B),
+            // "Select Word/s" label with counter
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 15.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Start
-            )
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+
+                
+            ) {
+                Text(
+                    text = "Select Words",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color(0xFF0B0B0B),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                )
+                
+                // Word count indicator
+                Text(
+                    text = "${selectedWords.size} selected",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (selectedWords.size >= 3) Color(0xFF4CAF50) else Color(0xFF999999)
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -174,15 +190,15 @@ fun SelectWordsScreen(
                             .fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        rowWords.forEach { w ->
+                        rowWords.forEach { wordObj ->
                             WordButton(
-                                word = w,
-                                isSelected = selectedWords.contains(w),
+                                word = wordObj.word,
+                                isSelected = selectedWords.contains(wordObj.word),
                                 onClick = {
-                                    selectedWords = if (selectedWords.contains(w)) {
-                                        selectedWords - w
+                                    selectedWords = if (selectedWords.contains(wordObj.word)) {
+                                        selectedWords - wordObj.word
                                     } else {
-                                        selectedWords + w
+                                        selectedWords + wordObj.word
                                     }
                                 },
                                 modifier = Modifier.weight(1f)
@@ -217,9 +233,11 @@ fun SelectWordsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 selectedWords.toList().forEachIndexed { index, word ->
+                    val wordObj = availableWords.find { it.word == word }
                     ConfigureWordItem(
                         index = index + 1,
                         word = word,
+                        hasImage = wordObj?.imagePath != null,
                         configurationType = wordConfigurations[word] ?: "Fill in the Blank",
                         onConfigurationChange = { newConfig ->
                             wordConfigurations = wordConfigurations.toMutableMap().apply {
@@ -257,10 +275,14 @@ fun SelectWordsScreen(
             ),
             shape = RoundedCornerShape(16.dp),
             contentPadding = PaddingValues(0.dp),
-            enabled = selectedWords.isNotEmpty()
+            enabled = selectedWords.size >= 3
         ) {
             Text(
-                text = "Add ${selectedWords.size} Word${if (selectedWords.size != 1) "s" else ""}",
+                text = if (selectedWords.size >= 3) {
+                    "Add ${selectedWords.size} Words"
+                } else {
+                    "Select at least 3 words"
+                },
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -317,13 +339,21 @@ private fun WordButton(
 private fun ConfigureWordItem(
     index: Int,
     word: String,
+    hasImage: Boolean,
     configurationType: String,
     onConfigurationChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expandedDropdown by remember { mutableStateOf(false) }
 
-    val dropdownOptions = listOf("Fill in the Blank", "Name the Picture", "Write the Word")
+    // Filter dropdown options based on whether word has an image
+    val dropdownOptions = remember(hasImage) {
+        if (hasImage) {
+            listOf("Fill in the Blank", "Name the Picture", "Write the Word")
+        } else {
+            listOf("Fill in the Blank", "Write the Word")
+        }
+    }
 
     Row(
         modifier = modifier

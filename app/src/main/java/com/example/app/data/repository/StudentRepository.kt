@@ -60,6 +60,9 @@ class StudentRepository(private val studentDao: StudentDao) {
             if (fullName.isBlank()) {
                 return@withContext StudentOperationResult.Error("Student name cannot be empty")
             }
+            if (fullName.trim().length > 30) {
+                return@withContext StudentOperationResult.Error("Student name must be 30 characters or less")
+            }
             if (gradeLevel.isBlank()) {
                 return@withContext StudentOperationResult.Error("Grade level cannot be empty")
             }
@@ -98,6 +101,9 @@ class StudentRepository(private val studentDao: StudentDao) {
         try {
             if (fullName.isBlank()) {
                 return@withContext StudentOperationResult.Error("Student name cannot be empty")
+            }
+            if (fullName.trim().length > 30) {
+                return@withContext StudentOperationResult.Error("Student name must be 30 characters or less")
             }
             if (gradeLevel.isBlank()) {
                 return@withContext StudentOperationResult.Error("Grade level cannot be empty")

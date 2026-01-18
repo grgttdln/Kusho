@@ -55,7 +55,7 @@ fun MainNavigationContainer(
     var selectedActivityId by remember { mutableStateOf(0L) }
     var selectedActivityTitle by remember { mutableStateOf("") }
     var selectedActivityIconRes by remember { mutableStateOf(com.example.app.R.drawable.ic_apple) }
-    var availableWords by remember { mutableStateOf(listOf<String>()) }
+    var availableWords by remember { mutableStateOf(listOf<com.example.app.data.entity.Word>()) }
     var createdSetTitle by remember { mutableStateOf("") }
     var selectedSetId by remember { mutableStateOf(0L) }
     var yourSetsScreenKey by remember { mutableStateOf(0) }
@@ -186,7 +186,7 @@ fun MainNavigationContainer(
         )
         12 -> {
             LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId).map { it.word }
+                availableWords = wordRepository.getWordsForUserOnce(userId)
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -225,7 +225,7 @@ fun MainNavigationContainer(
         )
         15 -> {
             LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId).map { it.word }
+                availableWords = wordRepository.getWordsForUserOnce(userId)
             }
             SelectWordsScreen(
                 availableWords = availableWords,

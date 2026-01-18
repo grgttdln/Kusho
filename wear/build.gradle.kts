@@ -28,7 +28,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            proguardFiles(stat
+            proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
@@ -45,8 +45,8 @@ android {
     buildFeatures {
         compose = true
     }
-    aaptOptions {
-        noCompress("tflite")
+    androidResources {
+        noCompress += "tflite"
     }
 }
 
