@@ -1,16 +1,23 @@
 package com.example.app.ui.feature.dashboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.TypeSpecimen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,6 +36,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -42,7 +50,6 @@ import com.example.app.data.SessionManager
 import com.example.app.service.ConnectionState
 import com.example.app.ui.components.BottomNavBar
 
-
 @Composable
 fun DashboardScreen(
     modifier: Modifier = Modifier,
@@ -55,26 +62,21 @@ fun DashboardScreen(
     val context = LocalContext.current
     val sessionManager = remember { SessionManager.getInstance(context) }
 
-    // State for logout confirmation dialog
     var showLogoutDialog by remember { mutableStateOf(false) }
     val greeting = viewModel.getGreeting()
 
-    // Request battery update every time Dashboard appears/resumes
     LaunchedEffect(Unit) {
         viewModel.requestBatteryUpdate()
-        viewModel.refreshAnalytics() // Refresh analytics data
+        viewModel.refreshAnalytics()
     }
 
-    // Also request when watch connection state changes to connected
     LaunchedEffect(watchDevice.isConnected) {
         if (watchDevice.isConnected) {
             viewModel.requestBatteryUpdate()
         }
     }
 
-    Box(
-        modifier = modifier.fillMaxSize()
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -102,15 +104,8 @@ fun DashboardScreen(
             if (showLogoutDialog) {
                 AlertDialog(
                     onDismissRequest = { showLogoutDialog = false },
-                    title = {
-                        Text(
-                            text = "Log Out",
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    text = {
-                        Text("Are you sure you want to log out?")
-                    },
+                    title = { Text(text = "Log Out", fontWeight = FontWeight.Bold) },
+                    text = { Text("Are you sure you want to log out?") },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -118,27 +113,17 @@ fun DashboardScreen(
                                 sessionManager.clearSession()
                                 onLogout()
                             }
-                        ) {
-                            Text(
-                                text = "Log Out",
-                                color = Color(0xFFE53935)
-                            )
-                        }
+                        ) { Text(text = "Log Out", color = Color(0xFFE53935)) }
                     },
                     dismissButton = {
-                        TextButton(
-                            onClick = { showLogoutDialog = false }
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                color = Color(0xFF2196F3)
-                            )
+                        TextButton(onClick = { showLogoutDialog = false }) {
+                            Text(text = "Cancel", color = Color(0xFF2196F3))
                         }
                     }
                 )
             }
 
-            // User Profile Section - 45dp circle, blue background (clickable for logout)
+            // User Profile Section
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -174,7 +159,7 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(29.dp))
 
-            // Greeting - 18sp, Medium weight
+            // Greeting
             Text(
                 text = greeting,
                 fontSize = 18.sp,
@@ -186,33 +171,26 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Device Card - #E9FCFF background, 145dp height, 24dp radius
+            // Device Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 30.dp)
                     .height(145.dp)
-                    .clickable {
-                        if (!watchDevice.isConnected) {
-                            // Navigate to watch pairing screen
-                            // onNavigate(Screen.WatchPairing.route)
-                        }
-                    },
+                    .clickable { },
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (watchDevice.isConnected) Color(0xFFE9FCFF) else Color(0xFFF5F5F5)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     // Refresh button
                     if (watchDevice.isConnected) {
                         IconButton(
                             onClick = {
                                 viewModel.checkWatchConnection()
-                                viewModel.requestBatteryUpdate() // Also request fresh battery data
+                                viewModel.requestBatteryUpdate()
                             },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -242,10 +220,7 @@ fun DashboardScreen(
                             .padding(18.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            // Display name based on connection state
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = when (watchDevice.connectionState) {
                                     ConnectionState.WATCH_CONNECTED -> watchDevice.name
@@ -261,7 +236,6 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Display status based on connection state
                             Text(
                                 text = when (watchDevice.connectionState) {
                                     ConnectionState.WATCH_CONNECTED -> "Connected"
@@ -273,7 +247,7 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.Normal,
                                 color = when (watchDevice.connectionState) {
                                     ConnectionState.WATCH_CONNECTED -> Color(0xFF3FA9F8)
-                                    ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800) // Orange for warning
+                                    ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800)
                                     else -> Color(0xFF888888)
                                 },
                                 lineHeight = 21.sp
@@ -281,15 +255,10 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.weight(1f))
 
-                            // Only show battery if fully connected with app
                             if (watchDevice.connectionState == ConnectionState.WATCH_CONNECTED) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     BatteryIcon(percentage = watchDevice.batteryPercentage)
-
                                     Spacer(modifier = Modifier.width(8.dp))
-
                                     Text(
                                         text = watchDevice.batteryPercentage?.let { "$it%" } ?: "Loading...",
                                         fontSize = 14.sp,
@@ -314,7 +283,7 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Quick Analytics - 20sp, Medium weight
+            // Quick Analytics
             Text(
                 text = "Quick Analytics",
                 fontSize = 20.sp,
@@ -326,24 +295,49 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(7.dp))
 
-            // Analytics Cards - 168dp wide, 128dp tall, 18dp radius
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 30.dp),
+                    .padding(start = 30.dp, top = 4.dp, bottom = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(15.dp)
             ) {
                 AnalyticsCard(
+                    icon = Icons.Filled.Group,
                     number = uiState.totalStudents.toString(),
                     label = "Total Students",
-                    modifier = Modifier.weight(1f)
+                    badgeText = null // e.g. "vs 1,114 last month"
                 )
 
                 AnalyticsCard(
+                    icon = Icons.Filled.BarChart,
                     number = uiState.totalActivities.toString(),
                     label = "Activities",
-                    modifier = Modifier.weight(1f)
+                    badgeText = null
                 )
+
+                AnalyticsCard(
+                    icon = Icons.Filled.TypeSpecimen,
+                    number = "50",
+                    label = "Total Words",
+                    badgeText = null
+                )
+
+                AnalyticsCard(
+                    icon = Icons.Filled.CheckCircle,
+                    number = "6",
+                    label = "Students at Mastery",
+                    badgeText = "≥ 90% accuracy"
+                )
+
+                AnalyticsCard(
+                    icon = Icons.Filled.TrendingDown,
+                    number = "5",
+                    label = "Students Below Target",
+                    badgeText = "< 70% accuracy"
+                )
+
+                Spacer(modifier = Modifier.width(30.dp))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -362,17 +356,14 @@ fun BatteryIcon(
     percentage: Int?,
     modifier: Modifier = Modifier
 ) {
-    val batteryColor = Color(0xFF14FF1E) // Green color from design
+    val batteryColor = Color(0xFF14FF1E)
 
-    Box(
-        modifier = modifier.size(24.dp)
-    ) {
+    Box(modifier = modifier.size(24.dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val bodyWidth = size.width * 0.75f
             val bodyHeight = size.height * 0.65f
             val strokeWidth = 1.dp.toPx()
 
-            // Battery border with opacity 0.35
             drawRoundRect(
                 color = Color.Black.copy(alpha = 0.35f),
                 topLeft = Offset(0f, (size.height - bodyHeight) / 2),
@@ -381,14 +372,12 @@ fun BatteryIcon(
                 style = Stroke(width = strokeWidth)
             )
 
-            // Battery cap with opacity 0.4
             drawRect(
                 color = Color.Black.copy(alpha = 0.4f),
                 topLeft = Offset(bodyWidth, size.height * 0.35f),
                 size = Size(size.width * 0.25f, size.height * 0.3f)
             )
 
-            // Battery capacity (fill) - only if percentage is not null
             percentage?.let {
                 val fillWidth = (bodyWidth - strokeWidth * 2) * (it / 100f)
                 val fillHeight = bodyHeight - strokeWidth * 2
@@ -403,49 +392,96 @@ fun BatteryIcon(
     }
 }
 
+
 @Composable
 fun AnalyticsCard(
+    icon: ImageVector,
     number: String,
     label: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    badgeText: String? = null
 ) {
+    val kushoBlue = Color(0xFF3FA9F8)
+    val bg = Color(0xFFE9FCFF)
+    val border = kushoBlue.copy(alpha = 0.22f)
+    val iconBg = Color.White
+
     Card(
-        modifier = modifier.height(128.dp),
+        modifier = modifier
+            .height(128.dp)
+            .width(168.dp),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFE9FCFF)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        colors = CardDefaults.cardColors(containerColor = bg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, border)
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.Start
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Start)
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(iconBg),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = number,
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF3FA9F8),
-                    lineHeight = 27.sp
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = kushoBlue,
+                    modifier = Modifier.size(18.dp)
                 )
+            }
 
-                Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
+
+            Text(
+                text = number,
+                modifier = Modifier.align(Alignment.Start),
+                fontSize = 32.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = kushoBlue,
+                lineHeight = 30.sp,
+                maxLines = 1
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = label,
+                modifier = Modifier.align(Alignment.Start),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = kushoBlue.copy(alpha = 0.80f),
+                letterSpacing = 0.6.sp,
+                lineHeight = 14.sp,
+                maxLines = 1
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (!badgeText.isNullOrBlank()) {
                 Text(
-                    text = label,
-                    fontSize = 16.sp,
-                    color = Color(0xFF3FA9F8),
+                    text = badgeText,
+                    modifier = Modifier.align(Alignment.Start),
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    lineHeight = 27.sp
+                    color = kushoBlue.copy(alpha = 0.65f),
+                    lineHeight = 14.sp,
+                    maxLines = 1
                 )
+            } else {
+                Spacer(modifier = Modifier.height(14.dp))
             }
         }
     }
 }
+
 
 /**
  * Map watch model name to corresponding drawable resource
