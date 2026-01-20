@@ -18,4 +18,7 @@ sealed class PairingState {
     
     /** Bluetooth is turned off */
     object BluetoothOff : PairingState()
+    
+    /** Max retry attempts reached - show skip/try again options */
+    data class MaxRetriesReached(val attemptCount: Int) : PairingState()
 }

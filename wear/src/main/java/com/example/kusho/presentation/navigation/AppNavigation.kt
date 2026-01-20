@@ -1,20 +1,46 @@
 package com.example.kusho.presentation.navigation
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.ButtonDefaults
+import androidx.wear.compose.material.Text
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import com.example.kusho.R
 import com.example.kusho.presentation.pairing.PairingScreen
 import com.example.kusho.presentation.screens.home.HomeScreen
 import com.example.kusho.presentation.practice.PracticeModeScreen
 import com.example.kusho.presentation.tutorial.TutorialModeScreen
 import com.example.kusho.presentation.learn.LearnModeScreen
 import com.example.kusho.presentation.service.ConnectionMonitor
+import com.example.kusho.presentation.service.DisconnectionReason
 
 /**
  * Navigation graph for the app
@@ -31,35 +57,35 @@ fun AppNavigation() {
     // Check if previously paired
     val prefs = context.getSharedPreferences("kusho_prefs", android.content.Context.MODE_PRIVATE)
     val isPaired = prefs.getBoolean("is_paired", false)
+    val isSkipped = prefs.getBoolean("is_skipped", false)
     
-    // Start at pairing screen if not paired, otherwise home
-    val startDestination = if (isPaired) NavigationRoutes.HOME else NavigationRoutes.PAIRING
+    // Start at pairing screen if not paired and not skipped, otherwise home
+    val startDestination = if (isPaired || isSkipped) NavigationRoutes.HOME else NavigationRoutes.PAIRING
     
-    // Start monitoring when navigation starts (only if paired)
-    LaunchedEffect(isPaired) {
-        if (isPaired) {
-            connectionMonitor.startMonitoring()
-        }
-    }
+    // Note: Monitoring is now started by HomeScreen when entering after successful pairing
     
-    // Handle connection loss - navigate to pairing screen
-    LaunchedEffect(isConnected) {
-        if (!isConnected && isPaired) {
-            // Connection lost, clear pairing and go back to pairing screen
-            connectionMonitor.clearPairingStatus()
-            connectionMonitor.stopMonitoring()
-            
-            // Navigate to pairing screen and clear back stack
-            navController.navigate(NavigationRoutes.PAIRING) {
-                popUpTo(0) { inclusive = true }
-            }
-        }
-    }
+    // Handle connection loss - show retry/skip screen instead of auto-navigating
+    // Note: Automatic navigation disabled to prevent crashes
+    // Connection loss is now handled by showing MaxRetriesReached state
     
     // Cleanup on dispose
     DisposableEffect(Unit) {
         onDispose {
             connectionMonitor.stopMonitoring()
+        }
+    }
+    
+    // Navigate to pairing screen when connection lost (not on pairing screen)
+    LaunchedEffect(isConnected) {
+        val currentRoute = navController.currentBackStackEntry?.destination?.route
+        if (!isConnected && isPaired && !isSkipped && currentRoute != NavigationRoutes.PAIRING) {
+            // Connection lost - navigate to pairing screen
+            prefs.edit().putBoolean("is_paired", false).apply()
+            connectionMonitor.stopMonitoring()
+            connectionMonitor.resetFailureCounter()
+            navController.navigate(NavigationRoutes.PAIRING) {
+                popUpTo(NavigationRoutes.HOME) { inclusive = false }
+            }
         }
     }
 

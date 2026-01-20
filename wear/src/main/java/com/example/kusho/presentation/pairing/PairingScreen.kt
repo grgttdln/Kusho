@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +18,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Text
 import com.example.kusho.R
@@ -56,8 +57,9 @@ fun PairingScreen(
         if (pairingState is PairingState.Success) {
             // Wait a bit to show success animation
             delay(3000)
-            // Start global monitoring after successful pairing
-            connectionMonitor.startMonitoring()
+            // Reset connection monitor state after successful pairing
+            connectionMonitor.setConnected()
+            // Navigate to home - monitoring will start there
             onPairingComplete()
         }
     }
@@ -94,6 +96,16 @@ fun PairingScreen(
             is PairingState.BluetoothOff -> {
                 BluetoothOffContent()
             }
+            is PairingState.MaxRetriesReached -> {
+                MaxRetriesContent(
+                    attemptCount = (pairingState as PairingState.MaxRetriesReached).attemptCount,
+                    onTryAgain = { viewModel.restartMonitoring() },
+                    onSkip = { 
+                        viewModel.skipPairing()
+                        onPairingComplete()
+                    }
+                )
+            }
         }
     }
 }
@@ -102,7 +114,9 @@ fun PairingScreen(
  * Prompt state - "Open Kusho' app for Pairing"
  */
 @Composable
-private fun PromptContent() {
+private fun PromptContent(
+    onSkip: (() -> Unit)? = null
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -263,6 +277,97 @@ private fun ErrorContent(
             fontSize = 12.sp,
             fontWeight = FontWeight.Normal,
             color = Color.White,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Max Retries Reached state - Show skip and try again options
+ */
+@Composable
+private fun MaxRetriesContent(
+    attemptCount: Int,
+    onTryAgain: () -> Unit,
+    onSkip: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.dis_remove),
+            contentDescription = "Connection failed",
+            modifier = Modifier
+                .size(50.dp)
+                .padding(bottom = 6.dp),
+            contentScale = ContentScale.Fit
+        )
+        
+        Text(
+            text = "Can't Connect",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFF6B6B),
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        Text(
+            text = "Tried $attemptCount times",
+            fontSize = 10.sp,
+            color = Color.Gray,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Buttons side by side
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Try Again button
+            Button(
+                onClick = onTryAgain,
+                modifier = Modifier.width(75.dp),
+                colors = ButtonDefaults.buttonColors(
+                    backgroundColor = Color(0xFF4A90E2)
+                )
+            ) {
+                Text(
+                    text = "Retry",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            
+            // Skip button
+            Button(
+                onClick = onSkip,
+                modifier = Modifier.width(75.dp),
+                colors = ButtonDefaults.buttonColors(
+                    backgroundColor = Color(0xFF666666)
+                )
+            ) {
+                Text(
+                    text = "Skip",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        Text(
+            text = "Skip = Practice only",
+            fontSize = 9.sp,
+            color = Color(0xFFAAAAAA),
             textAlign = TextAlign.Center
         )
     }
