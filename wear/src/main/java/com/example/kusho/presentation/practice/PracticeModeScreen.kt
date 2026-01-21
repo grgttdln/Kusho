@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +43,7 @@ import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.ml.ModelLoader
 import com.example.kusho.presentation.theme.AppColors
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.speech.TextToSpeechManager
 
 /**
  * Practice Mode screen: countdown -> record gesture -> classify -> show result
@@ -54,6 +56,16 @@ fun PracticeModeScreen() {
     var isInitialized by remember { mutableStateOf(false) }
     var sensorManager by remember { mutableStateOf<MotionSensorManager?>(null) }
     var classifierResult by remember { mutableStateOf<ClassifierLoadResult?>(null) }
+
+    // Initialize TextToSpeech manager
+    val ttsManager = remember { TextToSpeechManager(context) }
+
+    // Cleanup TTS when the composable is disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
 
     // Initialize dependencies in LaunchedEffect to avoid blocking composition
     LaunchedEffect(Unit) {
@@ -91,7 +103,8 @@ fun PracticeModeScreen() {
             // Show main content once initialized
             PracticeModeContent(
                 sensorManager = sensorManager!!,
-                classifierResult = classifierResult!!
+                classifierResult = classifierResult!!,
+                ttsManager = ttsManager
             )
         }
     }
@@ -100,13 +113,21 @@ fun PracticeModeScreen() {
 @Composable
 private fun PracticeModeContent(
     sensorManager: MotionSensorManager,
-    classifierResult: ClassifierLoadResult
+    classifierResult: ClassifierLoadResult,
+    ttsManager: TextToSpeechManager
 ) {
     val viewModel: PracticeModeViewModel = viewModel(
         factory = PracticeModeViewModelFactory(sensorManager, classifierResult)
     )
 
     val uiState by viewModel.uiState.collectAsState()
+
+    // Speak the prediction when we enter RESULT state
+    LaunchedEffect(uiState.state, uiState.prediction) {
+        if (uiState.state == PracticeModeViewModel.State.RESULT && uiState.prediction != null) {
+            ttsManager.speakLetter(uiState.prediction!!)
+        }
+    }
 
     Column(
         modifier = Modifier
