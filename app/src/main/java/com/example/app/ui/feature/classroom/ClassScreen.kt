@@ -60,11 +60,6 @@ fun ClassScreen(
     var isRemovalMode by remember { mutableStateOf(false) }
     var studentToRemove by remember { mutableStateOf<RosterStudent?>(null) }
 
-    // bottom sheet state
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val coroutineScope = rememberCoroutineScope()
-    var isSheetVisible by remember { mutableStateOf(false) }
-
     val accentBlue = Color(0xFF3FA9F8)
     val textDark = Color(0xFF0B0B0B)
     val subtleText = Color(0xFF6B7280)
@@ -80,36 +75,6 @@ fun ClassScreen(
             "Name (A-Z)" -> filtered.sortedBy { it.fullName }
             "Name (Z-A)" -> filtered.sortedByDescending { it.fullName }
             else -> filtered
-        }
-    }
-
-    // Show modal bottom sheet when requested
-    if (isSheetVisible) {
-        ModalBottomSheet(
-            onDismissRequest = {
-                coroutineScope.launch { sheetState.hide() }
-                isSheetVisible = false
-            },
-            sheetState = sheetState
-        ) {
-            AddStudentBottomSheetContent(
-                onAddExisting = {
-                    // dismiss and navigate afterwards
-                    coroutineScope.launch {
-                        sheetState.hide()
-                        isSheetVisible = false
-                        // pass null classId since ClassScreen doesn't represent a single class
-                        onNavigateToAddExistingStudents(null)
-                    }
-                },
-                onCreateNew = {
-                    coroutineScope.launch {
-                        sheetState.hide()
-                        isSheetVisible = false
-                        onNavigateToCreateStudent(null)
-                    }
-                }
-            )
         }
     }
 
@@ -318,7 +283,7 @@ fun ClassScreen(
                 Text(
                     text = classUiState.error!!,
                     fontSize = 16.sp,
-                    color = Color.Red,
+                    color = Color(0xFF49A9FF),
                     modifier = Modifier.padding(horizontal = 24.dp)
                 )
                 Spacer(Modifier.height(40.dp))
@@ -407,11 +372,8 @@ fun ClassScreen(
                     PrimaryButton(
                         text = "Add a Student",
                         onClick = {
-                            // show the modal bottom sheet with options
-                            coroutineScope.launch {
-                                isSheetVisible = true
-                                sheetState.show()
-                            }
+                            // directly navigate to create new student screen
+                            onNavigateToCreateStudent(null)
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -449,42 +411,6 @@ fun ClassScreen(
     }
 }
 
-
-// -------------------------
-// Bottom sheet content
-// -------------------------
-
-@Composable
-fun AddStudentBottomSheetContent(
-    onAddExisting: () -> Unit,
-    onCreateNew: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.padding(vertical = 12.dp)) {
-        Text(
-            text = "Add student",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-        )
-
-        HorizontalDivider()
-
-        ListItem(
-            headlineContent = { Text("Add existing student") },
-            supportingContent = { Text("Select a student from the directory") },
-            leadingContent = { Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color(0xFF3FA9F8)) },
-            trailingContent = { Icon(Icons.Default.Add, contentDescription = null) },
-            modifier = Modifier.clickable { onAddExisting() }
-        )
-
-        ListItem(
-            headlineContent = { Text("Create new student") },
-            supportingContent = { Text("Create a new student and add to class") },
-            leadingContent = { Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF3FA9F8)) },
-            modifier = Modifier.clickable { onCreateNew() }
-        )
-    }
-}
 
 @Preview(showBackground = true)
 @Composable

@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
+import com.example.app.ui.components.common.ErrorDialog
 import com.example.app.util.ImageUtil
 import com.example.app.data.SessionManager
 
@@ -45,11 +46,12 @@ fun AddStudentScreen(
     viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val allStudents by viewModel.allStudents.collectAsState()
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
-    var gradeLevel by remember { mutableStateOf("") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
     var profileImagePath by remember { mutableStateOf<String?>(null) }
+    var showDuplicateDialog by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -61,7 +63,7 @@ fun AddStudentScreen(
         }
     }
 
-    val isFormValid = firstName.isNotBlank() && lastName.isNotBlank() && gradeLevel.isNotBlank()
+    val isFormValid = firstName.isNotBlank() && lastName.isNotBlank()
     var isAdding by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -224,30 +226,6 @@ fun AddStudentScreen(
                     singleLine = true
                 )
 
-                Spacer(Modifier.height(20.dp))
-
-                // Grade Level TextField
-                TextField(
-                    value = gradeLevel,
-                    onValueChange = { gradeLevel = it },
-                    placeholder = {
-                        Text(
-                            text = "Enter Student's Grade Level",
-                            color = Color(0xFF999999)
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color(0xFF3FA9F8),
-                        unfocusedIndicatorColor = Color(0xFF3FA9F8),
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black
-                    ),
-                    singleLine = true
-                )
-
                 Spacer(Modifier.height(24.dp))
             }
 
@@ -260,8 +238,20 @@ fun AddStudentScreen(
                 text = if (isAdding) "Adding..." else "Add A New Student",
                 onClick = {
                     if (!isFormValid || isAdding) return@PrimaryButton
-                    isAdding = true
+                    
                     val fullName = "${firstName.trim()} ${lastName.trim()}"
+                    
+                    // Check for duplicate student name
+                    val isDuplicate = allStudents.any { student ->
+                        student.fullName.equals(fullName, ignoreCase = true)
+                    }
+                    
+                    if (isDuplicate) {
+                        showDuplicateDialog = true
+                        return@PrimaryButton
+                    }
+                    
+                    isAdding = true
                     // Auto-assign current logged-in user as a teacher for this student
                     val sessionManager = SessionManager.getInstance(context)
                     val currentUserId = sessionManager.getUserId()
@@ -269,7 +259,7 @@ fun AddStudentScreen(
 
                     viewModel.addStudentWithTeachers(
                         fullName = fullName,
-                        gradeLevel = gradeLevel,
+                        gradeLevel = "",
                         pfpPath = profileImagePath,
                         teacherIds = teacherIds,
                         onSuccess = { studentId: Long ->
@@ -290,6 +280,15 @@ fun AddStudentScreen(
                     .padding(vertical = 16.dp, horizontal = 8.dp)
             )
         }
+        
+        // Duplicate student error dialog
+        ErrorDialog(
+            isVisible = showDuplicateDialog,
+            title = "Student Already Exists!",
+            message = "A student with this name already exists.",
+            buttonText = "OK",
+            onDismiss = { showDuplicateDialog = false }
+        )
     }
 }
 

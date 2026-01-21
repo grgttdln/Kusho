@@ -72,12 +72,12 @@ fun ErrorDialog(
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.White)
             ) {
-                // Red header section
+                // Blue header section
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(70.dp)
-                        .background(Color(0xFFFF6B6B))
+                        .background(Color(0xFF49A9FF))
                 )
 
                 // White content section
@@ -119,7 +119,7 @@ fun ErrorDialog(
                             .height(56.dp),
                         shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF6B6B)
+                            containerColor = Color(0xFF49A9FF)
                         )
                     ) {
                         Text(

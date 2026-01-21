@@ -141,7 +141,7 @@ fun StudentDetailsScreen(
             Text(
                 text = uiState.error!!,
                 fontSize = 16.sp,
-                color = Color.Red,
+                color = Color(0xFF49A9FF),
                 modifier = Modifier.padding(horizontal = 24.dp)
             )
         } else {
