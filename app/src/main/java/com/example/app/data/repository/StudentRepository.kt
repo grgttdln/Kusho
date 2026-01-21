@@ -45,7 +45,7 @@ class StudentRepository(private val studentDao: StudentDao) {
      * Add a new student.
      *
      * @param fullName The student's full name
-     * @param gradeLevel The student's grade level
+     * @param gradeLevel The student's grade level (optional)
      * @param birthday The student's birthday
      * @param pfpPath Optional path to profile picture
      * @return StudentOperationResult indicating success or failure
@@ -62,9 +62,6 @@ class StudentRepository(private val studentDao: StudentDao) {
             }
             if (fullName.trim().length > 30) {
                 return@withContext StudentOperationResult.Error("Student name must be 30 characters or less")
-            }
-            if (gradeLevel.isBlank()) {
-                return@withContext StudentOperationResult.Error("Grade level cannot be empty")
             }
 
             val newStudent = Student(
@@ -86,7 +83,7 @@ class StudentRepository(private val studentDao: StudentDao) {
      *
      * @param studentId The student ID
      * @param fullName New full name
-     * @param gradeLevel New grade level
+     * @param gradeLevel New grade level (optional)
      * @param birthday New birthday
      * @param pfpPath Optional new profile picture path
      * @return StudentOperationResult indicating success or failure
@@ -104,9 +101,6 @@ class StudentRepository(private val studentDao: StudentDao) {
             }
             if (fullName.trim().length > 30) {
                 return@withContext StudentOperationResult.Error("Student name must be 30 characters or less")
-            }
-            if (gradeLevel.isBlank()) {
-                return@withContext StudentOperationResult.Error("Grade level cannot be empty")
             }
 
             val existingStudent = studentDao.getStudentById(studentId)
