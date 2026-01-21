@@ -32,7 +32,8 @@ import com.example.app.ui.feature.learn.learnmode.LearnModeActivitySelectionScre
 @Composable
 fun MainNavigationContainer(
     modifier: Modifier = Modifier,
-    onLogout: () -> Unit = {}
+    onLogout: () -> Unit = {},
+    onNavigateToWatchPairing: () -> Unit = {}
 ) {
     var currentScreen by remember { mutableStateOf(0) }
 
@@ -79,6 +80,7 @@ fun MainNavigationContainer(
         0 -> DashboardScreen(
             onNavigate = { currentScreen = it },
             onLogout = onLogout,
+            onNavigateToWatchPairing = onNavigateToWatchPairing,
             onNavigateToClassDetails = { classId, className, bannerPath ->
                 selectedClassId = classId
                 selectedClassName = className
