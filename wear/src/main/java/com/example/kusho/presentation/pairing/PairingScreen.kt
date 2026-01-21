@@ -212,7 +212,7 @@ private fun SuccessContent() {
                 painter = painterResource(id = R.drawable.dis_success),
                 contentDescription = "Success",
                 modifier = Modifier
-                    .size(120.dp)
+                    .size(100.dp)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
@@ -294,82 +294,88 @@ private fun MaxRetriesContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // Error icon
         Image(
             painter = painterResource(id = R.drawable.dis_remove),
             contentDescription = "Connection failed",
-            modifier = Modifier
-                .size(50.dp)
-                .padding(bottom = 6.dp),
+            modifier = Modifier.size(50.dp),
             contentScale = ContentScale.Fit
         )
         
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Main error message
         Text(
-            text = "Can't Connect",
+            text = "Unable to Pair",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFFFF6B6B),
             textAlign = TextAlign.Center
         )
-        
-        Spacer(modifier = Modifier.height(4.dp))
-        
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        // Helpful hint
         Text(
-            text = "Tried $attemptCount times",
+            text = "Open Kusho' on phone",
             fontSize = 10.sp,
-            color = Color.Gray,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        // Buttons side by side
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Try Again button
-            Button(
-                onClick = onTryAgain,
-                modifier = Modifier.width(75.dp),
-                colors = ButtonDefaults.buttonColors(
-                    backgroundColor = Color(0xFF4A90E2)
-                )
-            ) {
-                Text(
-                    text = "Retry",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            
-            // Skip button
-            Button(
-                onClick = onSkip,
-                modifier = Modifier.width(75.dp),
-                colors = ButtonDefaults.buttonColors(
-                    backgroundColor = Color(0xFF666666)
-                )
-            ) {
-                Text(
-                    text = "Skip",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(6.dp))
-        
-        Text(
-            text = "Skip = Practice only",
-            fontSize = 9.sp,
             color = Color(0xFFAAAAAA),
             textAlign = TextAlign.Center
         )
+        
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Primary action - Retry (larger, more prominent)
+        Button(
+            onClick = onTryAgain,
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                .height(38.dp),
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = Color(0xFF4A90E2)
+            )
+        ) {
+            Text(
+                text = "Try Again",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Secondary action - Skip (smaller, less prominent)
+        Button(
+            onClick = onSkip,
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                .height(32.dp),
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = Color(0xFF3A3A3A)
+            )
+        ) {
+            Text(
+                text = "Skip",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFFBBBBBB)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "Practice Mode only",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color(0xFFBBBBBB)
+        )
+
     }
 }
 

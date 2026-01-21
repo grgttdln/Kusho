@@ -206,16 +206,12 @@ private fun PairingIndicator(
             backgroundColor = Color(0xFF4A90E2)
         )
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Text(
-                text = "⟳",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        Image(
+            painter = painterResource(id = R.drawable.ic_refresh),
+            contentDescription = "Pair device",
+            modifier = Modifier.size(24.dp),
+            contentScale = ContentScale.Fit
+        )
     }
 }
 
