@@ -1,16 +1,21 @@
 package com.example.app.ui.feature.dashboard
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TypeSpecimen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -23,17 +28,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,15 +42,17 @@ import com.example.app.R
 import com.example.app.data.SessionManager
 import com.example.app.service.ConnectionState
 import com.example.app.ui.components.BottomNavBar
-import com.example.app.ui.components.classroom.ClassCard
-
+import com.example.app.ui.components.dashboard.AnalyticsCard
+import com.example.app.ui.components.dashboard.BatteryIcon
+import com.example.app.ui.components.dashboard.getWatchImageResource
+import com.example.app.ui.components.dashboard.ActivityProgressSection
+import com.example.app.ui.components.dashboard.ActivityProgress
 
 @Composable
 fun DashboardScreen(
+    modifier: Modifier = Modifier,
     onNavigate: (Int) -> Unit,
     onLogout: () -> Unit,
-    onNavigateToClassDetails: (String, String, String) -> Unit = { _, _, _ -> },
-    modifier: Modifier = Modifier,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -58,26 +60,87 @@ fun DashboardScreen(
     val context = LocalContext.current
     val sessionManager = remember { SessionManager.getInstance(context) }
 
-    // State for logout confirmation dialog
     var showLogoutDialog by remember { mutableStateOf(false) }
     val greeting = viewModel.getGreeting()
-    
-    // Request battery update every time Dashboard appears/resumes
+
     LaunchedEffect(Unit) {
         viewModel.requestBatteryUpdate()
-        viewModel.refreshAnalytics() // Refresh analytics data
+        viewModel.refreshAnalytics()
     }
-    
-    // Also request when watch connection state changes to connected
+
     LaunchedEffect(watchDevice.isConnected) {
         if (watchDevice.isConnected) {
             viewModel.requestBatteryUpdate()
         }
     }
 
-    Box(
-        modifier = modifier.fillMaxSize()
-    ) {
+    // Collect activities from ViewModel and map into ActivityProgress UI model.
+    val activities by viewModel.activities.collectAsState()
+
+    val activityProgressList: List<ActivityProgress> = remember(activities) {
+        if (activities.isEmpty()) {
+            // Provide a single placeholder row with zeros when no activities exist
+            listOf(
+                ActivityProgress(
+                    activityId = "0",
+                    activityName = "No activities",
+                    accuracyDeltaPercent = 0,
+                    timeDeltaSeconds = 0,
+                    masteryPercent = 0f,
+                    masteryLabel = "Beginner",
+                    avgAttempts = 0f,
+                    avgAccuracyPercent = 0,
+                    avgScoreText = "",
+                    avgTimeSeconds = 0
+                )
+            )
+        } else {
+            // prepare same icon pool as LearnModeActivitySelectionScreen for consistent assignment
+            val allIcons = listOf(
+                R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
+                R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
+                R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
+                R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
+                R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
+                R.drawable.ic_activity_21, R.drawable.ic_activity_22
+            )
+
+            fun getIconForActivity(activityId: Long): Int {
+                val iconIndex = ((activityId - 1) % allIcons.size).toInt()
+                return allIcons[iconIndex]
+            }
+
+            activities.map { act ->
+                 // If the activity doesn't have a coverImagePath, try to resolve a drawable named ic_<slugified title>
+                 val resolvedCover = act.coverImagePath?.takeIf { it.isNotBlank() } ?: run {
+                     val slug = act.title
+                         .lowercase()
+                         .replace(Regex("[^a-z0-9]+"), "_")
+                         .trim('_')
+                     val candidate = "ic_$slug"
+                     val resId = context.resources.getIdentifier(candidate, "drawable", context.packageName)
+                     if (resId != 0) candidate else null
+                 }
+
+                ActivityProgress(
+                    activityId = act.id.toString(),
+                    activityName = act.title,
+                    coverImagePath = resolvedCover,
+                    iconRes = getIconForActivity(act.id),
+                    accuracyDeltaPercent = 0,
+                    timeDeltaSeconds = 0,
+                    masteryPercent = 0f,
+                    masteryLabel = "Beginner",
+                    avgAttempts = 0f,
+                    avgAccuracyPercent = 0,
+                    avgScoreText = "",
+                    avgTimeSeconds = 0
+                )
+             }
+         }
+     }
+
+    Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -105,15 +168,8 @@ fun DashboardScreen(
             if (showLogoutDialog) {
                 AlertDialog(
                     onDismissRequest = { showLogoutDialog = false },
-                    title = {
-                        Text(
-                            text = "Log Out",
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    text = {
-                        Text("Are you sure you want to log out?")
-                    },
+                    title = { Text(text = "Log Out", fontWeight = FontWeight.Bold) },
+                    text = { Text("Are you sure you want to log out?") },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -121,27 +177,17 @@ fun DashboardScreen(
                                 sessionManager.clearSession()
                                 onLogout()
                             }
-                        ) {
-                            Text(
-                                text = "Log Out",
-                                color = Color(0xFFE53935)
-                            )
-                        }
+                        ) { Text(text = "Log Out", color = Color(0xFFE53935)) }
                     },
                     dismissButton = {
-                        TextButton(
-                            onClick = { showLogoutDialog = false }
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                color = Color(0xFF2196F3)
-                            )
+                        TextButton(onClick = { showLogoutDialog = false }) {
+                            Text(text = "Cancel", color = Color(0xFF2196F3))
                         }
                     }
                 )
             }
 
-            // User Profile Section - 45dp circle, blue background (clickable for logout)
+            // User Profile Section
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -177,7 +223,7 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(29.dp))
 
-            // Greeting - 18sp, Medium weight
+            // Greeting
             Text(
                 text = greeting,
                 fontSize = 18.sp,
@@ -189,33 +235,26 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Device Card - #E9FCFF background, 145dp height, 24dp radius
+            // Device Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 30.dp)
                     .height(145.dp)
-                    .clickable {
-                        if (!watchDevice.isConnected) {
-                            // Navigate to watch pairing screen
-                            // onNavigate(Screen.WatchPairing.route)
-                        }
-                    },
+                    .clickable { },
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (watchDevice.isConnected) Color(0xFFE9FCFF) else Color(0xFFF5F5F5)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     // Refresh button
                     if (watchDevice.isConnected) {
                         IconButton(
-                            onClick = { 
+                            onClick = {
                                 viewModel.checkWatchConnection()
-                                viewModel.requestBatteryUpdate() // Also request fresh battery data
+                                viewModel.requestBatteryUpdate()
                             },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -238,17 +277,14 @@ fun DashboardScreen(
                             }
                         }
                     }
-                    
+
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(18.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            // Display name based on connection state
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = when (watchDevice.connectionState) {
                                     ConnectionState.WATCH_CONNECTED -> watchDevice.name
@@ -264,7 +300,6 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Display status based on connection state
                             Text(
                                 text = when (watchDevice.connectionState) {
                                     ConnectionState.WATCH_CONNECTED -> "Connected"
@@ -276,7 +311,7 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.Normal,
                                 color = when (watchDevice.connectionState) {
                                     ConnectionState.WATCH_CONNECTED -> Color(0xFF3FA9F8)
-                                    ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800) // Orange for warning
+                                    ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800)
                                     else -> Color(0xFF888888)
                                 },
                                 lineHeight = 21.sp
@@ -284,15 +319,10 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.weight(1f))
 
-                            // Only show battery if fully connected with app
                             if (watchDevice.connectionState == ConnectionState.WATCH_CONNECTED) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     BatteryIcon(percentage = watchDevice.batteryPercentage)
-
                                     Spacer(modifier = Modifier.width(8.dp))
-
                                     Text(
                                         text = watchDevice.batteryPercentage?.let { "$it%" } ?: "Loading...",
                                         fontSize = 14.sp,
@@ -317,7 +347,7 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Quick Analytics - 20sp, Medium weight
+            // Quick Analytics
             Text(
                 text = "Quick Analytics",
                 fontSize = 20.sp,
@@ -329,113 +359,58 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(7.dp))
 
-            // Analytics Cards - 168dp wide, 128dp tall, 18dp radius
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 30.dp),
+                    .padding(start = 30.dp, top = 4.dp, bottom = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(15.dp)
             ) {
                 AnalyticsCard(
+                    icon = Icons.Filled.Group,
                     number = uiState.totalStudents.toString(),
                     label = "Total Students",
-                    modifier = Modifier.weight(1f)
+                    badgeText = null
                 )
 
                 AnalyticsCard(
-                    number = uiState.totalClassrooms.toString(),
-                    label = "Classrooms",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Your Recent Class - 20sp, Medium weight
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 30.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Your Recent Class",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black,
-                    lineHeight = 30.sp
+                    icon = Icons.Filled.BarChart,
+                    number = uiState.totalActivities.toString(),
+                    label = "Activities",
+                    badgeText = null
                 )
 
-                TextButton(onClick = { onNavigate(2) }) {
-                    Text(
-                        text = "View More",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF3FA9F8),
-                        lineHeight = 18.sp,
-                        textDecoration = TextDecoration.Underline
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(9.dp))
-
-            // Class Card or Empty State
-            val recentClass = uiState.recentClass
-            if (recentClass != null) {
-                ClassCard(
-                    classCode = recentClass.classCode,
-                    className = recentClass.className,
-                    imageRes = R.drawable.ic_class_abc,
-                    imagePath = recentClass.bannerPath,
-                    onClick = { 
-                        onNavigateToClassDetails(
-                            recentClass.classId.toString(),
-                            recentClass.className,
-                            recentClass.bannerPath ?: ""
-                        )
-                    },
-                    modifier = Modifier.padding(horizontal = 30.dp)
+                AnalyticsCard(
+                    icon = Icons.Filled.TypeSpecimen,
+                    number = uiState.totalWords.toString(),
+                    label = "Total Words",
+                    badgeText = null
                 )
-            } else {
-                // Empty state
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 30.dp)
-                        .height(150.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFF6F6F8)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "No Classes Yet",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF666666)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Create your first class to get started!",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = Color(0xFF999999)
-                            )
-                        }
-                    }
-                }
+
+                AnalyticsCard(
+                    icon = Icons.Filled.CheckCircle,
+                    number = "6",
+                    label = "Students at Mastery",
+                    badgeText = "≥ 90% accuracy"
+                )
+
+                AnalyticsCard(
+                    icon = Icons.AutoMirrored.Filled.TrendingDown,
+                    number = "5",
+                    label = "Students Below Target",
+                    badgeText = "< 70% accuracy"
+                )
+
+                Spacer(modifier = Modifier.width(30.dp))
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Activity Progress Section (previous accordion design)
+            ActivityProgressSection(
+                activities = activityProgressList,
+                onActivityClick = { /* TODO */ }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -448,121 +423,55 @@ fun DashboardScreen(
     }
 }
 
+// ---------------------- Preview ----------------------
+
+@Preview(showBackground = true)
 @Composable
-fun BatteryIcon(
-    percentage: Int?,
-    modifier: Modifier = Modifier
-) {
-    val batteryColor = Color(0xFF14FF1E) // Green color from design
-
-    Box(
-        modifier = modifier.size(24.dp)
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val bodyWidth = size.width * 0.75f
-            val bodyHeight = size.height * 0.65f
-            val strokeWidth = 1.dp.toPx()
-
-            // Battery border with opacity 0.35
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.35f),
-                topLeft = Offset(0f, (size.height - bodyHeight) / 2),
-                size = Size(bodyWidth, bodyHeight),
-                cornerRadius = CornerRadius(4.3.dp.toPx()),
-                style = Stroke(width = strokeWidth)
-            )
-
-            // Battery cap with opacity 0.4
-            drawRect(
-                color = Color.Black.copy(alpha = 0.4f),
-                topLeft = Offset(bodyWidth, size.height * 0.35f),
-                size = Size(size.width * 0.25f, size.height * 0.3f)
-            )
-
-            // Battery capacity (fill) - only if percentage is not null
-            percentage?.let {
-                val fillWidth = (bodyWidth - strokeWidth * 2) * (it / 100f)
-                val fillHeight = bodyHeight - strokeWidth * 2
-                drawRoundRect(
-                    color = batteryColor,
-                    topLeft = Offset(strokeWidth, (size.height - bodyHeight) / 2 + strokeWidth),
-                    size = Size(fillWidth, fillHeight),
-                    cornerRadius = CornerRadius(2.5.dp.toPx())
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun AnalyticsCard(
-    number: String,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.height(128.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFE9FCFF)
+fun ActivityProgressSectionPreview() {
+    val sample = listOf(
+        ActivityProgress(
+            activityId = "a1",
+            activityName = "Alphabet Gestures",
+            coverImagePath = "ic_apple",
+            accuracyDeltaPercent = 12,
+            timeDeltaSeconds = 0,
+            masteryPercent = 0.78f,
+            masteryLabel = "Intermediate",
+            avgAttempts = 1.9f,
+            avgAccuracyPercent = 79,
+            avgScoreText = "8/10",
+            avgTimeSeconds = 124
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = number,
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF3FA9F8),
-                    lineHeight = 27.sp
-                )
+        ActivityProgress(
+            activityId = "a2",
+            activityName = "Word Practice",
+            coverImagePath = "ic_apple",
+            accuracyDeltaPercent = 0,
+            timeDeltaSeconds = -20,
+            masteryPercent = 0.92f,
+            masteryLabel = "Advanced",
+            avgAttempts = 1.3f,
+            avgAccuracyPercent = 92,
+            avgScoreText = "9/10",
+            avgTimeSeconds = 80
+        ),
+        ActivityProgress(
+            activityId = "a3",
+            activityName = "Shape Matching",
+            coverImagePath = "ic_apple",
+            accuracyDeltaPercent = 0,
+            timeDeltaSeconds = 0,
+            masteryPercent = 0.45f,
+            masteryLabel = "Beginner",
+            avgAttempts = 2.4f,
+            avgAccuracyPercent = 45,
+            avgScoreText = "5/10",
+            avgTimeSeconds = 165
+        )
+    )
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = label,
-                    fontSize = 16.sp,
-                    color = Color(0xFF3FA9F8),
-                    fontWeight = FontWeight.Medium,
-                    lineHeight = 27.sp
-                )
-            }
-        }
-    }
-}
-
-/**
- * Map watch model name to corresponding drawable resource
- */
-fun getWatchImageResource(watchName: String): Int {
-    return when {
-        watchName.contains("Watch8", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8_classic
-        watchName.contains("Watch 8", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8_classic
-        watchName.contains("Watch8", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8
-        watchName.contains("Watch 8", ignoreCase = true) -> R.drawable.ic_galaxy_watch_8
-        watchName.contains("Watch7", ignoreCase = true) -> R.drawable.ic_galaxy_watch_7
-        watchName.contains("Watch 7", ignoreCase = true) -> R.drawable.ic_galaxy_watch_7
-        watchName.contains("Watch6", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6_classic
-        watchName.contains("Watch 6", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6_classic
-        watchName.contains("Watch6", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6
-        watchName.contains("Watch 6", ignoreCase = true) -> R.drawable.ic_galaxy_watch_6
-        watchName.contains("Watch5", ignoreCase = true) && watchName.contains("Pro", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5_pro
-        watchName.contains("Watch 5", ignoreCase = true) && watchName.contains("Pro", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5_pro
-        watchName.contains("Watch5", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5
-        watchName.contains("Watch 5", ignoreCase = true) -> R.drawable.ic_galaxy_watch_5
-        watchName.contains("Watch4", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4_classic
-        watchName.contains("Watch 4", ignoreCase = true) && watchName.contains("Classic", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4_classic
-        watchName.contains("Watch4", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4
-        watchName.contains("Watch 4", ignoreCase = true) -> R.drawable.ic_galaxy_watch_4
-        watchName.contains("Ultra", ignoreCase = true) -> R.drawable.ic_galaxy_ultra
-        else -> R.drawable.ic_watch_generic
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        ActivityProgressSection(activities = sample, onActivityClick = {})
     }
 }
 

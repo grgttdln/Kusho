@@ -55,7 +55,7 @@ fun MainNavigationContainer(
     var selectedActivityId by remember { mutableStateOf(0L) }
     var selectedActivityTitle by remember { mutableStateOf("") }
     var selectedActivityIconRes by remember { mutableStateOf(com.example.app.R.drawable.ic_apple) }
-    var availableWords by remember { mutableStateOf(listOf<String>()) }
+    var availableWords by remember { mutableStateOf(listOf<com.example.app.data.entity.Word>()) }
     var createdSetTitle by remember { mutableStateOf("") }
     var selectedSetId by remember { mutableStateOf(0L) }
     var yourSetsScreenKey by remember { mutableStateOf(0) }
@@ -77,15 +77,9 @@ fun MainNavigationContainer(
 
     when (currentScreen) {
         0 -> DashboardScreen(
+            modifier = modifier,
             onNavigate = { currentScreen = it },
-            onLogout = onLogout,
-            onNavigateToClassDetails = { classId, className, bannerPath ->
-                selectedClassId = classId
-                selectedClassName = className
-                selectedClassBannerPath = bannerPath
-                currentScreen = 22 
-            },
-            modifier = modifier
+            onLogout = onLogout
         )
         1 -> LearnScreen(onNavigate = { currentScreen = it }, modifier = modifier)
         2 -> ClassScreen(
@@ -94,6 +88,16 @@ fun MainNavigationContainer(
             onNavigateToClassDetails = { classId ->
                 selectedClassId = classId
                 currentScreen = 22
+            },
+            onNavigateToStudentDetails = { sId, sName, cName ->
+                selectedStudentId = sId
+                selectedStudentName = sName
+                selectedClassName = cName
+                currentScreen = 26
+            },
+            onNavigateToAddStudent = {
+                // Open Add Student flow from the top-level Class screen
+                currentScreen = 23
             },
             modifier = modifier
         )
@@ -182,7 +186,7 @@ fun MainNavigationContainer(
         )
         12 -> {
             LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId).map { it.word }
+                availableWords = wordRepository.getWordsForUserOnce(userId)
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -221,7 +225,7 @@ fun MainNavigationContainer(
         )
         15 -> {
             LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId).map { it.word }
+                availableWords = wordRepository.getWordsForUserOnce(userId)
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -297,9 +301,7 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         23 -> AddStudentScreen(
-            classId = selectedClassId,
-            className = selectedClassName,
-            onNavigateBack = { currentScreen = 22 },
+            onNavigateBack = { currentScreen = 2 },
             onStudentAdded = { studentName ->
                 addedStudentName = studentName
                 currentScreen = 24
@@ -308,7 +310,7 @@ fun MainNavigationContainer(
         )
         24 -> StudentAddedSuccessScreen(
             studentName = addedStudentName,
-            onContinue = { currentScreen = 22 },
+            onContinue = { currentScreen = 2 },
             modifier = modifier
         )
         25 -> EditClassScreen(
@@ -329,7 +331,7 @@ fun MainNavigationContainer(
             studentName = selectedStudentName,
             className = selectedClassName,
             classId = selectedClassId,
-            onNavigateBack = { currentScreen = 22 },
+            onNavigateBack = { currentScreen = 2 },
             modifier = modifier
         )
         27 -> TutorialModeStudentScreen(

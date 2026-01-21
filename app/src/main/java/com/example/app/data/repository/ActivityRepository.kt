@@ -24,6 +24,10 @@ class ActivityRepository(
                 return Result.failure(Exception("Activity title cannot be empty"))
             }
 
+            if (title.trim().length > 30) {
+                return Result.failure(Exception("Activity title must be 30 characters or less"))
+            }
+
             // Check if activity with same title already exists
             if (activityDao.activityTitleExistsForUser(userId, title)) {
                 return Result.failure(Exception("Activity with this title already exists"))
@@ -94,6 +98,18 @@ class ActivityRepository(
 
             val activity = activityDao.getActivityById(activityId)
                 ?: return Result.failure(Exception("Activity not found"))
+
+            // Check for duplicate title if title is being updated
+            if (!title.isNullOrBlank()) {
+                if (title.trim().length > 30) {
+                    return Result.failure(Exception("Activity title must be 30 characters or less"))
+                }
+                if (title.trim() != activity.title) {
+                    if (activityDao.activityTitleExistsForUserExcluding(activity.userId, title.trim(), activityId)) {
+                        return Result.failure(Exception("Activity with this title already exists"))
+                    }
+                }
+            }
 
             val updatedActivity = activity.copy(
                 title = title?.trim() ?: activity.title,

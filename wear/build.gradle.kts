@@ -45,8 +45,8 @@ android {
     buildFeatures {
         compose = true
     }
-    aaptOptions {
-        noCompress("tflite")
+    androidResources {
+        noCompress += "tflite"
     }
 }
 

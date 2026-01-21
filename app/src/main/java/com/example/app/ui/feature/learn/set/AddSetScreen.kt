@@ -32,6 +32,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.repository.SetRepository
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.common.AlreadyExistsDialog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -50,6 +51,8 @@ fun AddSetScreen(
     var setTitle by remember { mutableStateOf(uiState.setTitle) }
     var setDescription by remember { mutableStateOf(uiState.setDescription) }
     var internalWords by remember { mutableStateOf(selectedWords) }
+    var showDuplicateError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
 
     // Update viewModel when local state changes
     LaunchedEffect(setTitle, setDescription) {
@@ -68,6 +71,26 @@ fun AddSetScreen(
     }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // Show error dialog when duplicate set detected
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { message ->
+            if (message.contains("already exists", ignoreCase = true)) {
+                errorMessage = message
+                showDuplicateError = true
+            }
+        }
+    }
+
+    // Error Dialog
+    AlreadyExistsDialog(
+        isVisible = showDuplicateError,
+        itemType = "set",
+        onDismiss = {
+            showDuplicateError = false
+            viewModel.clearErrorMessage()
+        }
+    )
 
     Box(
         modifier = modifier

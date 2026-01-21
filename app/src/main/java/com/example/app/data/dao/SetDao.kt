@@ -101,4 +101,26 @@ interface SetDao {
      */
     @Query("DELETE FROM activity_set WHERE setId = :setId AND activityId = :activityId")
     suspend fun unlinkSetFromActivity(setId: Long, activityId: Long): Int
+
+    /**
+     * Check if a set with the given title already exists for a user (case-insensitive).
+     *
+     * @param userId The user's ID
+     * @param title The set title to check
+     * @return True if a set with this title exists, false otherwise
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM sets WHERE userId = :userId AND LOWER(title) = LOWER(:title))")
+    suspend fun setTitleExistsForUser(userId: Long, title: String): Boolean
+
+    /**
+     * Check if a set with the given title already exists for a user, excluding a specific set ID (case-insensitive).
+     * Used when updating a set to allow keeping the same title.
+     *
+     * @param userId The user's ID
+     * @param title The set title to check
+     * @param excludeSetId The set ID to exclude from the check
+     * @return True if another set with this title exists, false otherwise
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM sets WHERE userId = :userId AND LOWER(title) = LOWER(:title) AND id != :excludeSetId)")
+    suspend fun setTitleExistsForUserExcluding(userId: Long, title: String, excludeSetId: Long): Boolean
 }
