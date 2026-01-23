@@ -88,7 +88,7 @@ fun ClassDetailsScreen(
                 Text(
                     text = uiState.error!!,
                     fontSize = 16.sp,
-                    color = Color(0xFF49A9FF),
+                    color = Color.Red,
                     modifier = Modifier.padding(horizontal = 24.dp)
                 )
             } else if (classEntity != null) {

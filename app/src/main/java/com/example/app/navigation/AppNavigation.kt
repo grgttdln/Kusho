@@ -167,6 +167,9 @@ fun AppNavigation(
                             inclusive = true
                         }
                     }
+                },
+                onNavigateToWatchPairing = {
+                    navController.navigate(Screen.WatchPairing.route)
                 }
             )
         }

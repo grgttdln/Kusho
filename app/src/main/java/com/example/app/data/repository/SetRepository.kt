@@ -58,8 +58,6 @@ class SetRepository(
         return@withContext try {
             if (title.isBlank()) {
                 AddSetResult.Error("Set title cannot be empty")
-            } else if (setDao.setTitleExistsForUser(userId, title.trim())) {
-                AddSetResult.Error("A set with this title already exists")
             } else {
                 val set = Set(
                     userId = userId,
@@ -104,12 +102,6 @@ class SetRepository(
             } else if (selectedWords.isEmpty()) {
                 Log.e(TAG_REPO, "❌ Validation error: No words selected")
                 AddSetResult.Error("At least one word must be selected")
-            } else if (selectedWords.size < 3) {
-                Log.e(TAG_REPO, "❌ Validation error: Less than 3 words")
-                AddSetResult.Error("Set must contain at least 3 words")
-            } else if (setDao.setTitleExistsForUser(userId, title.trim())) {
-                Log.e(TAG_REPO, "❌ Validation error: Duplicate set title")
-                AddSetResult.Error("A set with this title already exists")
             } else {
                 Log.d(TAG_REPO, "✅ Validation passed")
                 
@@ -322,18 +314,9 @@ class SetRepository(
             if (title.isBlank()) {
                 Log.e(TAG_REPO, "❌ Validation error: Title is blank")
                 AddSetResult.Error("Set title cannot be empty")
-            } else if (title.trim().length > 30) {
-                Log.e(TAG_REPO, "❌ Validation error: Title too long")
-                AddSetResult.Error("Set title must be 30 characters or less")
             } else if (selectedWords.isEmpty()) {
                 Log.e(TAG_REPO, "❌ Validation error: No words selected")
                 AddSetResult.Error("At least one word must be selected")
-            } else if (selectedWords.size < 3) {
-                Log.e(TAG_REPO, "❌ Validation error: Less than 3 words")
-                AddSetResult.Error("Set must contain at least 3 words")
-            } else if (setDao.setTitleExistsForUserExcluding(userId, title.trim(), setId)) {
-                Log.e(TAG_REPO, "❌ Validation error: Duplicate set title")
-                AddSetResult.Error("A set with this title already exists")
             } else {
                 Log.d(TAG_REPO, "✅ Validation passed")
 

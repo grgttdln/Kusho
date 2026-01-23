@@ -13,7 +13,6 @@ import com.example.app.data.dao.StudentDao
 import com.example.app.data.dao.ActivityDao
 import com.example.app.data.dao.SetDao
 import com.example.app.data.dao.SetWordDao
-import com.example.app.data.dao.StudentTeacherDao
 // Import all Entities
 import com.example.app.data.entity.User
 import com.example.app.data.entity.Word
@@ -24,7 +23,6 @@ import com.example.app.data.entity.Activity
 import com.example.app.data.entity.Set
 import com.example.app.data.entity.SetWord
 import com.example.app.data.entity.ActivitySet
-import com.example.app.data.entity.StudentTeacher
 
 /**
  * Room Database for the Kusho application.
@@ -40,10 +38,9 @@ import com.example.app.data.entity.StudentTeacher
         Activity::class, 
         Set::class, 
         SetWord::class, 
-        ActivitySet::class,
-        StudentTeacher::class
+        ActivitySet::class
     ],
-    version = 6, // Incrementing version because the schema is changing
+    version = 5, // Incrementing version because the schema is changing
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,7 +54,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun activityDao(): ActivityDao
     abstract fun setDao(): SetDao
     abstract fun setWordDao(): SetWordDao
-    abstract fun studentTeacherDao(): StudentTeacherDao
 
     companion object {
         private const val DATABASE_NAME = "kusho_database"

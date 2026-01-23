@@ -120,7 +120,7 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
      * Create and save the activity to the database
      * Returns true if successful, false otherwise
      */
-    suspend fun createActivity(userId: Long): Boolean {
+    fun createActivity(userId: Long): Boolean {
         val state = _uiState.value
 
         // Validation
@@ -136,19 +136,18 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
 
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-        val result = activityRepository.addActivity(
-            userId = userId,
-            title = state.activityTitle.trim(),
-            description = if (state.activityDescription.isNotBlank()) {
-                state.activityDescription.trim()
-            } else {
-                null
-            }
-        )
+        viewModelScope.launch {
+            val result = activityRepository.addActivity(
+                userId = userId,
+                title = state.activityTitle.trim(),
+                description = if (state.activityDescription.isNotBlank()) {
+                    state.activityDescription.trim()
+                } else {
+                    null
+                }
+            )
 
-        return if (result.isSuccess) {
-            val activityId = result.getOrNull()
-            if (activityId != null) {
+            result.onSuccess { activityId ->
                 // Link all selected sets to the activity
                 state.selectedChapters.forEach { chapter ->
                     setRepository.linkSetToActivity(chapter.setId, activityId)
@@ -163,25 +162,18 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
                         selectedChapters = emptyList()
                     )
                 }
-                true
-            } else {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Failed to create activity"
-                    )
+            }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = error.message ?: "Failed to create activity"
+                        )
+                    }
                 }
-                false
-            }
-        } else {
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "Failed to create activity"
-                )
-            }
-            false
         }
+
+        return true
     }
 
     /**

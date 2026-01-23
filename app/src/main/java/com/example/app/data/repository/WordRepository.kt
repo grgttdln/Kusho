@@ -2,7 +2,6 @@ package com.example.app.data.repository
 
 import com.example.app.data.dao.WordDao
 import com.example.app.data.entity.Word
-import com.example.app.util.WordValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -48,10 +47,14 @@ class WordRepository(private val wordDao: WordDao) {
         try {
             val trimmedWord = word.trim()
 
-            // Validate word using WordValidator
-            val (isValid, errorMessage) = WordValidator.validateWordForBank(trimmedWord)
-            if (!isValid) {
-                return@withContext AddWordResult.Error(errorMessage ?: "Invalid word")
+            // Validate word is not empty
+            if (trimmedWord.isBlank()) {
+                return@withContext AddWordResult.Error("Word cannot be empty")
+            }
+
+            // Validate word contains only letters
+            if (!trimmedWord.all { it.isLetter() }) {
+                return@withContext AddWordResult.Error("Word can only contain letters")
             }
 
             // Check for duplicates (case-insensitive)
@@ -130,10 +133,14 @@ class WordRepository(private val wordDao: WordDao) {
         try {
             val trimmedWord = word.trim()
 
-            // Validate word using WordValidator
-            val (isValid, errorMessage) = WordValidator.validateWordForBank(trimmedWord)
-            if (!isValid) {
-                return@withContext UpdateWordResult.Error(errorMessage ?: "Invalid word")
+            // Validate word is not empty
+            if (trimmedWord.isBlank()) {
+                return@withContext UpdateWordResult.Error("Word cannot be empty")
+            }
+
+            // Validate word contains only letters
+            if (!trimmedWord.all { it.isLetter() }) {
+                return@withContext UpdateWordResult.Error("Word can only contain letters")
             }
 
             // Check for duplicates (case-insensitive), excluding current word

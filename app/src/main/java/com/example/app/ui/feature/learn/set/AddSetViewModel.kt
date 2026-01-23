@@ -78,11 +78,6 @@ class AddSetViewModel(application: Application) : AndroidViewModel(application) 
             return false
         }
 
-        if (selectedWords.size < 3) {
-            _uiState.update { it.copy(errorMessage = "Set must contain at least 3 words") }
-            return false
-        }
-
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
         return try {

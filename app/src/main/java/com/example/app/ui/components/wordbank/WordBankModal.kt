@@ -205,7 +205,7 @@ private fun WordInputSection(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFF49A9FF),
                 unfocusedBorderColor = Color(0xFFE0E0E0),
-                errorBorderColor = Color(0xFF49A9FF),
+                errorBorderColor = Color.Red,
                 focusedContainerColor = Color.White,
                 unfocusedContainerColor = Color.White,
                 cursorColor = Color(0xFF49A9FF),
@@ -218,7 +218,7 @@ private fun WordInputSection(
             isError = inputError != null,
             enabled = !isLoading,
             supportingText = if (inputError != null) {
-                { Text(text = inputError, color = Color(0xFF49A9FF)) }
+                { Text(text = inputError, color = Color.Red) }
             } else null,
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Words,

@@ -54,21 +54,6 @@ interface StudentDao {
     fun getAllStudentsFlow(): Flow<List<Student>>
 
     /**
-     * Get students for a specific teacher as a Flow by joining the student_teachers table.
-     */
-    @Query("SELECT s.* FROM students s INNER JOIN student_teachers st ON s.studentId = st.studentId WHERE st.userId = :userId ORDER BY s.fullName ASC")
-    fun getStudentsForTeacherFlow(userId: Long): Flow<List<Student>>
-
-    /**
-     * Get students by a list of IDs.
-     *
-     * @param ids List of student IDs
-     * @return List of Students matching the IDs
-     */
-    @Query("SELECT * FROM students WHERE studentId IN (:ids) ORDER BY fullName ASC")
-    suspend fun getStudentsByIds(ids: List<Long>): List<Student>
-
-    /**
      * Delete a student by their ID.
      * Note: This will also delete associated enrollments due to CASCADE.
      *

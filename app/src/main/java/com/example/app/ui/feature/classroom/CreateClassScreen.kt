@@ -32,7 +32,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.ui.components.PrimaryButton
-import com.example.app.ui.components.common.AlreadyExistsDialog
 import com.example.app.util.ImageUtil
 
 @Composable
@@ -49,7 +48,6 @@ fun CreateClassScreen(
     var customBannerUri by remember { mutableStateOf<Uri?>(null) }
     var customBannerPath by remember { mutableStateOf<String?>(null) }
     var showBannerPicker by remember { mutableStateOf(false) }
-    var showDuplicateError by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -63,13 +61,6 @@ fun CreateClassScreen(
     }
 
     val isFormValid = className.isNotBlank() && classCode.isNotBlank()
-
-    // Error Dialog
-    AlreadyExistsDialog(
-        isVisible = showDuplicateError,
-        itemType = "class",
-        onDismiss = { showDuplicateError = false }
-    )
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -261,9 +252,7 @@ fun CreateClassScreen(
                                 onClassCreated(className)
                             },
                             onError = { error ->
-                                if (error.contains("already exists", ignoreCase = true)) {
-                                    showDuplicateError = true
-                                }
+                                // TODO: Show error toast/snackbar
                             }
                         )
                     }

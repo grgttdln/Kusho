@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -58,11 +59,11 @@ fun StudentDetailsScreen(
     studentId: String,
     studentName: String,
     className: String,
-    onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier,
     classId: String = "",
+    onNavigateBack: () -> Unit,
     onEditStudent: () -> Unit = {},
-    viewModel: ClassroomViewModel = viewModel()
+    viewModel: ClassroomViewModel = viewModel(),
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val uiState by viewModel.studentDetailsUiState.collectAsState()
@@ -71,12 +72,14 @@ fun StudentDetailsScreen(
     var showEditNameDialog by remember { mutableStateOf(false) }
     var showEditPfpDialog by remember { mutableStateOf(false) }
     var editedName by remember { mutableStateOf("") }
+    var newPfpUri by remember { mutableStateOf<Uri?>(null) }
     
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
+            newPfpUri = it
             // Save image to internal storage
             val savedPath = ImageUtil.saveImageToInternalStorage(context, it, "profile")
             // Save immediately after selecting
@@ -90,7 +93,7 @@ fun StudentDetailsScreen(
                     // Reload student details
                     viewModel.loadStudentDetails(
                         studentId = studentId.toLongOrNull() ?: 0L,
-                        classId = classId.toLongOrNull()
+                        classId = classId.toLongOrNull() ?: 0L
                     )
                     showEditPfpDialog = false
                 },
@@ -103,11 +106,12 @@ fun StudentDetailsScreen(
     
     // Load student details when screen is first composed
     LaunchedEffect(studentId, classId) {
-        // classId may be empty when navigating from the top-level ClassScreen; pass null in that case
-        viewModel.loadStudentDetails(
-            studentId = studentId.toLongOrNull() ?: 0L,
-            classId = classId.toLongOrNull()
-        )
+        if (classId.isNotEmpty()) {
+            viewModel.loadStudentDetails(
+                studentId = studentId.toLongOrNull() ?: 0L,
+                classId = classId.toLongOrNull() ?: 0L
+            )
+        }
     }
 
     Column(
@@ -141,7 +145,7 @@ fun StudentDetailsScreen(
             Text(
                 text = uiState.error!!,
                 fontSize = 16.sp,
-                color = Color(0xFF49A9FF),
+                color = Color.Red,
                 modifier = Modifier.padding(horizontal = 24.dp)
             )
         } else {
@@ -195,9 +199,9 @@ fun StudentDetailsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Box {
-                    uiState.pfpPath?.let { pfp ->
+                    if (uiState.pfpPath != null) {
                         AsyncImage(
-                            model = java.io.File(pfp),
+                            model = java.io.File(uiState.pfpPath),
                             contentDescription = "Student Profile",
                             modifier = Modifier
                                 .size(200.dp)
@@ -205,7 +209,7 @@ fun StudentDetailsScreen(
                             contentScale = ContentScale.Crop,
                             error = painterResource(id = R.drawable.dis_default_pfp)
                         )
-                    } ?: run {
+                    } else {
                         Image(
                             painter = painterResource(id = R.drawable.dis_default_pfp),
                             contentDescription = "Student Profile",
@@ -430,7 +434,7 @@ fun StudentDetailsScreen(
                                     // Reload student details
                                     viewModel.loadStudentDetails(
                                         studentId = studentId.toLongOrNull() ?: 0L,
-                                        classId = classId.toLongOrNull()
+                                        classId = classId.toLongOrNull() ?: 0L
                                     )
                                     showEditNameDialog = false
                                 },
@@ -523,7 +527,7 @@ fun StudentDetailsScreen(
                                         // Reload student details
                                         viewModel.loadStudentDetails(
                                             studentId = studentId.toLongOrNull() ?: 0L,
-                                            classId = classId.toLongOrNull()
+                                            classId = classId.toLongOrNull() ?: 0L
                                         )
                                         showEditPfpDialog = false
                                     },

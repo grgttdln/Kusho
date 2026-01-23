@@ -60,6 +60,16 @@ fun LearnScreen(
                 color = Color(0xFF0B0B0B)
             )
 
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = "Want to watch how it's done, or test what you know? Choose a mode below.",
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+                color = Color(0xFF4A4A4A),
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+
             Spacer(Modifier.height(32.dp))
 
             ModeCard(

@@ -22,18 +22,6 @@ interface ActivityDao {
     @Query("SELECT EXISTS(SELECT 1 FROM activities WHERE userId = :userId AND LOWER(title) = LOWER(:title) LIMIT 1)")
     suspend fun activityTitleExistsForUser(userId: Long, title: String): Boolean
 
-    /**
-     * Check if an activity with the given title already exists for a user, excluding a specific activity ID (case-insensitive).
-     * Used when updating an activity to allow keeping the same title.
-     *
-     * @param userId The user's ID
-     * @param title The activity title to check
-     * @param excludeActivityId The activity ID to exclude from the check
-     * @return True if another activity with this title exists, false otherwise
-     */
-    @Query("SELECT EXISTS(SELECT 1 FROM activities WHERE userId = :userId AND LOWER(title) = LOWER(:title) AND id != :excludeActivityId LIMIT 1)")
-    suspend fun activityTitleExistsForUserExcluding(userId: Long, title: String, excludeActivityId: Long): Boolean
-
     @Update
     suspend fun updateActivity(activity: Activity): Int
 

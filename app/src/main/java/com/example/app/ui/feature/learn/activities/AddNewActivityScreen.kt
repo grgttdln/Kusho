@@ -31,8 +31,6 @@ import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.activities.AddedChapterPill
 import com.example.app.ui.components.activities.ChapterCard
-import com.example.app.ui.components.common.AlreadyExistsDialog
-import kotlinx.coroutines.launch
 
 @Composable
 fun AddNewActivityScreen(
@@ -44,12 +42,10 @@ fun AddNewActivityScreen(
     viewModel: AddActivityViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
     
     // Use local references to prevent unnecessary recompositions
     val activityTitle = uiState.activityTitle
     val addedChapters = uiState.selectedChapters
-    var showDuplicateError by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -276,11 +272,8 @@ fun AddNewActivityScreen(
         // Create Activity Button
         Button(
             onClick = { 
-                coroutineScope.launch {
-                    val success = viewModel.createActivity(userId)
-                    if (success) {
-                        onNavigate(10) // Navigate to confirmation screen
-                    }
+                if (viewModel.createActivity(userId)) {
+                    onNavigate(10) // Navigate to confirmation screen
                 }
             },
             modifier = Modifier
@@ -321,21 +314,9 @@ fun AddNewActivityScreen(
         // Display error message if any
         if (!uiState.errorMessage.isNullOrEmpty()) {
             LaunchedEffect(uiState.errorMessage) {
-                if (uiState.errorMessage?.contains("already exists", ignoreCase = true) == true) {
-                    showDuplicateError = true
-                }
+                // Error is shown - you can add a snackbar or toast here
             }
         }
-
-        // Error Dialog
-        AlreadyExistsDialog(
-            isVisible = showDuplicateError,
-            itemType = "activity",
-            onDismiss = {
-                showDuplicateError = false
-                viewModel.clearErrorMessage()
-            }
-        )
 
         // Bottom Navigation Bar
         BottomNavBar(

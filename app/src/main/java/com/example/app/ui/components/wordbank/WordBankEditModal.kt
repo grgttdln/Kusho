@@ -200,7 +200,7 @@ private fun EditMediaSection(
             Text(
                 text = imageError,
                 fontSize = 12.sp,
-                color = Color(0xFF49A9FF),
+                color = Color.Red,
                 modifier = Modifier.align(Alignment.Start)
             )
         }
@@ -247,7 +247,7 @@ private fun EditWordInputSection(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFF49A9FF),
                 unfocusedBorderColor = Color(0xFFE0E0E0),
-                errorBorderColor = Color(0xFF49A9FF),
+                errorBorderColor = Color.Red,
                 focusedContainerColor = Color.White,
                 unfocusedContainerColor = Color.White,
                 cursorColor = Color(0xFF49A9FF),
@@ -260,7 +260,7 @@ private fun EditWordInputSection(
             isError = inputError != null,
             enabled = !isLoading,
             supportingText = if (inputError != null) {
-                { Text(text = inputError, color = Color(0xFF49A9FF)) }
+                { Text(text = inputError, color = Color.Red) }
             } else null,
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Words,

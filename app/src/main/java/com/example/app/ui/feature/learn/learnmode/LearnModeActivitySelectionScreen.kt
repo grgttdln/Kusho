@@ -127,7 +127,7 @@ fun LearnModeActivitySelectionScreen(
                     ) {
                         Text(
                             text = uiState.errorMessage ?: "An error occurred",
-                            color = Color(0xFF49A9FF),
+                            color = Color.Red,
                             fontSize = 16.sp
                         )
                     }

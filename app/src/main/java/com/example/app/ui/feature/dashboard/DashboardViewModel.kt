@@ -6,16 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Class
-import com.example.app.data.entity.Activity
 import com.example.app.data.repository.ClassRepository
-import com.example.app.data.repository.ActivityRepository
-import com.example.app.data.repository.StudentTeacherRepository
-import com.example.app.data.repository.WordRepository
+import com.example.app.data.repository.EnrollmentRepository
+import com.example.app.data.repository.StudentRepository
 import com.example.app.service.WatchConnectionManager
 import com.example.app.service.WatchDeviceInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class DashboardUiState(
@@ -23,8 +22,7 @@ data class DashboardUiState(
     val watchDevice: WatchDeviceInfo = WatchDeviceInfo(),
     val isLoading: Boolean = false,
     val totalStudents: Int = 0,
-    val totalActivities: Int = 0,
-    val totalWords: Int = 0,
+    val totalClassrooms: Int = 0,
     val recentClass: Class? = null
 )
 
@@ -35,14 +33,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     
     private val database = AppDatabase.getInstance(application)
     private val classRepository = ClassRepository(database.classDao())
-    private val activityRepository = ActivityRepository(database.activityDao())
-    private val wordRepository = WordRepository(database.wordDao())
-    private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
+    private val enrollmentRepository = EnrollmentRepository(database.enrollmentDao(), database.studentDao())
+    private val studentRepository = StudentRepository(database.studentDao())
 
-    // Activities flow exposed to the UI
-    private val _activities = MutableStateFlow<List<Activity>>(emptyList())
-    val activities: StateFlow<List<Activity>> = _activities.asStateFlow()
-    
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
     
@@ -92,47 +85,33 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private fun loadAnalytics(userId: Long) {
         viewModelScope.launch {
             try {
-                // Collect active classes (updates recentClass and totalActivities)
-                launch {
-                    classRepository.getActiveClassesByUserId(userId).collect { activeClasses ->
-                        val classroomCount = activeClasses.size
-                        val activityCountResult = activityRepository.getActivityCount(userId)
-                        val totalActivitiesCount = activityCountResult.getOrNull() ?: 0
-                        val recentClass = activeClasses.maxByOrNull { it.classId }
-
-                        _uiState.value = _uiState.value.copy(
-                            totalActivities = totalActivitiesCount,
-                            recentClass = recentClass
-                        )
+                // Get all active (non-archived) classes for the user
+                classRepository.getActiveClassesByUserId(userId).collect { activeClasses ->
+                    // Count active classrooms
+                    val classroomCount = activeClasses.size
+                    
+                    // Get unique student IDs enrolled in active classes
+                    val uniqueStudentIds = mutableSetOf<Long>()
+                    
+                    // Use first() to get a snapshot instead of collect
+                    activeClasses.forEach { classEntity ->
+                        val enrollments = enrollmentRepository.getEnrollmentsByClassId(classEntity.classId).first()
+                        enrollments.forEach { enrollment ->
+                            uniqueStudentIds.add(enrollment.studentId)
+                        }
                     }
+                    
+                    // Get most recent class (highest classId = most recently created)
+                    val recentClass = activeClasses.maxByOrNull { it.classId }
+                    
+                    _uiState.value = _uiState.value.copy(
+                        totalStudents = uniqueStudentIds.size,
+                        totalClassrooms = classroomCount,
+                        recentClass = recentClass
+                    )
                 }
-
-                // Collect the number of distinct students assigned to this teacher reactively
-                launch {
-                    studentTeacherRepository.getStudentCountForTeacherFlow(userId).collect { count ->
-                        _uiState.value = _uiState.value.copy(totalStudents = count)
-                    }
-                }
-
-                // Load total words for this user (one-shot)
-                launch {
-                    try {
-                        val wordCount = wordRepository.getWordCount(userId)
-                        _uiState.value = _uiState.value.copy(totalWords = wordCount)
-                    } catch (e: Exception) {
-                        // fallback to 0 on error
-                        _uiState.value = _uiState.value.copy(totalWords = 0)
-                    }
-                }
-
-                // Collect activities for this user reactively and expose to UI
-                launch {
-                    activityRepository.getActivitiesForUser(userId).collect { activities ->
-                        _activities.value = activities
-                    }
-                }
-                
             } catch (e: Exception) {
+                // Handle error silently or log it
                 e.printStackTrace()
             }
         }

@@ -84,12 +84,12 @@ fun StudentCard(
                 )
             }
 
-            // Blue X button in removal mode
+            // Red X button in removal mode
             if (isRemovalMode) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Remove Student",
-                    tint = Color(0xFF49A9FF),
+                    tint = Color.Red,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
