@@ -27,7 +27,7 @@ import com.example.kusho.presentation.service.ConnectionMonitor
 import kotlinx.coroutines.delay
 
 /**
- * Watch Pairing Screen
+ * Watch Pairing Screen Functionality
  * Shows different states: Prompt, Checking, Success, Error
  */
 @Composable

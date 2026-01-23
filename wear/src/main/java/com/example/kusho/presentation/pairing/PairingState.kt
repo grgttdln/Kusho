@@ -1,7 +1,7 @@
 package com.example.kusho.presentation.pairing
 
 /**
- * Represents the different states of the watch-phone pairing process
+ * Represents the different states of the watch and phone pairing process
  */
 sealed class PairingState {
     /** Initial state - prompting user to open mobile app */

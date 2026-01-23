@@ -23,7 +23,7 @@ enum class DisconnectionReason {
 }
 
 /**
- * Get user-friendly message for disconnection reason
+ * Get a user-friendly message for disconnection reason
  */
 fun DisconnectionReason.toUserMessage(): String {
     return when (this) {

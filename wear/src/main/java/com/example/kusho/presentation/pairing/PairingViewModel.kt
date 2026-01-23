@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
- * ViewModel for managing watch-phone pairing state
+ * ViewModel for managing watch and phone pairing state
  */
 class PairingViewModel(private val context: Context) : ViewModel() {
     
