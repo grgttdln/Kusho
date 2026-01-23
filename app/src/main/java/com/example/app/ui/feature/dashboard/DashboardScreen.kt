@@ -1,5 +1,14 @@
-package com.example.app.ui.feature.dashboard
+﻿package com.example.app.ui.feature.dashboard
 
+import android.Manifest
+import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.SessionManager
@@ -53,6 +63,8 @@ fun DashboardScreen(
     modifier: Modifier = Modifier,
     onNavigate: (Int) -> Unit,
     onLogout: () -> Unit,
+    onNavigateToWatchPairing: () -> Unit = {},
+    onNavigateToClassDetails: (String, String, String) -> Unit = { _, _, _ -> },
     viewModel: DashboardViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -62,7 +74,29 @@ fun DashboardScreen(
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     val greeting = viewModel.getGreeting()
-
+    
+    // Bluetooth enable request launcher (must be declared first)
+    val bluetoothEnableLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            // Bluetooth was enabled, check connection again
+            viewModel.checkWatchConnection()
+        }
+    }
+    
+    // Bluetooth permission request launcher (Android 12+)
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Permission granted, now launch Bluetooth enable dialog
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            bluetoothEnableLauncher.launch(enableBtIntent)
+        }
+    }
+    
+    // Request battery update every time Dashboard appears/resumes
     LaunchedEffect(Unit) {
         viewModel.requestBatteryUpdate()
         viewModel.refreshAnalytics()
@@ -241,7 +275,41 @@ fun DashboardScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 30.dp)
                     .height(145.dp)
-                    .clickable { },
+                    .clickable {
+                        when (watchDevice.connectionState) {
+                            ConnectionState.BLUETOOTH_OFF -> {
+                                // Check if we need to request permission (Android 12+)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    // Android 12+ requires BLUETOOTH_CONNECT permission
+                                    when (ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.BLUETOOTH_CONNECT
+                                    )) {
+                                        PackageManager.PERMISSION_GRANTED -> {
+                                            // Permission already granted, launch Bluetooth enable
+                                            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                                            bluetoothEnableLauncher.launch(enableBtIntent)
+                                        }
+                                        else -> {
+                                            // Request permission first
+                                            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                                        }
+                                    }
+                                } else {
+                                    // Android 11 and below - no runtime permission needed
+                                    val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                                    bluetoothEnableLauncher.launch(enableBtIntent)
+                                }
+                            }
+                            ConnectionState.NO_WATCH -> {
+                                // Navigate to watch pairing screen
+                                onNavigateToWatchPairing()
+                            }
+                            else -> {
+                                // Other states: do nothing or handle future cases
+                            }
+                        }
+                    },
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (watchDevice.isConnected) Color(0xFFE9FCFF) else Color(0xFFF5F5F5)
