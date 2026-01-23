@@ -60,6 +60,8 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_REQUEST_DEVICE_INFO = "/request_device_info"
         private const val MESSAGE_PATH_BATTERY_STATUS = "/battery_status"
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
+        private const val MESSAGE_PATH_PING = "/kusho/ping"
+        private const val MESSAGE_PATH_PONG = "/kusho/pong"
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
     
@@ -322,6 +324,22 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private fun handleIncomingMessage(messageEvent: MessageEvent) {
         Log.d(TAG, "📥 Processing message: ${messageEvent.path}")
         when (messageEvent.path) {
+            MESSAGE_PATH_PING -> {
+                // Watch is checking if Kusho app is running - respond with PONG
+                Log.d(TAG, "🏓 Received PING from watch, sending PONG response")
+                scope.launch {
+                    try {
+                        messageClient.sendMessage(
+                            messageEvent.sourceNodeId,
+                            MESSAGE_PATH_PONG,
+                            "pong".toByteArray()
+                        ).await()
+                        Log.d(TAG, "✅ PONG sent successfully")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Failed to send PONG", e)
+                    }
+                }
+            }
             MESSAGE_PATH_BATTERY_STATUS -> {
                 val batteryLevel = String(messageEvent.data).toIntOrNull()
                 Log.d(TAG, "🔋 Received battery status: ${batteryLevel?.let { "$it%" } ?: "parsing failed"}")
