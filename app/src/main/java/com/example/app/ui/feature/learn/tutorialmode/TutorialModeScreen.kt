@@ -2,11 +2,10 @@ package com.example.app.ui.feature.learn.tutorialmode
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -25,35 +24,25 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.ui.components.classroom.StudentCard
-import com.example.app.ui.feature.learn.StudentSelectionViewModel
+import com.example.app.ui.feature.classroom.ClassroomViewModel
 
 @Composable
 fun TutorialModeScreen(
     onBack: () -> Unit,
     onStudentSelected: (studentId: Long, classId: Long) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
-    viewModel: StudentSelectionViewModel = viewModel()
+    classroomViewModel: ClassroomViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val students by classroomViewModel.allStudents.collectAsState()
 
     Box(modifier = modifier.fillMaxSize()) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 8.dp, top = 25.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color(0xFF2196F3)
-            )
-        }
-
+        // Scrollable screen
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(24.dp))
@@ -81,99 +70,60 @@ fun TutorialModeScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            when {
-                uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color(0xFF2196F3))
-                    }
-                }
-                uiState.error != null -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = uiState.error ?: "An error occurred",
-                            color = Color.Red,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
-                uiState.classesWithStudents.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No classes or students found",
-                            color = Color(0xFF4A4A4A),
-                            fontSize = 16.sp
-                        )
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(uiState.classesWithStudents) { classWithStudents ->
-                            // Class name header
-                            Text(
-                                text = classWithStudents.classEntity.className,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0B0B0B),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp)
-                            )
+            if (students.isEmpty()) {
+                Spacer(Modifier.height(140.dp))
+                Text(
+                    text = "No students found",
+                    color = Color(0xFF4A4A4A),
+                    fontSize = 16.sp
+                )
+                Spacer(Modifier.height(140.dp))
+            } else {
+                // 2-column grid using chunked rows
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    students.chunked(2).forEach { rowStudents ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            rowStudents.forEach { student ->
+                                StudentCard(
+                                    studentName = student.fullName,
+                                    profileImagePath = student.pfpPath,
+                                    onClick = {
+                                        // No class context in this mode, pass 0L
+                                        onStudentSelected(student.studentId, 0L)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
 
-                            // Students grid (2 columns)
-                            val students = classWithStudents.students
-                            val rows = students.chunked(2)
-
-                            rows.forEach { rowStudents ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    rowStudents.forEach { student ->
-                                        StudentCard(
-                                            studentName = student.fullName,
-                                            profileImagePath = student.pfpPath,
-                                            onClick = {
-                                                viewModel.selectStudent(
-                                                    student,
-                                                    classWithStudents.classEntity
-                                                )
-                                                onStudentSelected(
-                                                    student.studentId,
-                                                    classWithStudents.classEntity.classId
-                                                )
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    // Add empty space if odd number of students
-                                    if (rowStudents.size == 1) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    }
-                                }
+                            if (rowStudents.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
-
-                        // Bottom padding
-                        item {
-                            Spacer(Modifier.height(24.dp))
-                        }
                     }
                 }
+
+                Spacer(Modifier.height(24.dp))
             }
+        }
+
+        // Back button on top of content
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 8.dp, top = 25.dp)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color(0xFF2196F3)
+            )
         }
     }
 }
@@ -183,4 +133,3 @@ fun TutorialModeScreen(
 fun TutorialModeScreenPreview() {
     TutorialModeScreen(onBack = {})
 }
-

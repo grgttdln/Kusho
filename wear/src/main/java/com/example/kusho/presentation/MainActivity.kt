@@ -44,18 +44,6 @@ class MainActivity : ComponentActivity() {
         }
     }
     
-    override fun onResume() {
-        super.onResume()
-        // Resume battery monitoring when app comes to foreground
-        phoneCommunicationManager.startBatteryMonitoring()
-    }
-    
-    override fun onPause() {
-        super.onPause()
-        // Pause battery monitoring when app goes to background
-        phoneCommunicationManager.stopBatteryMonitoring()
-    }
-    
     override fun onDestroy() {
         super.onDestroy()
         phoneCommunicationManager.cleanup()
