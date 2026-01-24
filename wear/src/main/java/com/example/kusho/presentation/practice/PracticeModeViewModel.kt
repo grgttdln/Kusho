@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.wordformation.WordFormationManager
+import com.example.kusho.wordformation.WordFormationResult
+import com.example.kusho.wordformation.WordFormationState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -19,6 +22,7 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for Practice Mode.
  * Handles: countdown -> gesture recording -> classification -> result display
+ * Now with word formation support!
  */
 class PracticeModeViewModel(
     private val sensorManager: MotionSensorManager,
@@ -51,7 +55,23 @@ class PracticeModeViewModel(
         val statusMessage: String = "Tap Start",
         val errorMessage: String? = null,
         val modelInfo: String? = null,
-        val isModelLoaded: Boolean = false
+        val isModelLoaded: Boolean = false,
+        // Word formation fields
+        val wordFormationEnabled: Boolean = false,
+        val currentLetterSequence: String = "",
+        val formedWord: String? = null,
+        val isWordComplete: Boolean = false,
+        val wordSuggestions: List<String> = emptyList(),
+        // Session tracking (resets after 3 letters)
+        val formedWords: List<String> = emptyList(),
+        val wordsFormedCount: Int = 0,
+        val totalLettersInSession: Int = 0,
+        val lettersUntilReset: Int = 3,
+        val isSessionComplete: Boolean = false,
+        val wordBankSize: Int = 0,
+        // Word just formed tracking
+        val wordJustFormed: Boolean = false,
+        val lastFormedWord: String? = null
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -59,6 +79,10 @@ class PracticeModeViewModel(
 
     private var recordingJob: Job? = null
     private val classifier: AirWritingClassifier?
+
+    // Word formation manager
+    private val wordFormationManager = WordFormationManager()
+    val wordFormationState: StateFlow<WordFormationState> = wordFormationManager.state
 
     init {
         // Process classifier load result
@@ -205,25 +229,79 @@ class PracticeModeViewModel(
                 }
 
                 // === Phase 4: Show Result ===
-                _uiState.update {
-                    it.copy(
-                        state = State.RESULT,
-                        prediction = result.label,
-                        confidence = result.confidence,
-                        statusMessage = "${result.label} (${(result.confidence * 100).toInt()}%)",
-                        errorMessage = null,
-                        recordingProgress = 0f
-                    )
-                }
+                val predictedLetter = result.label
 
-                // Auto-reset after showing result
-                delay(RESULT_DISPLAY_SECONDS * 1000L)
-                if (isActive && _uiState.value.state == State.RESULT) {
+                // Add letter to word formation if enabled
+                if (_uiState.value.wordFormationEnabled && predictedLetter != null) {
+                    wordFormationManager.addLetter(predictedLetter, result.confidence)
+                    val wfState = wordFormationManager.state.value
+
                     _uiState.update {
                         it.copy(
-                            state = State.IDLE,
-                            statusMessage = "Tap Start"
+                            state = State.RESULT,
+                            prediction = predictedLetter,
+                            confidence = result.confidence,
+                            statusMessage = "${predictedLetter} (${(result.confidence * 100).toInt()}%)",
+                            errorMessage = null,
+                            recordingProgress = 0f,
+                            currentLetterSequence = wfState.currentSequence,
+                            isWordComplete = wfState.isWordComplete,
+                            formedWord = if (wfState.isWordComplete) wfState.currentSequence else null,
+                            wordSuggestions = wfState.suggestions,
+                            // Session tracking
+                            formedWords = wfState.formedWords,
+                            wordsFormedCount = wfState.wordsFormedCount,
+                            totalLettersInSession = wfState.totalLettersInSession,
+                            lettersUntilReset = wfState.lettersUntilReset,
+                            isSessionComplete = wfState.isSessionComplete,
+                            wordBankSize = wfState.wordBankSize,
+                            // Word just formed tracking
+                            wordJustFormed = wfState.wordJustFormed,
+                            lastFormedWord = wfState.lastFormedWord
                         )
+                    }
+
+                    Log.d(TAG, "Word formation state - wordJustFormed: ${wfState.wordJustFormed}, lastFormedWord: ${wfState.lastFormedWord}")
+
+                    // Auto-reset session if 3 letters written
+                    if (wfState.isSessionComplete) {
+                        Log.d(TAG, "Session complete! Total letters: ${wfState.totalLettersInSession}, Formed words: ${wfState.formedWords}")
+                        delay(2000) // Show completion state briefly
+                        wordFormationManager.resetSession()
+                        _uiState.update {
+                            it.copy(
+                                formedWords = emptyList(),
+                                wordsFormedCount = 0,
+                                totalLettersInSession = 0,
+                                lettersUntilReset = 3,
+                                isSessionComplete = false,
+                                currentLetterSequence = "",
+                                formedWord = null
+                            )
+                        }
+                    }
+                    // Don't auto-reset here - let the screen handle the timing for word display
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            state = State.RESULT,
+                            prediction = predictedLetter,
+                            confidence = result.confidence,
+                            statusMessage = "${predictedLetter} (${(result.confidence * 100).toInt()}%)",
+                            errorMessage = null,
+                            recordingProgress = 0f
+                        )
+                    }
+
+                    // Auto-reset after showing result (only when word formation is disabled)
+                    delay(RESULT_DISPLAY_SECONDS * 1000L)
+                    if (isActive && _uiState.value.state == State.RESULT) {
+                        _uiState.update {
+                            it.copy(
+                                state = State.IDLE,
+                                statusMessage = "Tap Start"
+                            )
+                        }
                     }
                 }
 
@@ -274,6 +352,99 @@ class PracticeModeViewModel(
                 countdownSeconds = 0
             )
         }
+    }
+
+    // ==================== Word Formation Methods ====================
+
+    /**
+     * Enable/disable word formation mode
+     */
+    fun setWordFormationEnabled(enabled: Boolean) {
+        Log.d(TAG, "Word formation enabled: $enabled")
+        _uiState.update {
+            it.copy(wordFormationEnabled = enabled)
+        }
+        if (!enabled) {
+            wordFormationManager.clearBuffer()
+        }
+    }
+
+    /**
+     * Load word bank for word formation
+     */
+    fun loadWordBank(words: List<String>) {
+        Log.d(TAG, "Loading word bank with ${words.size} words")
+        wordFormationManager.loadWordBank(words)
+    }
+
+    /**
+     * Acknowledge that the formed word has been displayed
+     */
+    fun acknowledgeFormedWord() {
+        Log.d(TAG, "Acknowledging formed word")
+        wordFormationManager.acknowledgeFormedWord()
+        _uiState.update {
+            it.copy(wordJustFormed = false)
+        }
+    }
+
+    /**
+     * Clear the current letter sequence
+     */
+    fun clearLetterSequence() {
+        Log.d(TAG, "Clearing letter sequence")
+        wordFormationManager.clearBuffer()
+        _uiState.update {
+            it.copy(
+                currentLetterSequence = "",
+                formedWord = null,
+                isWordComplete = false,
+                wordSuggestions = emptyList()
+            )
+        }
+    }
+
+    /**
+     * Undo the last letter
+     */
+    fun undoLastLetter() {
+        Log.d(TAG, "Undoing last letter")
+        wordFormationManager.removeLast()
+        val wfState = wordFormationManager.state.value
+        _uiState.update {
+            it.copy(
+                currentLetterSequence = wfState.currentSequence,
+                isWordComplete = wfState.isWordComplete,
+                formedWord = if (wfState.isWordComplete) wfState.currentSequence else null,
+                wordSuggestions = wfState.suggestions
+            )
+        }
+    }
+
+    /**
+     * Confirm the formed word
+     */
+    fun confirmWord(): String? {
+        val word = wordFormationManager.confirmWord()
+        if (word != null) {
+            Log.d(TAG, "Word confirmed: $word")
+            _uiState.update {
+                it.copy(
+                    currentLetterSequence = "",
+                    formedWord = null,
+                    isWordComplete = false,
+                    wordSuggestions = emptyList()
+                )
+            }
+        }
+        return word
+    }
+
+    /**
+     * Get current letter sequence
+     */
+    fun getCurrentLetterSequence(): String {
+        return wordFormationManager.getCurrentSequence()
     }
 
     override fun onCleared() {

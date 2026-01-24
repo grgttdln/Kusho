@@ -122,12 +122,97 @@ private fun PracticeModeContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
+    // Initialize word formation with hardcoded 3-letter CVC words
+    LaunchedEffect(Unit) {
+        // Enable word formation by default
+        viewModel.setWordFormationEnabled(true)
+
+        // Hardcoded 3-letter CVC (Consonant-Vowel-Consonant) word bank
+        val cvcWords = listOf(
+            // Common CVC words for kids
+            "CAT", "BAT", "HAT", "MAT", "RAT", "SAT", "PAT", "FAT", "VAT",
+            "BED", "FED", "LED", "RED", "WED",
+            "BIG", "DIG", "FIG", "JIG", "PIG", "RIG", "WIG",
+            "BIT", "FIT", "HIT", "KIT", "LIT", "PIT", "SIT", "WIT",
+            "BOX", "FOX", "POX",
+            "BUD", "CUD", "DUD", "MUD",
+            "BUG", "DUG", "HUG", "JUG", "MUG", "PUG", "RUG", "TUG",
+            "BUN", "FUN", "GUN", "NUN", "PUN", "RUN", "SUN",
+            "BUS", "PUS",
+            "BUT", "CUT", "GUT", "HUT", "JUT", "NUT", "PUT", "RUT",
+            "CAB", "DAB", "FAB", "GAB", "JAB", "LAB", "NAB", "TAB",
+            "CAD", "DAD", "FAD", "GAD", "HAD", "LAD", "MAD", "PAD", "SAD",
+            "CAM", "DAM", "HAM", "JAM", "RAM", "YAM",
+            "CAN", "BAN", "DAN", "FAN", "MAN", "PAN", "RAN", "TAN", "VAN",
+            "CAP", "GAP", "LAP", "MAP", "NAP", "RAP", "SAP", "TAP", "ZAP",
+            "CAR", "BAR", "FAR", "JAR", "TAR", "WAR",
+            "COB", "BOB", "FOB", "GOB", "HOB", "JOB", "MOB", "NOB", "ROB", "SOB",
+            "COD", "GOD", "HOD", "NOD", "POD", "ROD", "SOD",
+            "COG", "BOG", "DOG", "FOG", "HOG", "JOG", "LOG", "TOG",
+            "COP", "BOP", "HOP", "MOP", "POP", "SOP", "TOP",
+            "COT", "BOT", "DOT", "GOT", "HOT", "JOT", "LOT", "NOT", "POT", "ROT", "TOT",
+            "COW", "BOW", "HOW", "NOW", "POW", "ROW", "SOW", "VOW", "WOW",
+            "CUB", "DUB", "HUB", "NUB", "PUB", "RUB", "SUB", "TUB",
+            "CUP", "PUP", "SUP",
+            "DEN", "BEN", "FEN", "HEN", "KEN", "MEN", "PEN", "TEN", "YEN", "ZEN",
+            "DIM", "HIM", "RIM", "VIM",
+            "DIN", "BIN", "FIN", "GIN", "KIN", "PIN", "SIN", "TIN", "WIN",
+            "DIP", "HIP", "LIP", "NIP", "RIP", "SIP", "TIP", "ZIP",
+            "GAL", "PAL",
+            "GAS", "HAS", "WAS",
+            "GEM", "HEM",
+            "GET", "BET", "JET", "LET", "MET", "NET", "PET", "SET", "VET", "WET", "YET",
+            "GUM", "BUM", "HUM", "MUM", "RUM", "SUM", "YUM",
+            "GUT", "BUT", "CUT", "HUT", "JUT", "NUT", "PUT", "RUT",
+            "HEX", "REX", "SEX", "VEX",
+            "HID", "BID", "DID", "KID", "LID", "RID",
+            "HOP", "BOP", "COP", "MOP", "POP", "SOP", "TOP",
+            "LEG", "BEG", "KEG", "PEG",
+            "LET", "BET", "GET", "JET", "MET", "NET", "PET", "SET", "VET", "WET",
+            "MIX", "FIX", "SIX",
+            "PEN", "BEN", "DEN", "HEN", "MEN", "TEN",
+            "PET", "BET", "GET", "JET", "LET", "MET", "NET", "SET", "VET", "WET",
+            "POT", "BOT", "COT", "DOT", "GOT", "HOT", "JOT", "LOT", "NOT", "ROT",
+            "SIT", "BIT", "FIT", "HIT", "KIT", "LIT", "PIT", "WIT",
+            "SUN", "BUN", "FUN", "GUN", "NUN", "PUN", "RUN",
+            "TEN", "BEN", "DEN", "HEN", "MEN", "PEN",
+            "TOP", "BOP", "COP", "HOP", "MOP", "POP", "SOP",
+            "TUB", "CUB", "DUB", "HUB", "NUB", "PUB", "RUB", "SUB",
+            "VAN", "BAN", "CAN", "DAN", "FAN", "MAN", "PAN", "RAN", "TAN",
+            "WAX", "MAX", "TAX",
+            "WEB",
+            "WIG", "BIG", "DIG", "FIG", "JIG", "PIG", "RIG",
+            "WIN", "BIN", "DIN", "FIN", "GIN", "KIN", "PIN", "SIN", "TIN",
+            "YAK",
+            "YAM", "CAM", "DAM", "HAM", "JAM", "RAM",
+            "YAP", "CAP", "GAP", "LAP", "MAP", "NAP", "RAP", "SAP", "TAP", "ZAP",
+            "ZAP", "CAP", "GAP", "LAP", "MAP", "NAP", "RAP", "SAP", "TAP", "YAP",
+            "ZEN", "BEN", "DEN", "HEN", "KEN", "MEN", "PEN", "TEN", "YEN",
+            "ZIP", "DIP", "HIP", "LIP", "NIP", "RIP", "SIP", "TIP"
+        ).distinct() // Remove duplicates
+
+        viewModel.loadWordBank(cvcWords)
+        android.util.Log.d("PracticeModeScreen", "Loaded ${cvcWords.distinct().size} CVC words")
+    }
+
     // Speak the prediction when we enter RESULT state
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == PracticeModeViewModel.State.RESULT && uiState.prediction != null) {
             ttsManager.speakLetter(uiState.prediction!!)
         }
     }
+
+    // Speak the formed word (just the word, no encouragement)
+    // Triggered when wordJustFormed becomes true
+    LaunchedEffect(uiState.wordJustFormed, uiState.lastFormedWord) {
+        if (uiState.wordJustFormed && uiState.lastFormedWord != null) {
+            // Wait for letter TTS to finish before speaking the word
+            kotlinx.coroutines.delay(1000)
+            ttsManager.speakWord(uiState.lastFormedWord!!)
+            android.util.Log.d("PracticeModeScreen", "TTS speaking word: ${uiState.lastFormedWord}")
+        }
+    }
+
 
     Column(
         modifier = Modifier
@@ -164,7 +249,7 @@ private fun IdleContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // "Tap to Start" text below image
+            // "Tap to Start" text
             Text(
                 text = "Tap to Start",
                 color = Color.White,
@@ -260,25 +345,61 @@ private fun ResultContent(
     uiState: PracticeModeViewModel.UiState,
     viewModel: PracticeModeViewModel
 ) {
+    // Track display phase: LETTER -> WORD (if formed)
+    var showFormedWord by remember { mutableStateOf(false) }
+
+    // Use lastFormedWord from uiState - this is reliable
+    val formedWord = uiState.lastFormedWord
+    val hasFormedWord = uiState.wordJustFormed && formedWord != null
+
+    // Reset showFormedWord when prediction changes (new letter)
+    LaunchedEffect(uiState.prediction) {
+        showFormedWord = false
+    }
+
+    // Auto-transition logic
+    LaunchedEffect(uiState.prediction, hasFormedWord) {
+        if (hasFormedWord) {
+            // Word formed: Show letter -> wait -> show word -> wait -> IDLE
+            android.util.Log.d("ResultContent", "Word formed: $formedWord, showing letter first")
+            kotlinx.coroutines.delay(1000) // Wait for letter TTS
+            showFormedWord = true
+            android.util.Log.d("ResultContent", "Now showing formed word: $formedWord")
+            kotlinx.coroutines.delay(2000) // Wait for word TTS and display
+            viewModel.acknowledgeFormedWord()
+            viewModel.resetToIdle()
+        } else {
+            // No word formed: Show letter -> wait -> IDLE
+            kotlinx.coroutines.delay(1500) // Wait for letter TTS and brief display
+            viewModel.resetToIdle()
+        }
+    }
+
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                indication = null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            ) { viewModel.resetToIdle() },
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = uiState.prediction ?: "?",
-            color = Color.White,
-            textAlign = TextAlign.Center,
-            fontSize = 80.sp,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.display1,
-            modifier = Modifier
-                .wrapContentSize(Alignment.Center)
-        )
+        // Show formed word after letter has been displayed and spoken
+        if (showFormedWord && formedWord != null) {
+            Text(
+                text = formedWord,
+                color = Color(0xFF4CAF50),
+                fontSize = 64.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        } else {
+            // Show predicted letter only
+            Text(
+                text = uiState.prediction ?: "?",
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                fontSize = 80.sp,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.display1,
+                modifier = Modifier.wrapContentSize(Alignment.Center)
+            )
+        }
     }
 }
 
