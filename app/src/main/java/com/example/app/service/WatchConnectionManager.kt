@@ -1,18 +1,28 @@
 package com.example.app.service
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.wear.remote.interactions.RemoteActivityHelper
 import com.google.android.gms.wearable.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
+import java.util.concurrent.Executors
 
 enum class ConnectionState {
     BLUETOOTH_OFF,           // Bluetooth is disabled
@@ -46,6 +56,8 @@ class WatchConnectionManager private constructor(private val context: Context) {
         @Volatile
         private var INSTANCE: WatchConnectionManager? = null
         private const val TAG = "WatchConnectionMgr"
+        private const val NOTIFICATION_CHANNEL_ID = "kusho_watch_install"
+        private const val NOTIFICATION_ID_INSTALL_APP = 1001
         
         fun getInstance(context: Context): WatchConnectionManager {
             return INSTANCE ?: synchronized(this) {
@@ -391,6 +403,61 @@ class WatchConnectionManager private constructor(private val context: Context) {
             isConnected = false,
             connectionState = ConnectionState.NO_WATCH
         )
+    }
+    
+    /**
+     * Open Play Store on watch using RemoteActivityHelper
+     * This works even if the Kusho app is NOT installed on the watch yet.
+     */
+    fun openPlayStoreOnWatch() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                
+                if (nodes.isEmpty()) {
+                    Log.w(TAG, "⚠️ Cannot open Play Store - no connected watch nodes")
+                    return@launch
+                }
+
+                // RemoteActivityHelper needs a context and an executor
+                val remoteActivityHelper = RemoteActivityHelper(context, Executors.newSingleThreadExecutor())
+
+                // The Intent to open the Play Store specifically for YOUR app package
+                val intent = Intent(Intent.ACTION_VIEW)
+                    .addCategory(Intent.CATEGORY_BROWSABLE)
+                    .setData(Uri.parse("market://details?id=com.example.kusho"))
+
+                for (node in nodes) {
+                    remoteActivityHelper.startRemoteActivity(
+                        intent,
+                        node.id
+                    )
+                    Log.d(TAG, "✅ Sent Remote Intent to open Play Store on: ${node.displayName}")
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to open Play Store on watch", e)
+            }
+        }
+    }
+    
+    /**
+     * Create notification channel for install prompts
+     */
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "Watch App Installation",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for installing the Kusho watch app"
+                enableVibration(true)
+            }
+            
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
     }
     
     /**

@@ -56,6 +56,12 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
+    // Wearable Data Layer API for watch communication
+    implementation(libs.play.services.wearable)
+    
+    // Wear Remote Interactions for opening Play Store on watch
+    implementation("androidx.wear:wear-remote-interactions:1.0.0")
+
     // Room Database
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
