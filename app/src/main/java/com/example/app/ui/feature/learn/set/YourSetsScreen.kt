@@ -155,13 +155,35 @@ fun YourSetsScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No sets yet.\nCreate one to get started!",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF808080),
-                        textAlign = TextAlign.Center
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.dis_none),
+                            contentDescription = "No sets mascot",
+                            modifier = Modifier.size(240.dp),
+                            contentScale = ContentScale.Fit
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Text(
+                            text = "No Sets Yet",
+                            color = Color(0xFF4A4A4A),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Tap the button below to create\nyour first activity set.",
+                            color = Color(0xFF7A7A7A),
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             } else {
                 LazyColumn(

@@ -105,7 +105,6 @@ fun LearnModeActivitySelectionScreen(
                 alignment = Alignment.Center
             )
 
-            Spacer(Modifier.height(40.dp))
 
             when {
                 uiState.isLoading -> {
@@ -135,15 +134,40 @@ fun LearnModeActivitySelectionScreen(
                 uiState.activities.isEmpty() -> {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "No activities found.\nCreate some activities first!",
-                            color = Color(0xFF4A4A4A),
-                            fontSize = 16.sp
-                        )
+                        Column(
+                            modifier = Modifier.offset(y = (-70).dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.dis_none),
+                                contentDescription = "No activities mascot",
+                                modifier = Modifier.size(240.dp),
+                                contentScale = ContentScale.Fit
+                            )
+
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            Text(
+                                text = "No Activities Yet",
+                                color = Color(0xFF4A4A4A),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = "Create some activities first\nto get started!",
+                                color = Color(0xFF7A7A7A),
+                                fontSize = 16.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                     }
                 }
                 else -> {

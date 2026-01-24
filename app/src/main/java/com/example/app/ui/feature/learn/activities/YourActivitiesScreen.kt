@@ -171,13 +171,35 @@ fun YourActivitiesScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No activities yet.\nCreate one to get started!",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF808080),
-                        textAlign = TextAlign.Center
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.dis_none),
+                            contentDescription = "No activities mascot",
+                            modifier = Modifier.size(240.dp),
+                            contentScale = ContentScale.Fit
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Text(
+                            text = "No Activities Yet",
+                            color = Color(0xFF4A4A4A),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Tap the button below to create\nyour first activity.",
+                            color = Color(0xFF7A7A7A),
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             } else {
                 LazyColumn(

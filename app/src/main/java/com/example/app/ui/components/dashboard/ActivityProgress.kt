@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
@@ -87,47 +88,38 @@ fun ActivityProgressSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         if (activities.isEmpty()) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F9FC)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                modifier = Modifier.fillMaxWidth()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE3F2FD)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.BarChart,
-                            contentDescription = null,
-                            tint = Color(0xFF3FA9F8),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                Image(
+                    painter = painterResource(id = R.drawable.dis_none),
+                    contentDescription = "No activities mascot",
+                    modifier = Modifier.size(80.dp),
+                    contentScale = ContentScale.Fit
+                )
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                    Column {
-                        Text(
-                            text = "No activity data yet",
-                            fontSize = 14.sp,
-                            color = Color.Black
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Once students complete activities, insights will appear here.",
-                            fontSize = 12.sp,
-                            color = Color(0xFF7A7A7A)
-                        )
-                    }
-                }
+                Text(
+                    text = "No Activities Yet",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF4A4A4A)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Create your first activity in the Learn tab\nto start tracking student progress.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF7A7A7A),
+                    lineHeight = 18.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
             return
         }

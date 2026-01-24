@@ -72,14 +72,43 @@ fun LearnModeScreen(
             Spacer(Modifier.height(24.dp))
 
             if (students.isEmpty()) {
-                // Give it some height so it's visually centered even in a scroll column
-                Spacer(Modifier.height(140.dp))
-                Text(
-                    text = "No students found",
-                    color = Color(0xFF4A4A4A),
-                    fontSize = 16.sp
-                )
-                Spacer(Modifier.height(140.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier.offset(y = (-40).dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.dis_none),
+                            contentDescription = "No students mascot",
+                            modifier = Modifier.size(240.dp),
+                            contentScale = ContentScale.Fit
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Text(
+                            text = "No Students Yet",
+                            color = Color(0xFF4A4A4A),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Add students in the Class tab\nto start a learn session.",
+                            color = Color(0xFF7A7A7A),
+                            fontSize = 16.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
             } else {
                 // 2-column grid using chunked rows (scrolls because parent Column scrolls)
                 Column(

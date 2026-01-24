@@ -367,7 +367,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         return when {
             displayName.contains("Galaxy Watch", ignoreCase = true) -> displayName
             displayName.contains("Watch", ignoreCase = true) -> displayName
-            else -> "Galaxy Watch" // Default name
+            else -> "Smartwatch" // Default name for non-Galaxy watches
         }
     }
     

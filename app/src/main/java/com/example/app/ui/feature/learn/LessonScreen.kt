@@ -254,18 +254,55 @@ fun WordBankList(
     onWordClick: (Word) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 8.dp)
-    ) {
-        items(words, key = { it.id }) { word ->
-            WordBankItem(
-                word = word.word,
-                onClick = { onWordClick(word) }
-            )
+    if (words.isEmpty()) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.dis_none),
+                    contentDescription = "No words mascot",
+                    modifier = Modifier.size(140.dp),
+                    contentScale = ContentScale.Fit
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = "No Words Yet",
+                    color = Color(0xFF4A4A4A),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Tap the button below to add\nyour first word to the bank.",
+                    color = Color(0xFF7A7A7A),
+                    fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 8.dp)
+        ) {
+            items(words, key = { it.id }) { word ->
+                WordBankItem(
+                    word = word.word,
+                    onClick = { onWordClick(word) }
+                )
+            }
         }
     }
 }

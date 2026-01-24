@@ -113,21 +113,8 @@ fun DashboardScreen(
 
     val activityProgressList: List<ActivityProgress> = remember(activities) {
         if (activities.isEmpty()) {
-            // Provide a single placeholder row with zeros when no activities exist
-            listOf(
-                ActivityProgress(
-                    activityId = "0",
-                    activityName = "No activities",
-                    accuracyDeltaPercent = 0,
-                    timeDeltaSeconds = 0,
-                    masteryPercent = 0f,
-                    masteryLabel = "Beginner",
-                    avgAttempts = 0f,
-                    avgAccuracyPercent = 0,
-                    avgScoreText = "",
-                    avgTimeSeconds = 0
-                )
-            )
+            // Return empty list to trigger the empty state in ActivityProgressSection
+            emptyList()
         } else {
             // prepare same icon pool as LearnModeActivitySelectionScreen for consistent assignment
             val allIcons = listOf(
@@ -437,35 +424,35 @@ fun DashboardScreen(
                 AnalyticsCard(
                     icon = Icons.Filled.Group,
                     number = uiState.totalStudents.toString(),
-                    label = "Total Students",
+                    label = if (uiState.totalStudents == 1) "Total Student" else "Total Students",
                     badgeText = null
                 )
 
                 AnalyticsCard(
                     icon = Icons.Filled.BarChart,
                     number = uiState.totalActivities.toString(),
-                    label = "Activities",
+                    label = if (uiState.totalActivities == 1) "Activity" else "Activities",
                     badgeText = null
                 )
 
                 AnalyticsCard(
                     icon = Icons.Filled.TypeSpecimen,
                     number = uiState.totalWords.toString(),
-                    label = "Total Words",
+                    label = if (uiState.totalWords == 1) "Total Word" else "Total Words",
                     badgeText = null
                 )
 
                 AnalyticsCard(
                     icon = Icons.Filled.CheckCircle,
                     number = "6",
-                    label = "Students at Mastery",
+                    label = if (6 == 1) "Student at Mastery" else "Students at Mastery",
                     badgeText = "≥ 90% accuracy"
                 )
 
                 AnalyticsCard(
                     icon = Icons.AutoMirrored.Filled.TrendingDown,
                     number = "5",
-                    label = "Students Below Target",
+                    label = if (5 == 1) "Student Below Target" else "Students Below Target",
                     badgeText = "< 70% accuracy"
                 )
 

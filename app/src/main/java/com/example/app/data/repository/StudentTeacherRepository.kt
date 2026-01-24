@@ -59,4 +59,17 @@ class StudentTeacherRepository(private val dao: StudentTeacherDao) {
      * Observe count of distinct students assigned to a teacher.
      */
     fun getStudentCountForTeacherFlow(userId: Long): Flow<Int> = dao.getStudentCountForTeacherFlow(userId)
+
+    /**
+     * Delete all teacher mappings for a student.
+     * This should be called when a student is deleted.
+     */
+    suspend fun deleteMappingsForStudent(studentId: Long) = withContext(Dispatchers.IO) {
+        try {
+            dao.deleteMappingsForStudent(studentId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure<Unit>(e)
+        }
+    }
 }

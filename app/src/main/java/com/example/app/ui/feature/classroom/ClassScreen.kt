@@ -288,35 +288,41 @@ fun ClassScreen(
                 )
                 Spacer(Modifier.height(40.dp))
             } else if (displayedStudents.isEmpty()) {
-                Spacer(Modifier.height(40.dp))
-
-                Text(
-                    text = "No students found",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = accentBlue,
-                    textAlign = TextAlign.Center,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                )
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.dis_none),
+                        contentDescription = "No students mascot",
+                        modifier = Modifier.size(240.dp),
+                        contentScale = ContentScale.Fit
+                    )
 
-                Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                Text(
-                    text = "Add students to get started. Use the search to find existing students.",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = subtleText,
-                    lineHeight = 24.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                )
+                    Text(
+                        text = "No Students Yet",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF4A4A4A),
+                        textAlign = TextAlign.Center
+                    )
 
+                    Spacer(Modifier.height(12.dp))
 
-                Spacer(Modifier.height(40.dp))
+                    Text(
+                        text = "Add students to get started.\nUse the button below to create a new student.",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF7A7A7A),
+                        lineHeight = 24.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     displayedStudents.chunked(2).forEach { rowStudents ->

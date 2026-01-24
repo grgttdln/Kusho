@@ -520,7 +520,7 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
-     * Delete a student completely from the database (also cascades enrollments).
+     * Delete a student completely from the database (also cascades enrollments and teacher mappings).
      */
     fun deleteStudent(
         studentId: Long,
@@ -528,6 +528,10 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
+            // First, delete the student-teacher mappings
+            studentTeacherRepository.deleteMappingsForStudent(studentId)
+
+            // Then delete the student (which also cascades enrollments)
             when (val result = studentRepository.deleteStudent(studentId)) {
                 is StudentRepository.StudentOperationResult.Success -> onSuccess()
                 is StudentRepository.StudentOperationResult.Error -> onError(result.message)

@@ -78,9 +78,9 @@ class WearMessageListenerService : WearableListenerService() {
      */
     private fun getDeviceName(): String {
         return try {
-            android.os.Build.MODEL ?: "Galaxy Watch"
+            android.os.Build.MODEL ?: "Smartwatch"
         } catch (e: Exception) {
-            "Galaxy Watch"
+            "Smartwatch"
         }
     }
     
