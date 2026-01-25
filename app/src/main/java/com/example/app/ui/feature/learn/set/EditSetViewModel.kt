@@ -95,7 +95,8 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
                             selectedWords = setDetails.words.map { word ->
                                 SetRepository.SelectedWordConfig(
                                     wordName = word.word,
-                                    configurationType = word.configurationType
+                                    configurationType = word.configurationType,
+                                    selectedLetterIndex = word.selectedLetterIndex
                                 )
                             },
                             isLoading = false

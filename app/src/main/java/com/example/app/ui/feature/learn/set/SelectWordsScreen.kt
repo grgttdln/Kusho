@@ -45,6 +45,7 @@ fun SelectWordsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedWords by remember { mutableStateOf(setOf<String>()) }
     var wordConfigurations by remember { mutableStateOf(mapOf<String, String>()) }
+    var selectedLetterIndices by remember { mutableStateOf(mapOf<String, Int>()) }
 
     // Optimize filtering with memoization
     val filteredWords = remember(searchQuery, availableWords) {
@@ -239,9 +240,15 @@ fun SelectWordsScreen(
                         word = word,
                         hasImage = wordObj?.imagePath != null,
                         configurationType = wordConfigurations[word] ?: "Fill in the Blank",
+                        selectedLetterIndex = selectedLetterIndices[word] ?: 0,
                         onConfigurationChange = { newConfig ->
                             wordConfigurations = wordConfigurations.toMutableMap().apply {
                                 this[word] = newConfig
+                            }
+                        },
+                        onLetterSelected = { letterIndex ->
+                            selectedLetterIndices = selectedLetterIndices.toMutableMap().apply {
+                                this[word] = letterIndex
                             }
                         },
                         modifier = Modifier.padding(horizontal = 15.dp)
@@ -258,7 +265,8 @@ fun SelectWordsScreen(
                 val configuredWords = selectedWords.map { word ->
                     SetRepository.SelectedWordConfig(
                         wordName = word,
-                        configurationType = wordConfigurations[word] ?: "Fill in the Blank"
+                        configurationType = wordConfigurations[word] ?: "Fill in the Blank",
+                        selectedLetterIndex = selectedLetterIndices[word] ?: 0
                     )
                 }
                 onWordsSelected(configuredWords)
@@ -341,7 +349,9 @@ private fun ConfigureWordItem(
     word: String,
     hasImage: Boolean,
     configurationType: String,
+    selectedLetterIndex: Int,
     onConfigurationChange: (String) -> Unit,
+    onLetterSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expandedDropdown by remember { mutableStateOf(false) }
@@ -355,67 +365,90 @@ private fun ConfigureWordItem(
         }
     }
 
-    Row(
+    // Show letter selection only for "Fill in the Blank" mode
+    val showLetterSelection = configurationType == "Fill in the Blank"
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .height(60.dp)
-            .border(
-                width = 1.dp,
-                color = Color(0xFF3FA9F8),
-                shape = RoundedCornerShape(15.dp)
-            )
-            .background(Color.White, RoundedCornerShape(15.dp))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Word info on the left
+        // Main row with index, word letters, and dropdown
         Row(
-            modifier = Modifier.weight(0.8f), // Reduced weight to give more space to dropdown
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color(0xFF3FA9F8),
+                    shape = RoundedCornerShape(15.dp)
+                )
+                .background(Color.White, RoundedCornerShape(15.dp))
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = index.toString(),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF3FA9F8)
-            )
-            Text(
-                text = word,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF3FA9F8)
-            )
-        }
+            // Left side: Index and letter buttons
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = index.toString(),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color(0xFF3FA9F8)
+                )
 
-        // Dropdown button on the right
-        Box(modifier = Modifier.weight(1.2f)) { // Increased weight for wider dropdown
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Letter buttons
+                if (showLetterSelection) {
+                    word.forEachIndexed { letterIndex, letter ->
+                        LetterButton(
+                            letter = letter,
+                            isSelected = letterIndex == selectedLetterIndex,
+                            onClick = { onLetterSelected(letterIndex) }
+                        )
+                    }
+                } else {
+                    // Show word as text for other modes
+                    Text(
+                        text = word,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF3FA9F8)
+                    )
+                }
+            }
+
+            // Dropdown button on the right
+            Box {
             Button(
                 onClick = { expandedDropdown = !expandedDropdown },
                 modifier = Modifier
                     .height(36.dp)
-                    .fillMaxWidth(),
+                    .width(140.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF3FA9F8)
                 ),
-                contentPadding = PaddingValues(horizontal = 12.dp)
+                contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
                 Text(
                     text = configurationType,
-                    fontSize = 14.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, // Handle overflow gracefully
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     imageVector = Icons.Default.ArrowDropDown,
                     contentDescription = "Dropdown",
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -474,6 +507,41 @@ private fun ConfigureWordItem(
                 }
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun LetterButton(
+    letter: Char,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .size(40.dp),
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isSelected) Color(0xFF3FA9F8) else Color.White
+        ),
+        border = if (!isSelected) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = Color(0xFFC5E5FD)
+            )
+        } else {
+            null
+        },
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Text(
+            text = letter.toString(),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isSelected) Color.White else Color(0xFF3FA9F8)
+        )
     }
 }
 

@@ -38,7 +38,8 @@ class SetRepository(
      */
     data class SelectedWordConfig(
         val wordName: String,
-        val configurationType: String
+        val configurationType: String,
+        val selectedLetterIndex: Int = 0 // Index of the selected letter for "Fill in the Blank"
     )
 
     /**
@@ -140,7 +141,8 @@ class SetRepository(
                         SetWord(
                             setId = setId,
                             wordId = word.id,
-                            configurationType = selected.configurationType
+                            configurationType = selected.configurationType,
+                            selectedLetterIndex = selected.selectedLetterIndex
                         )
                     } else {
                         Log.w(TAG_REPO, "  ⚠️ Word '${selected.wordName}' not found in user's words")
@@ -252,7 +254,9 @@ class SetRepository(
      */
     data class WordWithConfig(
         val word: String,
-        val configurationType: String
+        val configurationType: String,
+        val selectedLetterIndex: Int = 0,
+        val imagePath: String? = null
     )
 
     /**
@@ -270,7 +274,9 @@ class SetRepository(
                 val word = wordDao.getWordById(setWord.wordId)
                 WordWithConfig(
                     word = word?.word ?: "Unknown",
-                    configurationType = setWord.configurationType
+                    configurationType = setWord.configurationType,
+                    selectedLetterIndex = setWord.selectedLetterIndex,
+                    imagePath = word?.imagePath
                 )
             }
 
@@ -367,7 +373,8 @@ class SetRepository(
                         SetWord(
                             setId = setId,
                             wordId = word.id,
-                            configurationType = selected.configurationType
+                            configurationType = selected.configurationType,
+                            selectedLetterIndex = selected.selectedLetterIndex
                         )
                     } else {
                         Log.w(TAG_REPO, "  ⚠️ Word '${selected.wordName}' not found in user's words")

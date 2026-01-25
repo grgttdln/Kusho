@@ -35,6 +35,7 @@ import com.example.app.R
 import com.example.app.ui.components.learnmode.LearnModeStatusCard
 
 data class ActivitySetStatus(
+    val setId: Long,
     val title: String,
     val status: String
 )
@@ -162,6 +163,7 @@ fun LearnModeSetStatusScreenPreview() {
         activityTitle = "Vowels",
         sets = List(25) { index ->
             ActivitySetStatus(
+                setId = index.toLong(),
                 title = "Set ${index + 1}",
                 status = if (index % 3 == 0) "Completed" else if (index % 3 == 1) "25% Complete" else "Not Started"
             )
