@@ -59,6 +59,7 @@ fun MainNavigationContainer(
     var availableWords by remember { mutableStateOf(listOf<com.example.app.data.entity.Word>()) }
     var createdSetTitle by remember { mutableStateOf("") }
     var selectedSetId by remember { mutableStateOf(0L) }
+    var learnModeSessionKey by remember { mutableStateOf(0) } // Key to force fresh ViewModel
     var yourSetsScreenKey by remember { mutableStateOf(0) }
     var wordsForCreation by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
     var wordsForEdit by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
@@ -383,6 +384,7 @@ fun MainNavigationContainer(
             val sets by setsFlow.collectAsState(initial = emptyList())
             val activitySetStatuses = sets.map {
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
+                    setId = it.id,
                     title = it.title,
                     status = "Not Started" // TODO: Replace with real status if available
                 )
@@ -393,18 +395,24 @@ fun MainNavigationContainer(
                 sets = activitySetStatuses,
                 onBack = { currentScreen = 31 },
                 onStartSet = { set ->
-                    // Navigate to LearnModeSessionScreen and pass the set title
+                    // Navigate to LearnModeSessionScreen and pass the set id and title
+                    selectedSetId = set.setId
                     tutorialSessionTitle = set.title
+                    learnModeSessionKey++ // Increment to force fresh ViewModel
                     currentScreen = 33
                 },
                 modifier = modifier
             )
         }
-        33 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
-            title = tutorialSessionTitle,
-            modifier = modifier,
-            onSessionComplete = { currentScreen = 34 }
-        )
+        33 -> {
+            com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
+                setId = selectedSetId,
+                activityTitle = tutorialSessionTitle,
+                sessionKey = learnModeSessionKey,
+                modifier = modifier,
+                onSessionComplete = { currentScreen = 34 }
+            )
+        }
         34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
             onPracticeAgain = { currentScreen = 31 },
             onContinue = { currentScreen = 35 },

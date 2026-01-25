@@ -43,7 +43,7 @@ import com.example.app.data.entity.StudentTeacher
         ActivitySet::class,
         StudentTeacher::class
     ],
-    version = 6, // Incrementing version because the schema is changing
+    version = 7, // Incrementing version for selectedLetterIndex column in SetWord
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

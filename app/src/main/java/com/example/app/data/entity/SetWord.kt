@@ -13,6 +13,7 @@ import androidx.room.PrimaryKey
  * @property setId Foreign key reference to the Set
  * @property wordId Foreign key reference to the Word
  * @property configurationType The type of configuration for this word (e.g., "fill in the blank", "identification", "air writing")
+ * @property selectedLetterIndex The index of the selected letter for "Fill in the Blank" configuration (default: 0)
  */
 @Entity(
     tableName = "set_words",
@@ -41,5 +42,6 @@ data class SetWord(
     val id: Long = 0,
     val setId: Long,
     val wordId: Long,
-    val configurationType: String // "fill in the blank", "identification", "air writing"
+    val configurationType: String, // "fill in the blank", "identification", "air writing"
+    val selectedLetterIndex: Int = 0 // Index of selected letter for "Fill in the Blank"
 )

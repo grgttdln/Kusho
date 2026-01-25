@@ -1,47 +1,150 @@
 package com.example.app.ui.feature.learn.learnmode
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.example.app.R
+import com.example.app.data.AppDatabase
+import com.example.app.data.repository.SetRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 private val PurpleColor = Color(0xFFAE8EFB)
 private val LightPurpleColor = Color(0xFFE7DDFE)
-private val BlueButtonColor = Color(0xFF3FA9F8)
+
+/**
+ * Data class representing a word item in the learn mode session.
+ */
+private data class WordItem(
+    val word: String,
+    val selectedLetterIndex: Int,
+    val imagePath: String?,
+    val configurationType: String
+) {
+    fun getMaskedWord(): String {
+        return word.mapIndexed { index, char ->
+            if (index == selectedLetterIndex) "_" else char
+        }.joinToString(" ")
+    }
+
+    fun getFullWord(): String {
+        return word.toList().joinToString(" ")
+    }
+
+    fun getBlankWord(): String {
+        return word.map { "▬" }.joinToString("  ")
+    }
+}
 
 @Composable
 fun LearnModeSessionScreen(
-    title: String,
+    setId: Long = 0L,
+    activityTitle: String = "",
+    sessionKey: Int = 0,
     modifier: Modifier = Modifier,
-    initialStep: Int = 1,
-    totalSteps: Int = 5,
     onSkip: () -> Unit = {},
     onAudioClick: () -> Unit = {},
     onSessionComplete: () -> Unit = {}
 ) {
-    var currentStep by remember { mutableIntStateOf(initialStep) }
+    // Local state - fresh on each recomposition with new sessionKey
+    var isLoading by remember(sessionKey) { mutableStateOf(true) }
+    var words by remember(sessionKey) { mutableStateOf<List<WordItem>>(emptyList()) }
+    var currentWordIndex by remember(sessionKey) { mutableIntStateOf(0) }
+    var title by remember(sessionKey) { mutableStateOf(activityTitle) }
+
+    val context = LocalContext.current
+
+    // Load data when screen opens - using sessionKey as key ensures this runs fresh each time
+    LaunchedEffect(setId, sessionKey) {
+        if (setId > 0) {
+            isLoading = true
+            try {
+                val database = AppDatabase.getInstance(context)
+                val setRepository = SetRepository(
+                    database.setDao(),
+                    database.setWordDao(),
+                    database.wordDao()
+                )
+
+                val setDetails = withContext(Dispatchers.IO) {
+                    setRepository.getSetDetails(setId)
+                }
+
+                if (setDetails != null) {
+                    words = setDetails.words.map { wordConfig ->
+                        WordItem(
+                            word = wordConfig.word,
+                            selectedLetterIndex = wordConfig.selectedLetterIndex,
+                            imagePath = wordConfig.imagePath,
+                            configurationType = wordConfig.configurationType
+                        )
+                    }
+                    title = activityTitle
+                }
+            } catch (e: Exception) {
+                // Handle error silently
+            } finally {
+                isLoading = false
+            }
+        } else {
+            isLoading = false
+        }
+    }
+
+    // Show loading
+    if (isLoading) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = PurpleColor)
+        }
+        return
+    }
+
+    val currentWord = words.getOrNull(currentWordIndex)
+    val totalWords = words.size.coerceAtLeast(1)
+    val currentStep = currentWordIndex + 1
+
+    // Function to handle skip/next
+    fun handleSkipOrNext() {
+        if (currentWordIndex < words.size - 1) {
+            currentWordIndex++
+        } else {
+            // Session complete - navigate away
+            onSessionComplete()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -53,7 +156,7 @@ fun LearnModeSessionScreen(
         // Progress Bar
         ProgressIndicator(
             currentStep = currentStep,
-            totalSteps = totalSteps,
+            totalSteps = totalWords,
             modifier = Modifier.fillMaxWidth(),
             activeColor = PurpleColor,
             inactiveColor = LightPurpleColor
@@ -77,12 +180,8 @@ fun LearnModeSessionScreen(
             }
 
             TextButton(onClick = {
-                if (currentStep < totalSteps) {
-                    currentStep++
-                    onSkip()
-                } else {
-                    onSessionComplete()
-                }
+                onSkip()
+                handleSkipOrNext()
             }) {
                 Text(
                     text = "Skip",
@@ -103,30 +202,88 @@ fun LearnModeSessionScreen(
             color = Color.Black
         )
 
+        // Activity Type Subtitle (dynamic from database)
+        Text(
+            text = currentWord?.configurationType ?: "",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Medium,
+            color = PurpleColor
+        )
+
         Spacer(Modifier.height(24.dp))
 
-        // Large Content Card
-        Card(
+        // Centered content area (slightly raised)
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
-            border = BorderStroke(3.dp, PurpleColor)
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top
         ) {
-            // Empty content area - can be customized later
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                // Content will go here
+            Spacer(Modifier.weight(0.3f))
+            // Large Content Card with Image (Square) - only show if there's an image
+            if (currentWord?.imagePath != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .aspectRatio(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFBF9FF)
+                    ),
+                    border = BorderStroke(4.dp, Color(0xFFAE8EFB))
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = rememberAsyncImagePainter(
+                                ImageRequest.Builder(context)
+                                    .data(File(currentWord.imagePath))
+                                    .crossfade(true)
+                                    .build()
+                            ),
+                            contentDescription = "Word image",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+
+                // Extra spacing for cards to push text/dashes lower
+                val isNameThePicture = currentWord.configurationType == "Name the Picture"
+                val isFillInTheBlanks = currentWord.configurationType == "Fill in the Blank"
+                if (isNameThePicture || isFillInTheBlanks) {
+                    Spacer(Modifier.height(48.dp))
+                } else {
+                    Spacer(Modifier.height(24.dp))
+                }
             }
+
+            // Masked Word Display (e.g., "D _ G") or Full Word Display for "Write the Word" or Blank for "Name the Picture"
+            if (currentWord != null) {
+                val isWriteTheWord = currentWord.configurationType == "Write the Word"
+                val isNameThePicture = currentWord.configurationType == "Name the Picture"
+                Text(
+                    text = when {
+                        isNameThePicture -> currentWord.getBlankWord()
+                        isWriteTheWord -> currentWord.getFullWord()
+                        else -> currentWord.getMaskedWord()
+                    },
+                    fontSize = if (currentWord.imagePath != null) 48.sp else 96.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isWriteTheWord) Color(0xFF808080) else Color.Black,
+                    letterSpacing = if (currentWord.imagePath != null) 4.sp else 8.sp
+                )
+            }
+
+            Spacer(Modifier.weight(0.7f))
         }
 
         Spacer(Modifier.height(24.dp))
-        // No End Session Button
     }
 }
 
@@ -161,8 +318,8 @@ private fun ProgressIndicator(
 @Composable
 fun LearnModeSessionScreenPreview() {
     LearnModeSessionScreen(
-        title = "Vowels",
-        initialStep = 1,
-        totalSteps = 5
+        setId = 0L,
+        activityTitle = "Vowels",
+        sessionKey = 0
     )
 }
