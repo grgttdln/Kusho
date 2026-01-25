@@ -3,8 +3,10 @@ package com.example.app.ui.feature.classroom
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,12 +22,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,6 +45,16 @@ import com.example.app.ui.components.common.ErrorDialog
 import com.example.app.util.ImageUtil
 import com.example.app.data.SessionManager
 
+/**
+ * Data class to hold student form data
+ */
+private data class StudentFormData(
+    val firstName: String = "",
+    val lastName: String = "",
+    val profileImageUri: Uri? = null,
+    val profileImagePath: String? = null
+)
+
 @Composable
 fun AddStudentScreen(
     onNavigateBack: () -> Unit,
@@ -47,23 +64,34 @@ fun AddStudentScreen(
 ) {
     val context = LocalContext.current
     val allStudents by viewModel.allStudents.collectAsState()
-    var firstName by remember { mutableStateOf("") }
-    var lastName by remember { mutableStateOf("") }
-    var profileImageUri by remember { mutableStateOf<Uri?>(null) }
-    var profileImagePath by remember { mutableStateOf<String?>(null) }
+    
+    // List of students to add
+    var students by remember { mutableStateOf(listOf(StudentFormData())) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
+    var duplicateStudentName by remember { mutableStateOf("") }
+    
+    // Track which student card is picking an image
+    var currentPickingIndex by remember { mutableIntStateOf(-1) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            profileImageUri = it
-            // Save image to internal storage
-            profileImagePath = ImageUtil.saveImageToInternalStorage(context, it, "profile")
+            if (currentPickingIndex >= 0 && currentPickingIndex < students.size) {
+                val imagePath = ImageUtil.saveImageToInternalStorage(context, it, "profile")
+                students = students.toMutableList().apply {
+                    this[currentPickingIndex] = this[currentPickingIndex].copy(
+                        profileImageUri = it,
+                        profileImagePath = imagePath
+                    )
+                }
+            }
         }
+        currentPickingIndex = -1
     }
 
-    val isFormValid = firstName.isNotBlank() && lastName.isNotBlank()
+    // Check if at least one student has valid data
+    val isFormValid = students.any { it.firstName.isNotBlank() && it.lastName.isNotBlank() }
     var isAdding by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -81,7 +109,7 @@ fun AddStudentScreen(
             ) {
                 Spacer(Modifier.height(40.dp))
 
-                // Back Button - positioned like Kusho logo
+                // Back Button
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = "Back",
@@ -100,7 +128,7 @@ fun AddStudentScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Add a New Student",
+                        text = "Add New Students",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFF0B0B0B)
@@ -109,121 +137,46 @@ fun AddStudentScreen(
 
                 Spacer(Modifier.height(28.dp))
 
-                // Profile Picture Section
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(169.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFE3F2FD))
-                            .clickable { imagePickerLauncher.launch("image/*") },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (profileImageUri != null) {
-                            AsyncImage(
-                                model = profileImageUri,
-                                contentDescription = "Student Profile",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.dis_pfp),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(100.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = "Add Profile Picture",
-                                    fontSize = 16.sp,
-                                    color = Color(0xFF64B5F6),
-                                    fontWeight = FontWeight.Normal
+                // Student Cards
+                students.forEachIndexed { index, studentData ->
+                    StudentCard(
+                        studentNumber = index + 1,
+                        firstName = studentData.firstName,
+                        lastName = studentData.lastName,
+                        profileImageUri = studentData.profileImageUri,
+                        onFirstNameChange = { newFirstName ->
+                            students = students.toMutableList().apply {
+                                this[index] = this[index].copy(firstName = newFirstName)
+                            }
+                        },
+                        onLastNameChange = { newLastName ->
+                            students = students.toMutableList().apply {
+                                this[index] = this[index].copy(lastName = newLastName)
+                            }
+                        },
+                        onImageClick = {
+                            currentPickingIndex = index
+                            imagePickerLauncher.launch("image/*")
+                        },
+                        onRemoveImage = {
+                            students = students.toMutableList().apply {
+                                this[index] = this[index].copy(
+                                    profileImageUri = null,
+                                    profileImagePath = null
                                 )
                             }
                         }
-
-                        // Plus/Close button
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp)
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF3FA9F8))
-                                .clickable {
-                                    if (profileImageUri != null) {
-                                        profileImageUri = null
-                                    } else {
-                                        imagePickerLauncher.launch("image/*")
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (profileImageUri != null) Icons.Default.Close else Icons.Default.Add,
-                                contentDescription = if (profileImageUri != null) "Remove Picture" else "Add Picture",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
+                    )
+                    
+                    Spacer(Modifier.height(16.dp))
                 }
 
-                Spacer(Modifier.height(28.dp))
-
-                // Student First Name TextField
-                TextField(
-                    value = firstName,
-                    onValueChange = { firstName = it },
-                    placeholder = {
-                        Text(
-                            text = "Enter Student's First Name",
-                            color = Color(0xFF999999)
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color(0xFF3FA9F8),
-                        unfocusedIndicatorColor = Color(0xFF3FA9F8),
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black
-                    ),
-                    singleLine = true
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                // Student Last Name TextField
-                TextField(
-                    value = lastName,
-                    onValueChange = { lastName = it },
-                    placeholder = {
-                        Text(
-                            text = "Enter Student's Last Name",
-                            color = Color(0xFF999999)
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color(0xFF3FA9F8),
-                        unfocusedIndicatorColor = Color(0xFF3FA9F8),
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black
-                    ),
-                    singleLine = true
+                // Add More Student Button
+                AddMoreStudentButton(
+                    studentsToAdd = 1,
+                    onClick = {
+                        students = students + StudentFormData()
+                    }
                 )
 
                 Spacer(Modifier.height(24.dp))
@@ -235,44 +188,60 @@ fun AddStudentScreen(
             }
 
             PrimaryButton(
-                text = if (isAdding) "Adding..." else "Add A New Student",
+                text = if (isAdding) "Adding..." else "Add Students",
                 onClick = {
                     if (!isFormValid || isAdding) return@PrimaryButton
                     
-                    val fullName = "${firstName.trim()} ${lastName.trim()}"
-                    
-                    // Check for duplicate student name
-                    val isDuplicate = allStudents.any { student ->
-                        student.fullName.equals(fullName, ignoreCase = true)
+                    // Get valid students only
+                    val validStudents = students.filter { 
+                        it.firstName.isNotBlank() && it.lastName.isNotBlank() 
                     }
                     
-                    if (isDuplicate) {
-                        showDuplicateDialog = true
-                        return@PrimaryButton
+                    // Check for duplicates
+                    for (student in validStudents) {
+                        val fullName = "${student.firstName.trim()} ${student.lastName.trim()}"
+                        val isDuplicate = allStudents.any { existingStudent ->
+                            existingStudent.fullName.equals(fullName, ignoreCase = true)
+                        }
+                        if (isDuplicate) {
+                            duplicateStudentName = fullName
+                            showDuplicateDialog = true
+                            return@PrimaryButton
+                        }
                     }
                     
                     isAdding = true
-                    // Auto-assign current logged-in user as a teacher for this student
                     val sessionManager = SessionManager.getInstance(context)
                     val currentUserId = sessionManager.getUserId()
                     val teacherIds = if (currentUserId > 0L) listOf(currentUserId) else emptyList()
 
-                    viewModel.addStudentWithTeachers(
-                        fullName = fullName,
-                        gradeLevel = "",
-                        pfpPath = profileImagePath,
-                        teacherIds = teacherIds,
-                        onSuccess = { studentId: Long ->
-                            isAdding = false
-                            onStudentAdded(fullName)
-                        },
-                        onError = { error: String ->
-                            isAdding = false
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(error)
+                    // Add all valid students
+                    var addedCount = 0
+                    var lastAddedName = ""
+                    
+                    validStudents.forEach { student ->
+                        val fullName = "${student.firstName.trim()} ${student.lastName.trim()}"
+                        viewModel.addStudentWithTeachers(
+                            fullName = fullName,
+                            gradeLevel = "",
+                            pfpPath = student.profileImagePath,
+                            teacherIds = teacherIds,
+                            onSuccess = { _: Long ->
+                                addedCount++
+                                lastAddedName = fullName
+                                if (addedCount == validStudents.size) {
+                                    isAdding = false
+                                    onStudentAdded(lastAddedName)
+                                }
+                            },
+                            onError = { error: String ->
+                                isAdding = false
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(error)
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 },
                 enabled = isFormValid && !isAdding,
                 modifier = Modifier
@@ -285,12 +254,241 @@ fun AddStudentScreen(
         ErrorDialog(
             isVisible = showDuplicateDialog,
             title = "Student Already Exists!",
-            message = "A student with this name already exists.",
+            message = "A student with the name \"$duplicateStudentName\" already exists.",
             buttonText = "OK",
             onDismiss = { showDuplicateDialog = false }
         )
     }
 }
+
+@Composable
+private fun StudentCard(
+    studentNumber: Int,
+    firstName: String,
+    lastName: String,
+    profileImageUri: Uri?,
+    onFirstNameChange: (String) -> Unit,
+    onLastNameChange: (String) -> Unit,
+    onImageClick: () -> Unit,
+    onRemoveImage: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Student label
+            Text(
+                text = "STUDENT $studentNumber",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF9E9E9E),
+                letterSpacing = 1.sp
+            )
+            
+            Spacer(Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Profile Picture with dashed border
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .dashedBorder(
+                            color = Color(0xFF90CAF9),
+                            shape = RoundedCornerShape(12.dp),
+                            strokeWidth = 2.dp,
+                            dashLength = 8.dp,
+                            gapLength = 4.dp
+                        )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFE3F2FD))
+                        .clickable { onImageClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (profileImageUri != null) {
+                        AsyncImage(
+                            model = profileImageUri,
+                            contentDescription = "Student Profile",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(id = R.drawable.dis_pfp),
+                            contentDescription = null,
+                            modifier = Modifier.size(50.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    
+                    // Plus/Close button
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 8.dp, y = (-8).dp)
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF90CAF9))
+                            .clickable {
+                                if (profileImageUri != null) {
+                                    onRemoveImage()
+                                } else {
+                                    onImageClick()
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (profileImageUri != null) Icons.Default.Close else Icons.Default.Add,
+                            contentDescription = if (profileImageUri != null) "Remove Picture" else "Add Picture",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                
+                Spacer(Modifier.width(16.dp))
+                
+                // Name fields - same height as image, centered vertically
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // First Name TextField
+                    TextField(
+                        value = firstName,
+                        onValueChange = onFirstNameChange,
+                        placeholder = {
+                            Text(
+                                text = "First Name",
+                                color = Color(0xFFBDBDBD),
+                                fontSize = 14.sp
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color(0xFFE0E0E0),
+                            unfocusedIndicatorColor = Color(0xFFE0E0E0),
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedTextColor = Color.Black,
+                            unfocusedTextColor = Color.Black
+                        ),
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp)
+                    )
+                    
+                    // Last Name TextField
+                    TextField(
+                        value = lastName,
+                        onValueChange = onLastNameChange,
+                        placeholder = {
+                            Text(
+                                text = "Last Name",
+                                color = Color(0xFFBDBDBD),
+                                fontSize = 14.sp
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color(0xFFE0E0E0),
+                            unfocusedIndicatorColor = Color(0xFFE0E0E0),
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedTextColor = Color.Black,
+                            unfocusedTextColor = Color.Black
+                        ),
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddMoreStudentButton(
+    studentsToAdd: Int,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .dashedBorder(
+                color = Color(0xFF90CAF9),
+                shape = RoundedCornerShape(24.dp),
+                strokeWidth = 2.dp,
+                dashLength = 8.dp,
+                gapLength = 4.dp
+            )
+            .clip(RoundedCornerShape(24.dp))
+            .clickable { onClick() }
+            .padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = Color(0xFF3FA9F8),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Add $studentsToAdd More Student",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF3FA9F8)
+            )
+        }
+    }
+}
+
+/**
+ * Extension function to create a dashed border
+ */
+private fun Modifier.dashedBorder(
+    color: Color,
+    shape: RoundedCornerShape,
+    strokeWidth: Dp,
+    dashLength: Dp,
+    gapLength: Dp
+): Modifier = this.then(
+    Modifier.drawWithContent {
+        drawContent()
+        val stroke = Stroke(
+            width = strokeWidth.toPx(),
+            pathEffect = PathEffect.dashPathEffect(
+                floatArrayOf(dashLength.toPx(), gapLength.toPx())
+            )
+        )
+        val cornerRadius = shape.topStart
+        drawRoundRect(
+            color = color,
+            style = stroke,
+            cornerRadius = CornerRadius(
+                (cornerRadius as androidx.compose.foundation.shape.CornerSize).toPx(size, this)
+            )
+        )
+    }
+)
 
 @Preview(showBackground = true)
 @Composable

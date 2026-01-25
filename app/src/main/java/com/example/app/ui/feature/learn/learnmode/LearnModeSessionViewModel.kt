@@ -73,16 +73,16 @@ class LearnModeSessionViewModel(application: Application) : AndroidViewModel(app
     fun loadSetForLearnMode(setId: Long, activityTitle: String) {
         viewModelScope.launch {
             // Reset session state before loading new set
-            _uiState.update {
+            _uiState.update { 
                 it.copy(
-                    isLoading = true,
+                    isLoading = true, 
                     activityTitle = activityTitle,
                     isSessionComplete = false,
                     currentWordIndex = 0,
                     errorMessage = null
-                )
+                ) 
             }
-
+            
             try {
                 val setDetails = setRepository.getSetDetails(setId)
                 if (setDetails != null) {
