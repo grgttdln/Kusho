@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -51,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.SessionManager
 import com.example.app.service.ConnectionState
+import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.dashboard.AnalyticsCard
 import com.example.app.ui.components.dashboard.BatteryIcon
@@ -71,8 +73,10 @@ fun DashboardScreen(
     val watchDevice = uiState.watchDevice
     val context = LocalContext.current
     val sessionManager = remember { SessionManager.getInstance(context) }
+    val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
 
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showInstallInstructionsDialog by remember { mutableStateOf(false) }
     val greeting = viewModel.getGreeting()
     
     // Bluetooth enable request launcher (must be declared first)
@@ -207,6 +211,28 @@ fun DashboardScreen(
                     }
                 )
             }
+            
+            // Install Instructions Dialog
+            if (showInstallInstructionsDialog) {
+                AlertDialog(
+                    onDismissRequest = { showInstallInstructionsDialog = false },
+                    title = { Text(text = "Install Kusho Watch App", fontWeight = FontWeight.Bold) },
+                    text = { 
+                        Text(
+                            text = "To use Kusho with your watch:\n\n" +
+                                   "1. Open Play Store on your watch\n" +
+                                   "2. Search for \"Kusho\"\n" +
+                                   "3. Install the app\n\n" +
+                                   "Once installed, your watch will connect automatically."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showInstallInstructionsDialog = false }) {
+                            Text(text = "Got it", color = Color(0xFF2196F3))
+                        }
+                    }
+                )
+            }
 
             // User Profile Section
             Row(
@@ -291,6 +317,15 @@ fun DashboardScreen(
                             ConnectionState.NO_WATCH -> {
                                 // Navigate to watch pairing screen
                                 onNavigateToWatchPairing()
+                            }
+                            ConnectionState.WATCH_PAIRED_NO_APP -> {
+                                // Watch paired but app not installed - open Play Store on watch
+                                watchConnectionManager.openPlayStoreOnWatch()
+                                Toast.makeText(
+                                    context,
+                                    "Opening Play Store on your watch...",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                             else -> {
                                 // Other states: do nothing or handle future cases
