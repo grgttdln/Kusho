@@ -2,6 +2,7 @@
 package com.example.app.ui.feature.learn.tutorialmode
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -36,14 +38,73 @@ private val BlueButtonColor = Color(0xFF3FA9F8)
 @Composable
 fun TutorialSessionScreen(
     title: String,
+    letterType: String = "capital",
     onEndSession: () -> Unit,
     modifier: Modifier = Modifier,
     initialStep: Int = 1,
-    totalSteps: Int = 5,
+    totalSteps: Int = 0, // Will be calculated from letters
     onSkip: () -> Unit = {},
     onAudioClick: () -> Unit = {}
 ) {
     var currentStep by remember { mutableIntStateOf(initialStep) }
+    
+    // Define all letters based on the section
+    val allLetters = remember(title) {
+        when (title.lowercase()) {
+            "vowels" -> listOf(
+                R.drawable.ic_letter_a_upper, R.drawable.ic_letter_a_lower,
+                R.drawable.ic_letter_e_upper, R.drawable.ic_letter_e_lower,
+                R.drawable.ic_letter_i_upper, R.drawable.ic_letter_i_lower,
+                R.drawable.ic_letter_o_upper, R.drawable.ic_letter_o_lower,
+                R.drawable.ic_letter_u_upper, R.drawable.ic_letter_u_lower
+            )
+            "consonants" -> listOf(
+                R.drawable.ic_letter_b_upper, R.drawable.ic_letter_b_lower,
+                R.drawable.ic_letter_c_upper, R.drawable.ic_letter_c_lower,
+                R.drawable.ic_letter_d_upper, R.drawable.ic_letter_d_lower,
+                R.drawable.ic_letter_f_upper, R.drawable.ic_letter_f_lower,
+                R.drawable.ic_letter_g_upper, R.drawable.ic_letter_g_lower,
+                R.drawable.ic_letter_h_upper, R.drawable.ic_letter_h_lower,
+                R.drawable.ic_letter_j_upper, R.drawable.ic_letter_j_lower,
+                R.drawable.ic_letter_k_upper, R.drawable.ic_letter_k_lower,
+                R.drawable.ic_letter_l_upper, R.drawable.ic_letter_l_lower,
+                R.drawable.ic_letter_m_upper, R.drawable.ic_letter_m_lower,
+                R.drawable.ic_letter_n_upper, R.drawable.ic_letter_n_lower,
+                R.drawable.ic_letter_p_upper, R.drawable.ic_letter_p_lower,
+                R.drawable.ic_letter_q_upper, R.drawable.ic_letter_q_lower,
+                R.drawable.ic_letter_r_upper, R.drawable.ic_letter_r_lower,
+                R.drawable.ic_letter_s_upper, R.drawable.ic_letter_s_lower,
+                R.drawable.ic_letter_t_upper, R.drawable.ic_letter_t_lower,
+                R.drawable.ic_letter_v_upper, R.drawable.ic_letter_v_lower,
+                R.drawable.ic_letter_w_upper, R.drawable.ic_letter_w_lower,
+                R.drawable.ic_letter_x_upper, R.drawable.ic_letter_x_lower,
+                R.drawable.ic_letter_y_upper, R.drawable.ic_letter_y_lower,
+                R.drawable.ic_letter_z_upper, R.drawable.ic_letter_z_lower
+            )
+            else -> emptyList()
+        }
+    }
+    
+    // Filter letters based on type (capital or small)
+    val letters = remember(allLetters, letterType) {
+        when (letterType.lowercase()) {
+            "capital" -> allLetters.filterIndexed { index, _ -> index % 2 == 0 }
+            "small" -> allLetters.filterIndexed { index, _ -> index % 2 == 1 }
+            else -> allLetters
+        }
+    }
+    
+    // Get current letter based on step
+    val currentLetterRes = remember(currentStep, letters) {
+        if (letters.isNotEmpty() && currentStep > 0 && currentStep <= letters.size) {
+            letters[currentStep - 1]
+        } else {
+            null
+        }
+    }
+    
+    // Calculate total steps from letters
+    val calculatedTotalSteps = remember(letters) { letters.size }
 
     Column(
         modifier = modifier
@@ -55,7 +116,7 @@ fun TutorialSessionScreen(
         // Progress Bar
         ProgressIndicator(
             currentStep = currentStep,
-            totalSteps = totalSteps,
+            totalSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -77,7 +138,8 @@ fun TutorialSessionScreen(
             }
 
             TextButton(onClick = {
-                if (currentStep < totalSteps) {
+                val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                if (currentStep < maxSteps) {
                     currentStep++
                 }
                 onSkip()
@@ -114,12 +176,23 @@ fun TutorialSessionScreen(
             ),
             border = BorderStroke(3.dp, YellowColor)
         ) {
-            // Empty content area - can be customized later
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Content will go here
+                // Display single letter for current step
+                currentLetterRes?.let { letterRes ->
+                    Image(
+                        painter = painterResource(id = letterRes),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .aspectRatio(1f),
+                        contentScale = ContentScale.Fit
+                    )
+                }
             }
         }
 
