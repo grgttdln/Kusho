@@ -417,12 +417,18 @@ fun MainNavigationContainer(
             )
         }
         34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
-            onPracticeAgain = { currentScreen = 31 },
+            onPracticeAgain = { 
+                // Reset to set selection screen, user can tap the same set again
+                currentScreen = 32
+            },
             onContinue = { currentScreen = 35 },
             modifier = modifier
         )
         35 -> com.example.app.ui.feature.learn.learnmode.LearnModeFinishedScreen(
-            onEndSession = { currentScreen = 1 },
+            onEndSession = { 
+                learnModeSessionKey++ // Reset session
+                currentScreen = 1 
+            },
             modifier = modifier
         )
     }
