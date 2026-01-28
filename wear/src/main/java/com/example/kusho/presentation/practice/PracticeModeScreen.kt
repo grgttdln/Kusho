@@ -127,69 +127,82 @@ private fun PracticeModeContent(
         // Enable word formation by default
         viewModel.setWordFormationEnabled(true)
 
-        // Hardcoded 3-letter CVC (Consonant-Vowel-Consonant) word bank
         val cvcWords = listOf(
-            // Common CVC words for kids
-            "CAT", "BAT", "HAT", "MAT", "RAT", "SAT", "PAT", "FAT", "VAT",
-            "BED", "FED", "LED", "RED", "WED",
-            "BIG", "DIG", "FIG", "JIG", "PIG", "RIG", "WIG",
-            "BIT", "FIT", "HIT", "KIT", "LIT", "PIT", "SIT", "WIT",
-            "BOX", "FOX", "POX",
-            "BUD", "CUD", "DUD", "MUD",
-            "BUG", "DUG", "HUG", "JUG", "MUG", "PUG", "RUG", "TUG",
-            "BUN", "FUN", "GUN", "NUN", "PUN", "RUN", "SUN",
-            "BUS", "PUS",
-            "BUT", "CUT", "GUT", "HUT", "JUT", "NUT", "PUT", "RUT",
-            "CAB", "DAB", "FAB", "GAB", "JAB", "LAB", "NAB", "TAB",
-            "CAD", "DAD", "FAD", "GAD", "HAD", "LAD", "MAD", "PAD", "SAD",
-            "CAM", "DAM", "HAM", "JAM", "RAM", "YAM",
-            "CAN", "BAN", "DAN", "FAN", "MAN", "PAN", "RAN", "TAN", "VAN",
-            "CAP", "GAP", "LAP", "MAP", "NAP", "RAP", "SAP", "TAP", "ZAP",
-            "CAR", "BAR", "FAR", "JAR", "TAR", "WAR",
-            "COB", "BOB", "FOB", "GOB", "HOB", "JOB", "MOB", "NOB", "ROB", "SOB",
-            "COD", "GOD", "HOD", "NOD", "POD", "ROD", "SOD",
-            "COG", "BOG", "DOG", "FOG", "HOG", "JOG", "LOG", "TOG",
-            "COP", "BOP", "HOP", "MOP", "POP", "SOP", "TOP",
-            "COT", "BOT", "DOT", "GOT", "HOT", "JOT", "LOT", "NOT", "POT", "ROT", "TOT",
-            "COW", "BOW", "HOW", "NOW", "POW", "ROW", "SOW", "VOW", "WOW",
-            "CUB", "DUB", "HUB", "NUB", "PUB", "RUB", "SUB", "TUB",
-            "CUP", "PUP", "SUP",
-            "DEN", "BEN", "FEN", "HEN", "KEN", "MEN", "PEN", "TEN", "YEN", "ZEN",
-            "DIM", "HIM", "RIM", "VIM",
-            "DIN", "BIN", "FIN", "GIN", "KIN", "PIN", "SIN", "TIN", "WIN",
-            "DIP", "HIP", "LIP", "NIP", "RIP", "SIP", "TIP", "ZIP",
-            "GAL", "PAL",
-            "GAS", "HAS", "WAS",
-            "GEM", "HEM",
-            "GET", "BET", "JET", "LET", "MET", "NET", "PET", "SET", "VET", "WET", "YET",
-            "GUM", "BUM", "HUM", "MUM", "RUM", "SUM", "YUM",
-            "GUT", "BUT", "CUT", "HUT", "JUT", "NUT", "PUT", "RUT",
-            "HEX", "REX", "SEX", "VEX",
-            "HID", "BID", "DID", "KID", "LID", "RID",
-            "HOP", "BOP", "COP", "MOP", "POP", "SOP", "TOP",
-            "LEG", "BEG", "KEG", "PEG",
-            "LET", "BET", "GET", "JET", "MET", "NET", "PET", "SET", "VET", "WET",
-            "MIX", "FIX", "SIX",
-            "PEN", "BEN", "DEN", "HEN", "MEN", "TEN",
-            "PET", "BET", "GET", "JET", "LET", "MET", "NET", "SET", "VET", "WET",
-            "POT", "BOT", "COT", "DOT", "GOT", "HOT", "JOT", "LOT", "NOT", "ROT",
-            "SIT", "BIT", "FIT", "HIT", "KIT", "LIT", "PIT", "WIT",
-            "SUN", "BUN", "FUN", "GUN", "NUN", "PUN", "RUN",
-            "TEN", "BEN", "DEN", "HEN", "MEN", "PEN",
-            "TOP", "BOP", "COP", "HOP", "MOP", "POP", "SOP",
-            "TUB", "CUB", "DUB", "HUB", "NUB", "PUB", "RUB", "SUB",
-            "VAN", "BAN", "CAN", "DAN", "FAN", "MAN", "PAN", "RAN", "TAN",
-            "WAX", "MAX", "TAX",
-            "WEB",
-            "WIG", "BIG", "DIG", "FIG", "JIG", "PIG", "RIG",
-            "WIN", "BIN", "DIN", "FIN", "GIN", "KIN", "PIN", "SIN", "TIN",
-            "YAK",
-            "YAM", "CAM", "DAM", "HAM", "JAM", "RAM",
-            "YAP", "CAP", "GAP", "LAP", "MAP", "NAP", "RAP", "SAP", "TAP", "ZAP",
-            "ZAP", "CAP", "GAP", "LAP", "MAP", "NAP", "RAP", "SAP", "TAP", "YAP",
-            "ZEN", "BEN", "DEN", "HEN", "KEN", "MEN", "PEN", "TEN", "YEN",
-            "ZIP", "DIP", "HIP", "LIP", "NIP", "RIP", "SIP", "TIP"
-        ).distinct() // Remove duplicates
+            // --- CVC (expanded heavily) ---
+            "CAT","BAT","HAT","MAT","RAT","PAT","SAT","FAT",
+            "BED","RED","LED","FED",
+            "BIG","DIG","FIG","JIG","PIG","RIG","WIG",
+            "SIT","HIT","KIT","LIT","PIT","FIT","BIT","WIT",
+            "DOG","LOG","FOG","HOG","JOG",
+            "CUP","PUP","SUP",
+            "BUG","HUG","MUG","RUG","TUG","DUG",
+            "SUN","FUN","RUN","BUN","GUN","PUN","NUN",
+            "BOX","FOX","POX",
+            "COW","HOW","NOW","WOW","SOW","ROW",
+            "POT","HOT","NOT","LOT","DOT","ROT",
+            "JAM","RAM","YAM","HAM","DAM","CAM",
+            "CAP","MAP","TAP","NAP","LAP","RAP","SAP","GAP","ZAP",
+            "CAR","BAR","FAR","JAR","TAR","WAR",
+            "HEN","PEN","TEN","MEN","DEN","KEN",
+            "WEB","WAX","YAK","ZIP","MIX","FIX","SIX",
+            "LEG","PEG","BEG",
+            "LIP","TIP","RIP","DIP","NIP","SIP","HIP",
+            "HID","DID","KID","LID","RID",
+            "GAS","HAS","WAS",
+            "GUM","HUM","MUM","SUM","YUM",
+            "JET","NET","VET","MET","BET","LET","PET","SET","YET",
+            "PAN","TIN","PIN","BIN","WIN","SIN","FIN",
+            "SAD","MAD","BAD","PAD","LAD",
+            "RAN","CAN","MAN","DAN","FAN","TAN","VAN",
+            "JUG","MUD","BUD",
+            "JOB","MOB","ROB","SOB",
+            "COD","ROD","NOD","POD",
+            "TAG","RAG","WAG","BAG",
+            "JAW","LAW","RAW","SAW",
+            "VAN","TAX","MAX","SAX",
+
+            // --- CVV (long vowels / vowel pairs) ---
+            "SEE","BEE","TEE","ZOO","TOO","FOO",
+            "TOE","PIE","DUE","CUE","SEA","SKI",
+            "LAY","DAY","PAY","SAY","WAY","BOY",
+            "JOY","TOY","CRY","TRY","FLY",
+            "PAW","JAW","LAW","RAW",
+            "FEE","LEE","PEE",
+            "LIE","DIE","TIE",
+            "DAY","MAY","RAY","HAY",
+            "YOU","TWO","WHY",
+
+            // --- VCV ---
+            "EYE","AGE","ICE","APE","ORE","USE","EGO","EEL","OIL",
+            "ARM","ARK","ASH","ILL","OFF",
+
+            // --- CCV / VCC ---
+            "SKY","FLY","DRY","TRY",
+            "ANT","INK","ELM","OLD","AND","END","ASK","ACT","AGO","EAT","OAK",
+            "SKI","SPY",
+            "PLY","SHY",
+
+            // --- Common sight / function words ---
+            "THE","YOU","FOR","ARE","WAS","NOT",
+            "ALL","ANY","CAN","HER","HIM","HIS",
+            "OUT","GET","HAS","HAD","LET","PUT","TOO",
+            "YES","YET","NOW","HOW","WHO","WHY",
+            "OWN","DID","DOO","TOO",
+
+
+            // --- People / familiar nouns ---
+            "MOM","DAD","BOY","GIR","PET","TOY",
+            "BAG","HAT","BAT","CUP","CAR","BUS",
+            "BED","SUN","MOON","COW","PIG","HEN",
+            "EAT","RUN","SIT","HOP","JOG","DIG","HUG","TRY","FLY",
+
+            // --- Animals ---
+            "CAT","DOG","RAT","BAT","COW","PIG","HEN","BUG","ANT",
+
+            // --- Action words ---
+            "RUN","HOP","JOG","SIT","EAT","SEE","GET","PUT","TRY",
+            "EGG","HAT","CAP","MAP","PEN","CUP","BAT","BALL","ICE","SKY","SEA","SUN","ZOO"
+        ).distinct()
 
         viewModel.loadWordBank(cvcWords)
         android.util.Log.d("PracticeModeScreen", "Loaded ${cvcWords.distinct().size} CVC words")
@@ -383,7 +396,7 @@ private fun ResultContent(
         if (showFormedWord && formedWord != null) {
             Text(
                 text = formedWord,
-                color = Color(0xFF4CAF50),
+                color = AppColors.PracticeModeColor,
                 fontSize = 64.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
