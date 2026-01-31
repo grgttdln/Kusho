@@ -1,5 +1,6 @@
 package com.example.app.ui.feature.learn.set
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,7 +37,7 @@ fun EditSetScreen(
     userId: Long = 0L,
     modifier: Modifier = Modifier,
     onBackClick: () -> Unit = {},
-    onAddWordsClick: () -> Unit = {},
+    onAddWordsClick: (existingWords: List<String>) -> Unit = {},
     onUpdateSuccess: () -> Unit = {},
     onDeleteSuccess: () -> Unit = {},
     selectedWords: List<SetRepository.SelectedWordConfig> = emptyList(),
@@ -266,6 +268,13 @@ fun EditSetScreen(
                                         index = index + 1,
                                         word = wordConfig.wordName,
                                         configurationType = wordConfig.configurationType,
+                                        selectedLetterIndex = wordConfig.selectedLetterIndex,
+                                        onConfigurationChange = { newConfig ->
+                                            viewModel.updateWordConfiguration(index, newConfig)
+                                        },
+                                        onLetterSelected = { letterIndex ->
+                                            viewModel.updateWordLetterIndex(index, letterIndex)
+                                        },
                                         onRemove = {
                                             viewModel.removeWord(index)
                                         }
@@ -296,7 +305,9 @@ fun EditSetScreen(
 
                         // Add Words Button
                         Button(
-                            onClick = { currentOnAddWordsClick() },
+                            onClick = {
+                                currentOnAddWordsClick(uiState.selectedWords.map { it.wordName })
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
@@ -397,65 +408,205 @@ private fun EditWordWithConfigItem(
     index: Int,
     word: String,
     configurationType: String,
+    selectedLetterIndex: Int,
+    onConfigurationChange: (String) -> Unit,
+    onLetterSelected: (Int) -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(60.dp)
-            .border(
-                width = 1.dp,
-                color = Color(0xFF3FA9F8),
-                shape = RoundedCornerShape(15.dp)
-            )
-            .background(Color.White, RoundedCornerShape(15.dp))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+    var expandedDropdown by remember { mutableStateOf(false) }
+
+    // Dropdown options
+    val dropdownOptions = listOf("Fill in the Blank", "Name the Picture", "Write the Word")
+
+    // Show letter selection only for "Fill in the Blank" mode
+    val showLetterSelection = configurationType == "Fill in the Blank"
+
+    Column(
+        modifier = modifier.fillMaxWidth()
     ) {
-        // Word info on the left
+        // Main row with index, word letters/text, dropdown, and remove button
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color(0xFF3FA9F8),
+                    shape = RoundedCornerShape(15.dp)
+                )
+                .background(Color.White, RoundedCornerShape(15.dp))
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = index.toString(),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF3FA9F8)
-            )
-            Column(
-                modifier = Modifier.weight(1f)
+            // Left side: Index and letter buttons or word text
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = word,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF0B0B0B)
-                )
-                Text(
-                    text = configurationType,
-                    fontSize = 12.sp,
+                    text = index.toString(),
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color(0xFF3FA9F8)
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Letter buttons for "Fill in the Blank" mode
+                if (showLetterSelection) {
+                    word.forEachIndexed { letterIndex, letter ->
+                        EditLetterButton(
+                            letter = letter,
+                            isSelected = letterIndex == selectedLetterIndex,
+                            onClick = { onLetterSelected(letterIndex) }
+                        )
+                    }
+                } else {
+                    // Show word as text for other modes
+                    Text(
+                        text = word,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF3FA9F8)
+                    )
+                }
+            }
+
+            // Dropdown button
+            Box {
+                Button(
+                    onClick = { expandedDropdown = !expandedDropdown },
+                    modifier = Modifier
+                        .height(40.dp)
+                        .width(120.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3FA9F8)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text(
+                        text = configurationType,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Dropdown",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Dropdown Menu
+                DropdownMenu(
+                    expanded = expandedDropdown,
+                    onDismissRequest = { expandedDropdown = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .background(
+                            color = Color.White,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color(0xFFC5E5FD),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .padding(vertical = 8.dp)
+                        .width(IntrinsicSize.Max)
+                ) {
+                    dropdownOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = option,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = if (option == configurationType) Color(0xFF3FA9F8) else Color(0xFF0B0B0B),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Visible
+                                )
+                            },
+                            onClick = {
+                                onConfigurationChange(option)
+                                expandedDropdown = false
+                            },
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .height(40.dp)
+                                .background(
+                                    color = if (option == configurationType) Color(0xFFF0F9FF) else Color.Transparent,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .fillMaxWidth()
+                        )
+                        if (option != dropdownOptions.last()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .padding(horizontal = 16.dp)
+                                    .background(Color(0xFFF5F5F5))
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Remove button
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Text(
+                    text = "✕",
+                    fontSize = 14.sp,
+                    color = Color(0xFF3FA9F8),
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
+    }
+}
 
-        // Remove button on the right
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(36.dp)
-        ) {
-            Text(
-                text = "✕",
-                fontSize = 16.sp,
-                color = Color(0xFF3FA9F8),
-                fontWeight = FontWeight.Bold
+@Composable
+private fun EditLetterButton(
+    letter: Char,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.size(30.dp),
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isSelected) Color(0xFF3FA9F8) else Color.White
+        ),
+        border = if (!isSelected) {
+            BorderStroke(
+                width = 1.dp,
+                color = Color(0xFFC5E5FD)
             )
-        }
+        } else {
+            null
+        },
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Text(
+            text = letter.toString(),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isSelected) Color.White else Color(0xFF3FA9F8)
+        )
     }
 }
 

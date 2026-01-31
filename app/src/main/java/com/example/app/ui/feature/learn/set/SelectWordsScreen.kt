@@ -38,6 +38,8 @@ import com.example.app.ui.components.BottomNavBar
 @Composable
 fun SelectWordsScreen(
     availableWords: List<Word> = emptyList(),
+    excludeWords: List<String> = emptyList(),
+    isAddingToExistingSet: Boolean = false,
     onBackClick: () -> Unit = {},
     onWordsSelected: (selectedWords: List<SetRepository.SelectedWordConfig>) -> Unit = {},
     modifier: Modifier = Modifier
@@ -47,13 +49,15 @@ fun SelectWordsScreen(
     var wordConfigurations by remember { mutableStateOf(mapOf<String, String>()) }
     var selectedLetterIndices by remember { mutableStateOf(mapOf<String, Int>()) }
 
-    // Optimize filtering with memoization
-    val filteredWords = remember(searchQuery, availableWords) {
+    // Filter out excluded words and apply search filter
+    val filteredWords = remember(searchQuery, availableWords, excludeWords) {
+        val excludeSet = excludeWords.toSet()
+        val wordsAfterExclusion = availableWords.filter { it.word !in excludeSet }
         if (searchQuery.isBlank()) {
-            availableWords
+            wordsAfterExclusion
         } else {
             val query = searchQuery.lowercase()
-            availableWords.filter { it.word.lowercase().contains(query) }
+            wordsAfterExclusion.filter { it.word.lowercase().contains(query) }
         }
     }
 
@@ -283,13 +287,14 @@ fun SelectWordsScreen(
             ),
             shape = RoundedCornerShape(16.dp),
             contentPadding = PaddingValues(0.dp),
-            enabled = selectedWords.size >= 3
+            enabled = if (isAddingToExistingSet) selectedWords.isNotEmpty() else selectedWords.size >= 3
         ) {
             Text(
-                text = if (selectedWords.size >= 3) {
-                    "Add ${selectedWords.size} Words"
-                } else {
-                    "Select at least 3 words"
+                text = when {
+                    isAddingToExistingSet && selectedWords.isNotEmpty() -> "Add ${selectedWords.size} Word${if (selectedWords.size > 1) "s" else ""}"
+                    isAddingToExistingSet -> "Select words to add"
+                    selectedWords.size >= 3 -> "Add ${selectedWords.size} Words"
+                    else -> "Select at least 3 words"
                 },
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
@@ -521,7 +526,7 @@ private fun LetterButton(
     Button(
         onClick = onClick,
         modifier = modifier
-            .size(40.dp),
+            .size(30.dp),
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSelected) Color(0xFF3FA9F8) else Color.White

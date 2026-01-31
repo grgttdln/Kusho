@@ -51,6 +51,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.SessionManager
+import com.example.app.data.entity.Activity as ActivityEntity
 import com.example.app.service.ConnectionState
 import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.components.BottomNavBar
@@ -113,7 +114,7 @@ fun DashboardScreen(
     }
 
     // Collect activities from ViewModel and map into ActivityProgress UI model.
-    val activities by viewModel.activities.collectAsState()
+    val activities: List<ActivityEntity> by viewModel.activities.collectAsState()
 
     val activityProgressList: List<ActivityProgress> = remember(activities) {
         if (activities.isEmpty()) {
@@ -135,9 +136,9 @@ fun DashboardScreen(
                 return allIcons[iconIndex]
             }
 
-            activities.map { act ->
+            activities.map { act: ActivityEntity ->
                  // If the activity doesn't have a coverImagePath, try to resolve a drawable named ic_<slugified title>
-                 val resolvedCover = act.coverImagePath?.takeIf { it.isNotBlank() } ?: run {
+                 val resolvedCover: String? = act.coverImagePath?.takeIf { it.isNotBlank() } ?: run {
                      val slug = act.title
                          .lowercase()
                          .replace(Regex("[^a-z0-9]+"), "_")

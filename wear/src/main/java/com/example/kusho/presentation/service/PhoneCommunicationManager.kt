@@ -27,11 +27,19 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
     private val _batteryLevel = MutableStateFlow(0)
     val batteryLevel: StateFlow<Int> = _batteryLevel.asStateFlow()
     
+    // StateFlow to track if mobile app is in Learn Mode session
+    private val _isPhoneInLearnMode = MutableStateFlow(false)
+    val isPhoneInLearnMode: StateFlow<Boolean> = _isPhoneInLearnMode.asStateFlow()
+    
     companion object {
         private const val MESSAGE_PATH_REQUEST_BATTERY = "/request_battery"
         private const val MESSAGE_PATH_REQUEST_DEVICE_INFO = "/request_device_info"
         private const val MESSAGE_PATH_BATTERY_STATUS = "/battery_status"
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
+        private const val MESSAGE_PATH_LEARN_MODE_SKIP = "/learn_mode_skip"
+        private const val MESSAGE_PATH_LEARN_MODE_STARTED = "/learn_mode_started"
+        private const val MESSAGE_PATH_LEARN_MODE_ENDED = "/learn_mode_ended"
+        private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
         private const val BATTERY_UPDATE_INTERVAL_MS = 60000L // 1 minute
     }
     
@@ -164,6 +172,42 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             MESSAGE_PATH_REQUEST_DEVICE_INFO -> {
                 sendDeviceInfoToPhone()
             }
+            MESSAGE_PATH_LEARN_MODE_STARTED -> {
+                android.util.Log.d("PhoneCommunicationMgr", "📚 Phone Learn Mode started")
+                _isPhoneInLearnMode.value = true
+            }
+            MESSAGE_PATH_LEARN_MODE_ENDED -> {
+                android.util.Log.d("PhoneCommunicationMgr", "📚 Phone Learn Mode ended")
+                _isPhoneInLearnMode.value = false
+                // Also end session in state holder
+                com.example.kusho.presentation.learn.LearnModeStateHolder.endSession()
+            }
+            MESSAGE_PATH_LEARN_MODE_WORD_DATA -> {
+                android.util.Log.d("PhoneCommunicationMgr", "📚 Word data received")
+                handleWordData(messageEvent.data)
+            }
+        }
+    }
+    
+    /**
+     * Handle incoming word data for fill-in-the-blanks
+     */
+    private fun handleWordData(data: ByteArray) {
+        try {
+            val jsonString = String(data)
+            val json = org.json.JSONObject(jsonString)
+            
+            val word = json.optString("word", "")
+            val maskedIndex = json.optInt("maskedIndex", -1)
+            val configurationType = json.optString("configurationType", "")
+            
+            android.util.Log.d("PhoneCommunicationMgr", "📚 Word: $word, maskedIndex: $maskedIndex, type: $configurationType")
+            
+            if (word.isNotEmpty()) {
+                com.example.kusho.presentation.learn.LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing word data", e)
         }
     }
     
@@ -175,6 +219,30 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             updateBatteryLevel()
             sendBatteryStatusToPhone()
             sendDeviceInfoToPhone()
+        }
+    }
+    
+    /**
+     * Send skip command to phone app's Learn Mode
+     * This is triggered when user swipes left on the watch
+     */
+    suspend fun sendSkipCommand() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_SKIP,
+                        ByteArray(0) // Empty payload
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     

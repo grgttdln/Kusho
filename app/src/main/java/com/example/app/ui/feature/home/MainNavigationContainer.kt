@@ -63,6 +63,7 @@ fun MainNavigationContainer(
     var yourSetsScreenKey by remember { mutableStateOf(0) }
     var wordsForCreation by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
     var wordsForEdit by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
+    var wordsToExclude by remember { mutableStateOf(listOf<String>()) }
 
     // --- REPOSITORY & CONTEXT HELPERS ---
     val context = LocalContext.current
@@ -185,7 +186,10 @@ fun MainNavigationContainer(
             userId = userId,
             activityId = if (selectedActivityId > 0L) selectedActivityId else null,
             onBackClick = { currentScreen = if (selectedActivityId > 0L) 16 else 7 },
-            onAddWordsClick = { currentScreen = 12 },
+            onAddWordsClick = { existingWords ->
+                wordsToExclude = existingWords
+                currentScreen = 12
+            },
             selectedWords = wordsForCreation,
             onCreateSet = { title, _, _ ->
                 createdSetTitle = title
@@ -199,6 +203,7 @@ fun MainNavigationContainer(
             }
             SelectWordsScreen(
                 availableWords = availableWords,
+                excludeWords = wordsToExclude,
                 onBackClick = { currentScreen = 11 },
                 onWordsSelected = { words ->
                     wordsForCreation = words
@@ -220,7 +225,10 @@ fun MainNavigationContainer(
             setId = selectedSetId,
             userId = userId,
             onBackClick = { currentScreen = if (selectedActivityId > 0L) 16 else 7 },
-            onAddWordsClick = { currentScreen = 15 },
+            onAddWordsClick = { existingWords ->
+                wordsToExclude = existingWords
+                currentScreen = 15
+            },
             onUpdateSuccess = {
                 yourSetsScreenKey++
                 currentScreen = if (selectedActivityId > 0L) 16 else 7
@@ -238,6 +246,8 @@ fun MainNavigationContainer(
             }
             SelectWordsScreen(
                 availableWords = availableWords,
+                excludeWords = wordsToExclude,
+                isAddingToExistingSet = true,
                 onBackClick = { currentScreen = 14 },
                 onWordsSelected = { words ->
                     wordsForEdit = words
@@ -347,7 +357,7 @@ fun MainNavigationContainer(
             studentId = tutorialModeStudentId,
             classId = tutorialModeClassId,
             onBack = { currentScreen = 4 },
-            onStartSession = { title ->
+            onStartSession = { title, _ ->
                 tutorialSessionTitle = title
                 currentScreen = 28
             },

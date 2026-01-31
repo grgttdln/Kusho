@@ -52,6 +52,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _deviceInfo = MutableStateFlow(WatchDeviceInfo())
     val deviceInfo: StateFlow<WatchDeviceInfo> = _deviceInfo.asStateFlow()
     
+    // Flow for Learn Mode skip commands from watch
+    private val _learnModeSkipTrigger = MutableStateFlow(0L) // Timestamp of skip event
+    val learnModeSkipTrigger: StateFlow<Long> = _learnModeSkipTrigger.asStateFlow()
+    
     companion object {
         @Volatile
         private var INSTANCE: WatchConnectionManager? = null
@@ -74,6 +78,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
         private const val MESSAGE_PATH_PING = "/kusho/ping"
         private const val MESSAGE_PATH_PONG = "/kusho/pong"
+        private const val MESSAGE_PATH_LEARN_MODE_SKIP = "/learn_mode_skip"
+        private const val MESSAGE_PATH_LEARN_MODE_STARTED = "/learn_mode_started"
+        private const val MESSAGE_PATH_LEARN_MODE_ENDED = "/learn_mode_ended"
+        private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
     
@@ -134,7 +142,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         monitoringJob = scope.launch {
             while (isActive) {
                 checkConnection()
-                
+
                 // If watch is connected but battery is still 0, request it again
                 val currentDevice = _deviceInfo.value
                 if (currentDevice.isConnected && 
@@ -271,6 +279,80 @@ class WatchConnectionManager private constructor(private val context: Context) {
     }
     
     /**
+     * Notify watch that Learn Mode session has started
+     */
+    fun notifyLearnModeStarted() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_STARTED,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode started notification sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to notify watch of Learn Mode start", e)
+            }
+        }
+    }
+    
+    /**
+     * Notify watch that Learn Mode session has ended
+     */
+    fun notifyLearnModeEnded() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_ENDED,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode ended notification sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to notify watch of Learn Mode end", e)
+            }
+        }
+    }
+    
+    /**
+     * Send word data to watch for fill-in-the-blanks mode
+     * @param word The full word
+     * @param maskedIndex Index of the masked letter (for fill-in-the-blank)
+     * @param configurationType The configuration type (e.g., "Fill in the Blank")
+     */
+    fun sendLearnModeWordData(word: String, maskedIndex: Int, configurationType: String) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                
+                // Create JSON payload
+                val jsonPayload = org.json.JSONObject().apply {
+                    put("word", word)
+                    put("maskedIndex", maskedIndex)
+                    put("configurationType", configurationType)
+                }.toString()
+                
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_WORD_DATA,
+                        jsonPayload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Word data sent to watch: $word (masked: $maskedIndex, type: $configurationType)")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send word data to watch", e)
+            }
+        }
+    }
+    
+    /**
      * Request device info from connected watch
      */
     fun requestDeviceInfo() {
@@ -368,6 +450,11 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     name = deviceName,
                     lastUpdated = System.currentTimeMillis()
                 )
+            }
+            MESSAGE_PATH_LEARN_MODE_SKIP -> {
+                Log.d(TAG, "⏭️ Received Learn Mode skip command from watch")
+                // Trigger skip by updating the timestamp
+                _learnModeSkipTrigger.value = System.currentTimeMillis()
             }
         }
     }

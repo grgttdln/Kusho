@@ -1,54 +1,448 @@
 package com.example.kusho.presentation.learn
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.wear.compose.material.CircularProgressIndicator
+import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
+import com.example.kusho.R
+import com.example.kusho.ml.ClassifierLoadResult
+import com.example.kusho.ml.ModelLoader
 import com.example.kusho.presentation.components.CircularModeBorder
+import com.example.kusho.presentation.service.PhoneCommunicationManager
 import com.example.kusho.presentation.theme.AppColors
+import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.speech.TextToSpeechManager
+import kotlinx.coroutines.launch
 
 /**
- * Learn Mode screen - displays title only for now
+ * Learn Mode screen - displays fill-in-the-blanks with gesture input
+ * For "Fill in the Blank" configuration, users can tap to start gesture recognition
+ * Swipe Left: Skip to next word (sends command to phone)
+ * Swipe Right: Native Wear OS back gesture (preserved)
  */
 @Composable
 fun LearnModeScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val phoneCommunicationManager = remember { PhoneCommunicationManager(context) }
+    val isPhoneInLearnMode by phoneCommunicationManager.isPhoneInLearnMode.collectAsState()
+    
+    // Observe word data from LearnModeStateHolder
+    val wordData by LearnModeStateHolder.wordData.collectAsState()
+    val sessionData by LearnModeStateHolder.sessionData.collectAsState()
+
+    // Debouncing state for skip gesture
+    var lastSkipTime by remember { mutableLongStateOf(0L) }
+
+    // Check if current word is Fill in the Blank type
+    val isFillInTheBlank = wordData.configurationType == "Fill in the Blank"
+
+    CircularModeBorder(borderColor = AppColors.LearnModeColor) {
+        Scaffold {
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when {
+                    !isPhoneInLearnMode -> {
+                        // Waiting state - phone hasn't started Learn Mode session yet
+                        WaitingContent()
+                    }
+                    isFillInTheBlank && wordData.word.isNotEmpty() -> {
+                        // Fill in the Blank mode - show gesture input
+                        FillInTheBlankContent(
+                            wordData = wordData,
+                            onSkip = {
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastSkipTime >= 500) {
+                                    lastSkipTime = currentTime
+                                    scope.launch {
+                                        phoneCommunicationManager.sendSkipCommand()
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    else -> {
+                        // Other modes or waiting for word data - show simple swipe to skip
+                        DefaultLearnModeContent(
+                            onSkip = {
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastSkipTime >= 500) {
+                                    lastSkipTime = currentTime
+                                    scope.launch {
+                                        phoneCommunicationManager.sendSkipCommand()
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaitingContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Waiting...",
+            color = AppColors.LearnModeColor,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+
+        Text(
+            text = "Start Learn Mode\non your phone",
+            color = AppColors.LearnModeColor.copy(alpha = 0.7f),
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun DefaultLearnModeContent(onSkip: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (dragAmount < -50f) {
+                        change.consume()
+                        onSkip()
+                    }
+                }
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Learn Mode",
+                color = AppColors.LearnModeColor,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "Swipe left to skip",
+                color = AppColors.LearnModeColor.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun FillInTheBlankContent(
+    wordData: LearnModeStateHolder.WordData,
+    onSkip: () -> Unit
+) {
+    val context = LocalContext.current
+
+    // Initialize dependencies
+    var isInitialized by remember { mutableStateOf(false) }
+    var sensorManager by remember { mutableStateOf<MotionSensorManager?>(null) }
+    var classifierResult by remember { mutableStateOf<ClassifierLoadResult?>(null) }
+
+    // Initialize TextToSpeech manager
+    val ttsManager = remember { TextToSpeechManager(context) }
+
+    // Cleanup TTS when disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
+
+    // Initialize dependencies
+    LaunchedEffect(Unit) {
+        sensorManager = MotionSensorManager(context)
+        classifierResult = try {
+            ModelLoader.loadDefault(context)
+        } catch (e: Exception) {
+            ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
+        }
+        isInitialized = true
+    }
+
+    if (!isInitialized || sensorManager == null || classifierResult == null) {
+        // Loading state
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(40.dp),
+                strokeWidth = 4.dp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Loading...",
+                color = AppColors.TextSecondary,
+                fontSize = 12.sp
+            )
+        }
+    } else {
+        FillInTheBlankMainContent(
+            wordData = wordData,
+            sensorManager = sensorManager!!,
+            classifierResult = classifierResult!!,
+            ttsManager = ttsManager,
+            onSkip = onSkip
+        )
+    }
+}
+
+@Composable
+private fun FillInTheBlankMainContent(
+    wordData: LearnModeStateHolder.WordData,
+    sensorManager: MotionSensorManager,
+    classifierResult: ClassifierLoadResult,
+    ttsManager: TextToSpeechManager,
+    onSkip: () -> Unit
+) {
     val viewModel: LearnModeViewModel = viewModel(
-        factory = LearnModeViewModelFactory()
+        factory = LearnModeViewModelFactory(sensorManager, classifierResult)
     )
 
     val uiState by viewModel.uiState.collectAsState()
 
-    CircularModeBorder(borderColor = AppColors.LearnModeColor) {
-        Scaffold {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = uiState.title,
-                    color = AppColors.LearnModeColor,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+    // Speak the prediction when result is shown
+    LaunchedEffect(uiState.state, uiState.prediction) {
+        if (uiState.state == LearnModeViewModel.State.RESULT && uiState.prediction != null) {
+            ttsManager.speakLetter(uiState.prediction!!)
+        }
+    }
+
+    // Build masked word display
+    val maskedWord = buildMaskedWordDisplay(wordData.word, wordData.maskedIndex)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (dragAmount < -50f) {
+                        change.consume()
+                        onSkip()
+                    }
+                }
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            when (uiState.state) {
+                LearnModeViewModel.State.IDLE -> IdleContent(
+                    maskedWord = maskedWord,
+                    viewModel = viewModel
+                )
+                LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
+                LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
+                LearnModeViewModel.State.PROCESSING -> ProcessingContent()
+                LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
+                LearnModeViewModel.State.RESULT -> ResultContent(
+                    uiState = uiState,
+                    maskedWord = maskedWord,
+                    viewModel = viewModel
                 )
             }
         }
     }
+}
+
+@Composable
+private fun IdleContent(
+    maskedWord: String,
+    viewModel: LearnModeViewModel
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.startRecording() },
+        contentAlignment = Alignment.Center
+    ) {
+        // Mascot avatar image - centered and fills the screen
+        Image(
+            painter = painterResource(id = R.drawable.dis_watch_wait),
+            contentDescription = "Learn mascot",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+@Composable
+private fun CountdownContent(uiState: LearnModeViewModel.UiState) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "${uiState.countdownSeconds}",
+            color = AppColors.LearnModeColor,
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.display1
+        )
+    }
+}
+
+@Composable
+private fun RecordingContent(uiState: LearnModeViewModel.UiState) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            progress = uiState.recordingProgress,
+            modifier = Modifier.fillMaxSize(),
+            strokeWidth = 8.dp,
+            indicatorColor = AppColors.LearnModeColor
+        )
+        Text(text = "✍️", fontSize = 52.sp)
+    }
+}
+
+@Composable
+private fun ProcessingContent() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(60.dp),
+            strokeWidth = 6.dp,
+            indicatorColor = AppColors.LearnModeColor
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Processing...",
+            color = AppColors.TextPrimary,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ShowingPredictionContent(uiState: LearnModeViewModel.UiState) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Display the predicted letter as the user inputted it
+        Text(
+            text = uiState.prediction ?: "",
+            color = Color.White,
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.display1
+        )
+    }
+}
+
+@Composable
+private fun ResultContent(
+    uiState: LearnModeViewModel.UiState,
+    maskedWord: String,
+    viewModel: LearnModeViewModel
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.resetToIdle() },
+        contentAlignment = Alignment.Center
+    ) {
+        // Show correct or wrong mascot image based on result
+        Image(
+            painter = painterResource(
+                id = if (uiState.isCorrect == true) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+            ),
+            contentDescription = if (uiState.isCorrect == true) "Correct" else "Wrong",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+/**
+ * Build a display string with the masked letter shown as underscore
+ */
+private fun buildMaskedWordDisplay(word: String, maskedIndex: Int): String {
+    return word.mapIndexed { index, char ->
+        if (index == maskedIndex) "_" else char.toString()
+    }.joinToString(" ")
 }
 

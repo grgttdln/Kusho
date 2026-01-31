@@ -35,6 +35,7 @@ import coil.request.ImageRequest
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.data.repository.SetRepository
+import com.example.app.service.WatchConnectionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -84,6 +85,21 @@ fun LearnModeSessionScreen(
 
     val context = LocalContext.current
 
+    // Get WatchConnectionManager instance
+    val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
+    
+    // Notify watch when Learn Mode session starts
+    LaunchedEffect(sessionKey) {
+        watchConnectionManager.notifyLearnModeStarted()
+    }
+    
+    // Notify watch when session ends (cleanup)
+    androidx.compose.runtime.DisposableEffect(sessionKey) {
+        onDispose {
+            watchConnectionManager.notifyLearnModeEnded()
+        }
+    }
+
     // Load data when screen opens - using sessionKey as key ensures this runs fresh each time
     LaunchedEffect(setId, sessionKey) {
         if (setId > 0) {
@@ -118,6 +134,38 @@ fun LearnModeSessionScreen(
             }
         } else {
             isLoading = false
+        }
+    }
+
+    // Send current word data to watch whenever current word changes
+    LaunchedEffect(currentWordIndex, words) {
+        val currentWord = words.getOrNull(currentWordIndex)
+        if (currentWord != null) {
+            watchConnectionManager.sendLearnModeWordData(
+                word = currentWord.word,
+                maskedIndex = currentWord.selectedLetterIndex,
+                configurationType = currentWord.configurationType
+            )
+        }
+    }
+
+    // Listen for skip commands from watch with debouncing
+    LaunchedEffect(sessionKey) {
+        val sessionStartTime = System.currentTimeMillis()
+        var lastSkipTime = 0L
+        watchConnectionManager.learnModeSkipTrigger.collect { skipTime ->
+            // Only process skip events that happened AFTER this session started (prevents stale events)
+            // and at least 500ms since last skip (debouncing)
+            val timeSinceLastSkip = skipTime - lastSkipTime
+            if (skipTime > sessionStartTime && skipTime > lastSkipTime && timeSinceLastSkip >= 500) {
+                lastSkipTime = skipTime
+                onSkip()
+                if (currentWordIndex < words.size - 1) {
+                    currentWordIndex++
+                } else {
+                    onSessionComplete()
+                }
+            }
         }
     }
 

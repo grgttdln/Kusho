@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
+import com.example.kusho.presentation.learn.LearnModeStateHolder
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
@@ -12,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import org.json.JSONObject
 
 /**
  * Background service that listens for messages from phone even when app is closed
@@ -29,6 +31,9 @@ class WearMessageListenerService : WearableListenerService() {
         private const val MESSAGE_PATH_REQUEST_DEVICE_INFO = "/request_device_info"
         private const val MESSAGE_PATH_BATTERY_STATUS = "/battery_status"
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
+        private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
+        private const val MESSAGE_PATH_LEARN_MODE_SESSION_START = "/learn_mode_session_start"
+        private const val MESSAGE_PATH_LEARN_MODE_SESSION_END = "/learn_mode_session_end"
     }
     
     override fun onMessageReceived(messageEvent: MessageEvent) {
@@ -39,14 +44,67 @@ class WearMessageListenerService : WearableListenerService() {
         when (messageEvent.path) {
             MESSAGE_PATH_REQUEST_BATTERY -> {
                 Log.d(TAG, "🔋 Battery request received from phone")
-                // Phone is requesting battery status
                 sendBatteryStatusToPhone()
             }
             MESSAGE_PATH_REQUEST_DEVICE_INFO -> {
                 Log.d(TAG, "📱 Device info request received from phone")
-                // Phone is requesting device info
                 sendDeviceInfoToPhone()
             }
+            MESSAGE_PATH_LEARN_MODE_WORD_DATA -> {
+                Log.d(TAG, "📚 Word data received from phone")
+                handleWordData(messageEvent.data)
+            }
+            MESSAGE_PATH_LEARN_MODE_SESSION_START -> {
+                Log.d(TAG, "🎯 Learn mode session start received")
+                handleSessionStart(messageEvent.data)
+            }
+            MESSAGE_PATH_LEARN_MODE_SESSION_END -> {
+                Log.d(TAG, "🏁 Learn mode session end received")
+                LearnModeStateHolder.endSession()
+            }
+        }
+    }
+    
+    /**
+     * Handle incoming word data for fill-in-the-blanks
+     * Expected JSON format: {"word": "APPLE", "maskedIndex": 2, "configurationType": "Fill in the Blank"}
+     */
+    private fun handleWordData(data: ByteArray) {
+        try {
+            val jsonString = String(data)
+            val json = JSONObject(jsonString)
+            
+            val word = json.optString("word", "")
+            val maskedIndex = json.optInt("maskedIndex", -1)
+            val configurationType = json.optString("configurationType", "")
+            
+            Log.d(TAG, "📚 Parsed word data: word=$word, maskedIndex=$maskedIndex, type=$configurationType")
+            
+            if (word.isNotEmpty()) {
+                LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error parsing word data", e)
+        }
+    }
+    
+    /**
+     * Handle session start message
+     * Expected JSON format: {"setTitle": "Animal Set", "totalWords": 10}
+     */
+    private fun handleSessionStart(data: ByteArray) {
+        try {
+            val jsonString = String(data)
+            val json = JSONObject(jsonString)
+            
+            val setTitle = json.optString("setTitle", "")
+            val totalWords = json.optInt("totalWords", 0)
+            
+            Log.d(TAG, "🎯 Session start: title=$setTitle, totalWords=$totalWords")
+            
+            LearnModeStateHolder.startSession(setTitle, totalWords)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error parsing session start data", e)
         }
     }
     

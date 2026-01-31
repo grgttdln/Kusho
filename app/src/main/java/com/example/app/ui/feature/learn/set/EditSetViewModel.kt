@@ -162,6 +162,32 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
+     * Update configuration type for a word at the given index
+     */
+    fun updateWordConfiguration(index: Int, configurationType: String) {
+        _uiState.update { state ->
+            state.copy(
+                selectedWords = state.selectedWords.mapIndexed { i, word ->
+                    if (i == index) word.copy(configurationType = configurationType) else word
+                }
+            )
+        }
+    }
+
+    /**
+     * Update selected letter index for a word at the given index
+     */
+    fun updateWordLetterIndex(index: Int, letterIndex: Int) {
+        _uiState.update { state ->
+            state.copy(
+                selectedWords = state.selectedWords.mapIndexed { i, word ->
+                    if (i == index) word.copy(selectedLetterIndex = letterIndex) else word
+                }
+            )
+        }
+    }
+
+    /**
      * Update the set in the database
      * Returns true on success, false on failure
      */
