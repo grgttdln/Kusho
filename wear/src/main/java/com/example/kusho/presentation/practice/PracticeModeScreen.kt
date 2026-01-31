@@ -122,12 +122,110 @@ private fun PracticeModeContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
+    // Initialize word formation with hardcoded 3-letter CVC words
+    LaunchedEffect(Unit) {
+        // Enable word formation by default
+        viewModel.setWordFormationEnabled(true)
+
+        val cvcWords = listOf(
+            // --- CVC (expanded heavily) ---
+            "CAT","BAT","HAT","MAT","RAT","PAT","SAT","FAT",
+            "BED","RED","LED","FED",
+            "BIG","DIG","FIG","JIG","PIG","RIG","WIG",
+            "SIT","HIT","KIT","LIT","PIT","FIT","BIT","WIT",
+            "DOG","LOG","FOG","HOG","JOG",
+            "CUP","PUP","SUP",
+            "BUG","HUG","MUG","RUG","TUG","DUG",
+            "SUN","FUN","RUN","BUN","GUN","PUN","NUN",
+            "BOX","FOX","POX",
+            "COW","HOW","NOW","WOW","SOW","ROW",
+            "POT","HOT","NOT","LOT","DOT","ROT",
+            "JAM","RAM","YAM","HAM","DAM","CAM",
+            "CAP","MAP","TAP","NAP","LAP","RAP","SAP","GAP","ZAP",
+            "CAR","BAR","FAR","JAR","TAR","WAR",
+            "HEN","PEN","TEN","MEN","DEN","KEN",
+            "WEB","WAX","YAK","ZIP","MIX","FIX","SIX",
+            "LEG","PEG","BEG",
+            "LIP","TIP","RIP","DIP","NIP","SIP","HIP",
+            "HID","DID","KID","LID","RID",
+            "GAS","HAS","WAS",
+            "GUM","HUM","MUM","SUM","YUM",
+            "JET","NET","VET","MET","BET","LET","PET","SET","YET",
+            "PAN","TIN","PIN","BIN","WIN","SIN","FIN",
+            "SAD","MAD","BAD","PAD","LAD",
+            "RAN","CAN","MAN","DAN","FAN","TAN","VAN",
+            "JUG","MUD","BUD",
+            "JOB","MOB","ROB","SOB",
+            "COD","ROD","NOD","POD",
+            "TAG","RAG","WAG","BAG",
+            "JAW","LAW","RAW","SAW",
+            "VAN","TAX","MAX","SAX",
+
+            // --- CVV (long vowels / vowel pairs) ---
+            "SEE","BEE","TEE","ZOO","TOO","FOO",
+            "TOE","PIE","DUE","CUE","SEA","SKI",
+            "LAY","DAY","PAY","SAY","WAY","BOY",
+            "JOY","TOY","CRY","TRY","FLY",
+            "PAW","JAW","LAW","RAW",
+            "FEE","LEE","PEE",
+            "LIE","DIE","TIE",
+            "DAY","MAY","RAY","HAY",
+            "YOU","TWO","WHY",
+
+            // --- VCV ---
+            "EYE","AGE","ICE","APE","ORE","USE","EGO","EEL","OIL",
+            "ARM","ARK","ASH","ILL","OFF",
+
+            // --- CCV / VCC ---
+            "SKY","FLY","DRY","TRY",
+            "ANT","INK","ELM","OLD","AND","END","ASK","ACT","AGO","EAT","OAK",
+            "SKI","SPY",
+            "PLY","SHY",
+
+            // --- Common sight / function words ---
+            "THE","YOU","FOR","ARE","WAS","NOT",
+            "ALL","ANY","CAN","HER","HIM","HIS",
+            "OUT","GET","HAS","HAD","LET","PUT","TOO",
+            "YES","YET","NOW","HOW","WHO","WHY",
+            "OWN","DID","DOO","TOO",
+
+
+            // --- People / familiar nouns ---
+            "MOM","DAD","BOY","GIR","PET","TOY",
+            "BAG","HAT","BAT","CUP","CAR","BUS",
+            "BED","SUN","MOON","COW","PIG","HEN",
+            "EAT","RUN","SIT","HOP","JOG","DIG","HUG","TRY","FLY",
+
+            // --- Animals ---
+            "CAT","DOG","RAT","BAT","COW","PIG","HEN","BUG","ANT",
+
+            // --- Action words ---
+            "RUN","HOP","JOG","SIT","EAT","SEE","GET","PUT","TRY",
+            "EGG","HAT","CAP","MAP","PEN","CUP","BAT","BALL","ICE","SKY","SEA","SUN","ZOO"
+        ).distinct()
+
+        viewModel.loadWordBank(cvcWords)
+        android.util.Log.d("PracticeModeScreen", "Loaded ${cvcWords.distinct().size} CVC words")
+    }
+
     // Speak the prediction when we enter RESULT state
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == PracticeModeViewModel.State.RESULT && uiState.prediction != null) {
             ttsManager.speakLetter(uiState.prediction!!)
         }
     }
+
+    // Speak the formed word (just the word, no encouragement)
+    // Triggered when wordJustFormed becomes true
+    LaunchedEffect(uiState.wordJustFormed, uiState.lastFormedWord) {
+        if (uiState.wordJustFormed && uiState.lastFormedWord != null) {
+            // Wait for letter TTS to finish before speaking the word
+            kotlinx.coroutines.delay(1000)
+            ttsManager.speakWord(uiState.lastFormedWord!!)
+            android.util.Log.d("PracticeModeScreen", "TTS speaking word: ${uiState.lastFormedWord}")
+        }
+    }
+
 
     Column(
         modifier = Modifier
@@ -164,7 +262,7 @@ private fun IdleContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // "Tap to Start" text below image
+            // "Tap to Start" text
             Text(
                 text = "Tap to Start",
                 color = Color.White,
@@ -260,25 +358,61 @@ private fun ResultContent(
     uiState: PracticeModeViewModel.UiState,
     viewModel: PracticeModeViewModel
 ) {
+    // Track display phase: LETTER -> WORD (if formed)
+    var showFormedWord by remember { mutableStateOf(false) }
+
+    // Use lastFormedWord from uiState - this is reliable
+    val formedWord = uiState.lastFormedWord
+    val hasFormedWord = uiState.wordJustFormed && formedWord != null
+
+    // Reset showFormedWord when prediction changes (new letter)
+    LaunchedEffect(uiState.prediction) {
+        showFormedWord = false
+    }
+
+    // Auto-transition logic
+    LaunchedEffect(uiState.prediction, hasFormedWord) {
+        if (hasFormedWord) {
+            // Word formed: Show letter -> wait -> show word -> wait -> IDLE
+            android.util.Log.d("ResultContent", "Word formed: $formedWord, showing letter first")
+            kotlinx.coroutines.delay(1000) // Wait for letter TTS
+            showFormedWord = true
+            android.util.Log.d("ResultContent", "Now showing formed word: $formedWord")
+            kotlinx.coroutines.delay(2000) // Wait for word TTS and display
+            viewModel.acknowledgeFormedWord()
+            viewModel.resetToIdle()
+        } else {
+            // No word formed: Show letter -> wait -> IDLE
+            kotlinx.coroutines.delay(1500) // Wait for letter TTS and brief display
+            viewModel.resetToIdle()
+        }
+    }
+
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                indication = null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            ) { viewModel.resetToIdle() },
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = uiState.prediction ?: "?",
-            color = Color.White,
-            textAlign = TextAlign.Center,
-            fontSize = 80.sp,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.display1,
-            modifier = Modifier
-                .wrapContentSize(Alignment.Center)
-        )
+        // Show formed word after letter has been displayed and spoken
+        if (showFormedWord && formedWord != null) {
+            Text(
+                text = formedWord,
+                color = AppColors.PracticeModeColor,
+                fontSize = 64.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        } else {
+            // Show predicted letter only
+            Text(
+                text = uiState.prediction ?: "?",
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                fontSize = 80.sp,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.display1,
+                modifier = Modifier.wrapContentSize(Alignment.Center)
+            )
+        }
     }
 }
 

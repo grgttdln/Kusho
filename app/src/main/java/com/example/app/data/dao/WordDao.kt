@@ -116,4 +116,13 @@ interface WordDao {
      */
     @Query("SELECT COUNT(*) FROM words WHERE userId = :userId")
     suspend fun getWordCountForUser(userId: Long): Int
+
+    /**
+     * Get all unique words in the database (for wearable sync).
+     * Returns distinct word strings regardless of user.
+     *
+     * @return List of all unique words
+     */
+    @Query("SELECT DISTINCT word FROM words ORDER BY word ASC")
+    suspend fun getAllUniqueWords(): List<String>
 }
