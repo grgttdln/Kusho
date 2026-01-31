@@ -51,7 +51,6 @@ fun MainNavigationContainer(
     var tutorialModeStudentId by remember { mutableStateOf(0L) }
     var tutorialModeClassId by remember { mutableStateOf(0L) }
     var tutorialSessionTitle by remember { mutableStateOf("") }
-    var tutorialLetterType by remember { mutableStateOf("capital") }
 
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
@@ -64,6 +63,7 @@ fun MainNavigationContainer(
     var yourSetsScreenKey by remember { mutableStateOf(0) }
     var wordsForCreation by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
     var wordsForEdit by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
+    var wordsToExclude by remember { mutableStateOf(listOf<String>()) }
 
     // --- REPOSITORY & CONTEXT HELPERS ---
     val context = LocalContext.current
@@ -186,7 +186,10 @@ fun MainNavigationContainer(
             userId = userId,
             activityId = if (selectedActivityId > 0L) selectedActivityId else null,
             onBackClick = { currentScreen = if (selectedActivityId > 0L) 16 else 7 },
-            onAddWordsClick = { currentScreen = 12 },
+            onAddWordsClick = { existingWords ->
+                wordsToExclude = existingWords
+                currentScreen = 12
+            },
             selectedWords = wordsForCreation,
             onCreateSet = { title, _, _ ->
                 createdSetTitle = title
@@ -200,6 +203,7 @@ fun MainNavigationContainer(
             }
             SelectWordsScreen(
                 availableWords = availableWords,
+                excludeWords = wordsToExclude,
                 onBackClick = { currentScreen = 11 },
                 onWordsSelected = { words ->
                     wordsForCreation = words
@@ -221,7 +225,10 @@ fun MainNavigationContainer(
             setId = selectedSetId,
             userId = userId,
             onBackClick = { currentScreen = if (selectedActivityId > 0L) 16 else 7 },
-            onAddWordsClick = { currentScreen = 15 },
+            onAddWordsClick = { existingWords ->
+                wordsToExclude = existingWords
+                currentScreen = 15
+            },
             onUpdateSuccess = {
                 yourSetsScreenKey++
                 currentScreen = if (selectedActivityId > 0L) 16 else 7
@@ -239,6 +246,8 @@ fun MainNavigationContainer(
             }
             SelectWordsScreen(
                 availableWords = availableWords,
+                excludeWords = wordsToExclude,
+                isAddingToExistingSet = true,
                 onBackClick = { currentScreen = 14 },
                 onWordsSelected = { words ->
                     wordsForEdit = words
@@ -348,16 +357,14 @@ fun MainNavigationContainer(
             studentId = tutorialModeStudentId,
             classId = tutorialModeClassId,
             onBack = { currentScreen = 4 },
-            onStartSession = { title, letterType ->
+            onStartSession = { title, _ ->
                 tutorialSessionTitle = title
-                tutorialLetterType = letterType
                 currentScreen = 28
             },
             modifier = modifier
         )
         28 -> TutorialSessionScreen(
             title = tutorialSessionTitle,
-            letterType = tutorialLetterType,
             onEndSession = { currentScreen = 29 },
             modifier = modifier
         )
@@ -417,18 +424,12 @@ fun MainNavigationContainer(
             )
         }
         34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
-            onPracticeAgain = { 
-                // Reset to set selection screen, user can tap the same set again
-                currentScreen = 32
-            },
+            onPracticeAgain = { currentScreen = 31 },
             onContinue = { currentScreen = 35 },
             modifier = modifier
         )
         35 -> com.example.app.ui.feature.learn.learnmode.LearnModeFinishedScreen(
-            onEndSession = { 
-                learnModeSessionKey++ // Reset session
-                currentScreen = 1 
-            },
+            onEndSession = { currentScreen = 1 },
             modifier = modifier
         )
     }

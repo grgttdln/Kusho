@@ -38,7 +38,7 @@ fun BottomNavBar(
         )
 
         NavBarItem(
-            icon = com.example.app.R.drawable.ic_lesson,
+            icon = com.example.app.R.drawable.ic_book_blue,
             label = "Learn",
             isSelected = selectedTab == 1,
             onClick = { onTabSelected(1) }

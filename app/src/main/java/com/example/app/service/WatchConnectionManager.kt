@@ -81,6 +81,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_LEARN_MODE_SKIP = "/learn_mode_skip"
         private const val MESSAGE_PATH_LEARN_MODE_STARTED = "/learn_mode_started"
         private const val MESSAGE_PATH_LEARN_MODE_ENDED = "/learn_mode_ended"
+        private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
     
@@ -315,6 +316,38 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Learn Mode ended notification sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to notify watch of Learn Mode end", e)
+            }
+        }
+    }
+    
+    /**
+     * Send word data to watch for fill-in-the-blanks mode
+     * @param word The full word
+     * @param maskedIndex Index of the masked letter (for fill-in-the-blank)
+     * @param configurationType The configuration type (e.g., "Fill in the Blank")
+     */
+    fun sendLearnModeWordData(word: String, maskedIndex: Int, configurationType: String) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                
+                // Create JSON payload
+                val jsonPayload = org.json.JSONObject().apply {
+                    put("word", word)
+                    put("maskedIndex", maskedIndex)
+                    put("configurationType", configurationType)
+                }.toString()
+                
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_WORD_DATA,
+                        jsonPayload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Word data sent to watch: $word (masked: $maskedIndex, type: $configurationType)")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send word data to watch", e)
             }
         }
     }

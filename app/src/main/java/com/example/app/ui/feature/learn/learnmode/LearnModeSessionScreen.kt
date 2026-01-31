@@ -137,6 +137,18 @@ fun LearnModeSessionScreen(
         }
     }
 
+    // Send current word data to watch whenever current word changes
+    LaunchedEffect(currentWordIndex, words) {
+        val currentWord = words.getOrNull(currentWordIndex)
+        if (currentWord != null) {
+            watchConnectionManager.sendLearnModeWordData(
+                word = currentWord.word,
+                maskedIndex = currentWord.selectedLetterIndex,
+                configurationType = currentWord.configurationType
+            )
+        }
+    }
+
     // Listen for skip commands from watch with debouncing
     LaunchedEffect(sessionKey) {
         val sessionStartTime = System.currentTimeMillis()

@@ -62,6 +62,9 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.core.splashscreen)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+
+    // Wearable Data Layer API for communication with phone
+    implementation(libs.play.services.wearable)
     implementation("androidx.wear.compose:compose-navigation:1.3.0")
     implementation("androidx.navigation:navigation-compose:2.7.6")
     implementation("androidx.compose.material:material-icons-core:1.6.0")
