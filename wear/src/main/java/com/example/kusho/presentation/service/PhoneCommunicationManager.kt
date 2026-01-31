@@ -31,6 +31,20 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
     private val _isPhoneInLearnMode = MutableStateFlow(false)
     val isPhoneInLearnMode: StateFlow<Boolean> = _isPhoneInLearnMode.asStateFlow()
     
+    // StateFlow for letter validation results from phone (for Write the Word mode)
+    data class LetterResultEvent(
+        val isCorrect: Boolean = false,
+        val currentIndex: Int = 0,
+        val totalLetters: Int = 0,
+        val timestamp: Long = 0L
+    )
+    private val _letterResultEvent = MutableStateFlow(LetterResultEvent())
+    val letterResultEvent: StateFlow<LetterResultEvent> = _letterResultEvent.asStateFlow()
+
+    // StateFlow for word complete events from phone
+    private val _wordCompleteEvent = MutableStateFlow(0L) // Timestamp
+    val wordCompleteEvent: StateFlow<Long> = _wordCompleteEvent.asStateFlow()
+
     companion object {
         private const val MESSAGE_PATH_REQUEST_BATTERY = "/request_battery"
         private const val MESSAGE_PATH_REQUEST_DEVICE_INFO = "/request_device_info"
@@ -40,6 +54,9 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_LEARN_MODE_STARTED = "/learn_mode_started"
         private const val MESSAGE_PATH_LEARN_MODE_ENDED = "/learn_mode_ended"
         private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
+        private const val MESSAGE_PATH_LETTER_INPUT = "/learn_mode_letter_input"
+        private const val MESSAGE_PATH_LETTER_RESULT = "/learn_mode_letter_result"
+        private const val MESSAGE_PATH_WORD_COMPLETE = "/learn_mode_word_complete"
         private const val BATTERY_UPDATE_INTERVAL_MS = 60000L // 1 minute
     }
     
@@ -186,6 +203,44 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                 android.util.Log.d("PhoneCommunicationMgr", "📚 Word data received")
                 handleWordData(messageEvent.data)
             }
+            MESSAGE_PATH_LETTER_RESULT -> {
+                android.util.Log.d("PhoneCommunicationMgr", "📝 Letter result received")
+                handleLetterResult(messageEvent.data)
+            }
+            MESSAGE_PATH_WORD_COMPLETE -> {
+                android.util.Log.d("PhoneCommunicationMgr", "✅ Word complete received")
+                _wordCompleteEvent.value = System.currentTimeMillis()
+                // Also update state holder
+                com.example.kusho.presentation.learn.LearnModeStateHolder.onWordComplete()
+            }
+        }
+    }
+
+    /**
+     * Handle letter result from phone
+     */
+    private fun handleLetterResult(data: ByteArray) {
+        try {
+            val jsonString = String(data)
+            val json = org.json.JSONObject(jsonString)
+
+            val isCorrect = json.optBoolean("isCorrect", false)
+            val currentIndex = json.optInt("currentIndex", 0)
+            val totalLetters = json.optInt("totalLetters", 0)
+
+            android.util.Log.d("PhoneCommunicationMgr", "📝 Letter result: correct=$isCorrect, index=$currentIndex/$totalLetters")
+
+            _letterResultEvent.value = LetterResultEvent(
+                isCorrect = isCorrect,
+                currentIndex = currentIndex,
+                totalLetters = totalLetters,
+                timestamp = System.currentTimeMillis()
+            )
+
+            // Also update state holder
+            com.example.kusho.presentation.learn.LearnModeStateHolder.onLetterResult(isCorrect, currentIndex, totalLetters)
+        } catch (e: Exception) {
+            android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing letter result", e)
         }
     }
     
@@ -245,7 +300,38 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             e.printStackTrace()
         }
     }
-    
+
+    /**
+     * Send letter input to phone for Write the Word mode
+     * @param letter The letter that was recognized
+     * @param letterIndex The current letter index being input
+     */
+    suspend fun sendLetterInput(letter: String, letterIndex: Int) {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+
+            val payload = org.json.JSONObject().apply {
+                put("letter", letter)
+                put("letterIndex", letterIndex)
+            }.toString()
+
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LETTER_INPUT,
+                        payload.toByteArray()
+                    ).await()
+                    android.util.Log.d("PhoneCommunicationMgr", "📤 Letter input sent: $letter at index $letterIndex")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PhoneCommunicationMgr", "❌ Failed to send letter input", e)
+        }
+    }
+
     /**
      * Clean up resources
      */

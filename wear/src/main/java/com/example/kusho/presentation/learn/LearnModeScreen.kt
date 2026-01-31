@@ -76,6 +76,7 @@ fun LearnModeScreen() {
 
     // Check if current word is Fill in the Blank type
     val isFillInTheBlank = wordData.configurationType == "Fill in the Blank"
+    val isWriteTheWord = wordData.configurationType == "Write the Word"
 
     CircularModeBorder(borderColor = AppColors.LearnModeColor) {
         Scaffold {
@@ -91,6 +92,22 @@ fun LearnModeScreen() {
                         // Fill in the Blank mode - show gesture input
                         FillInTheBlankContent(
                             wordData = wordData,
+                            onSkip = {
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastSkipTime >= 500) {
+                                    lastSkipTime = currentTime
+                                    scope.launch {
+                                        phoneCommunicationManager.sendSkipCommand()
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    isWriteTheWord && wordData.word.isNotEmpty() -> {
+                        // Write the Word mode - show letter-by-letter gesture input
+                        WriteTheWordContent(
+                            wordData = wordData,
+                            phoneCommunicationManager = phoneCommunicationManager,
                             onSkip = {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastSkipTime >= 500) {
@@ -444,5 +461,290 @@ private fun buildMaskedWordDisplay(word: String, maskedIndex: Int): String {
     return word.mapIndexed { index, char ->
         if (index == maskedIndex) "_" else char.toString()
     }.joinToString(" ")
+}
+
+/**
+ * Write the Word mode content - letter-by-letter gesture input
+ * User inputs each letter of the word sequentially using gestures
+ */
+@Composable
+private fun WriteTheWordContent(
+    wordData: LearnModeStateHolder.WordData,
+    phoneCommunicationManager: PhoneCommunicationManager,
+    onSkip: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Observe Write the Word state
+    val writeTheWordState by LearnModeStateHolder.writeTheWordState.collectAsState()
+
+    // Initialize dependencies
+    var isInitialized by remember { mutableStateOf(false) }
+    var sensorManager by remember { mutableStateOf<MotionSensorManager?>(null) }
+    var classifierResult by remember { mutableStateOf<ClassifierLoadResult?>(null) }
+
+    // Initialize TextToSpeech manager
+    val ttsManager = remember { TextToSpeechManager(context) }
+
+    // Cleanup TTS when disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
+
+    // Initialize dependencies
+    LaunchedEffect(Unit) {
+        sensorManager = MotionSensorManager(context)
+        classifierResult = try {
+            ModelLoader.loadDefault(context)
+        } catch (e: Exception) {
+            ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
+        }
+        isInitialized = true
+    }
+
+    if (!isInitialized || sensorManager == null || classifierResult == null) {
+        // Loading state
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(40.dp),
+                strokeWidth = 4.dp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Loading...",
+                color = AppColors.TextSecondary,
+                fontSize = 12.sp
+            )
+        }
+    } else {
+        WriteTheWordMainContent(
+            wordData = wordData,
+            writeTheWordState = writeTheWordState,
+            sensorManager = sensorManager!!,
+            classifierResult = classifierResult!!,
+            ttsManager = ttsManager,
+            phoneCommunicationManager = phoneCommunicationManager,
+            onSkip = onSkip
+        )
+    }
+}
+
+@Composable
+private fun WriteTheWordMainContent(
+    wordData: LearnModeStateHolder.WordData,
+    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
+    sensorManager: MotionSensorManager,
+    classifierResult: ClassifierLoadResult,
+    ttsManager: TextToSpeechManager,
+    phoneCommunicationManager: PhoneCommunicationManager,
+    onSkip: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val viewModel: LearnModeViewModel = viewModel(
+        factory = LearnModeViewModelFactory(sensorManager, classifierResult)
+    )
+
+    val uiState by viewModel.uiState.collectAsState()
+
+    // Current letter to input - keep exact case (uppercase or lowercase)
+    val currentLetterIndex = writeTheWordState.currentLetterIndex
+    val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
+
+    // Track if we're showing feedback (correct/wrong image)
+    var showingFeedback by remember { mutableStateOf(false) }
+    var feedbackIsCorrect by remember { mutableStateOf(false) }
+
+    // Send letter input to phone when prediction is made
+    LaunchedEffect(uiState.state, uiState.prediction) {
+        if (uiState.state == LearnModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
+            // Speak the predicted letter
+            ttsManager.speakLetter(uiState.prediction!!)
+
+            // Send letter input to phone for validation (preserve exact case)
+            phoneCommunicationManager.sendLetterInput(uiState.prediction!!, currentLetterIndex)
+        }
+    }
+
+    // Listen for letter result from phone
+    LaunchedEffect(Unit) {
+        phoneCommunicationManager.letterResultEvent.collect { result ->
+            if (result.timestamp > 0L) {
+                // Show feedback image
+                feedbackIsCorrect = result.isCorrect
+                showingFeedback = true
+
+                // Auto-reset after showing feedback
+                kotlinx.coroutines.delay(1500) // Show feedback for 1.5 seconds
+                showingFeedback = false
+                viewModel.resetToIdle()
+            }
+        }
+    }
+
+    // Check if prediction matches expected letter for local UI feedback (case-sensitive)
+    val isCorrectPrediction = uiState.prediction?.firstOrNull() == expectedLetter
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (dragAmount < -50f) {
+                        change.consume()
+                        onSkip()
+                    }
+                }
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Show feedback image if we're in feedback state
+            if (showingFeedback) {
+                WriteTheWordFeedbackContent(isCorrect = feedbackIsCorrect)
+            } else {
+                when (uiState.state) {
+                    LearnModeViewModel.State.IDLE -> WriteTheWordIdleContent(
+                        wordData = wordData,
+                        writeTheWordState = writeTheWordState,
+                        viewModel = viewModel
+                    )
+                    LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
+                    LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
+                    LearnModeViewModel.State.PROCESSING -> ProcessingContent()
+                    LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
+                    LearnModeViewModel.State.RESULT -> WriteTheWordIdleContent(
+                        wordData = wordData,
+                        writeTheWordState = writeTheWordState,
+                        viewModel = viewModel
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WriteTheWordIdleContent(
+    wordData: LearnModeStateHolder.WordData,
+    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
+    viewModel: LearnModeViewModel
+) {
+    val currentLetterIndex = writeTheWordState.currentLetterIndex
+    val expectedLetter = wordData.word.getOrNull(currentLetterIndex)?.toString() ?: ""
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.startRecording() },
+        contentAlignment = Alignment.Center
+    ) {
+        // Display only the current letter to write - large and purple like in the UI image
+        Text(
+            text = expectedLetter,
+            color = AppColors.LearnModeColor,
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.display1
+        )
+    }
+}
+
+@Composable
+private fun WriteTheWordLetterDisplay(
+    word: String,
+    completedIndices: Set<Int>,
+    currentIndex: Int
+) {
+    val completedColor = Color(0xFFAE8EFB) // Purple for completed
+    val currentColor = Color.White // White for current letter
+    val pendingColor = Color(0xFF808080) // Gray for pending
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        word.forEachIndexed { index, letter ->
+            Text(
+                text = letter.toString(),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = when {
+                    index in completedIndices -> completedColor
+                    index == currentIndex -> currentColor
+                    else -> pendingColor
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun WriteTheWordResultContent(
+    uiState: LearnModeViewModel.UiState,
+    wordData: LearnModeStateHolder.WordData,
+    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
+    isCorrect: Boolean,
+    viewModel: LearnModeViewModel
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.resetToIdle() },
+        contentAlignment = Alignment.Center
+    ) {
+        // Show correct or wrong mascot image based on result
+        Image(
+            painter = painterResource(
+                id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+            ),
+            contentDescription = if (isCorrect) "Correct" else "Wrong",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+/**
+ * Feedback content for Write the Word mode - shows correct/wrong image
+ */
+@Composable
+private fun WriteTheWordFeedbackContent(isCorrect: Boolean) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Show correct or wrong mascot image
+        Image(
+            painter = painterResource(
+                id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+            ),
+            contentDescription = if (isCorrect) "Correct" else "Wrong",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentScale = ContentScale.Fit
+        )
+    }
 }
 

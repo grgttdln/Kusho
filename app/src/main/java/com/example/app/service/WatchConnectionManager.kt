@@ -56,6 +56,15 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _learnModeSkipTrigger = MutableStateFlow(0L) // Timestamp of skip event
     val learnModeSkipTrigger: StateFlow<Long> = _learnModeSkipTrigger.asStateFlow()
     
+    // Flow for letter input events from watch (for Write the Word mode)
+    data class LetterInputEvent(
+        val letter: Char = ' ',
+        val letterIndex: Int = 0,
+        val timestamp: Long = 0L
+    )
+    private val _letterInputEvent = MutableStateFlow(LetterInputEvent())
+    val letterInputEvent: StateFlow<LetterInputEvent> = _letterInputEvent.asStateFlow()
+
     companion object {
         @Volatile
         private var INSTANCE: WatchConnectionManager? = null
@@ -82,6 +91,9 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_LEARN_MODE_STARTED = "/learn_mode_started"
         private const val MESSAGE_PATH_LEARN_MODE_ENDED = "/learn_mode_ended"
         private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
+        private const val MESSAGE_PATH_LETTER_INPUT = "/learn_mode_letter_input"
+        private const val MESSAGE_PATH_LETTER_RESULT = "/learn_mode_letter_result"
+        private const val MESSAGE_PATH_WORD_COMPLETE = "/learn_mode_word_complete"
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
     
@@ -353,6 +365,57 @@ class WatchConnectionManager private constructor(private val context: Context) {
     }
     
     /**
+     * Send letter validation result back to watch for Write the Word mode
+     * @param isCorrect Whether the input letter was correct
+     * @param currentIndex Current letter index being spelled (next letter to input)
+     * @param totalLetters Total letters in the word
+     */
+    fun sendLetterResult(isCorrect: Boolean, currentIndex: Int, totalLetters: Int) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = org.json.JSONObject().apply {
+                    put("isCorrect", isCorrect)
+                    put("currentIndex", currentIndex)
+                    put("totalLetters", totalLetters)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LETTER_RESULT,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Letter result sent: correct=$isCorrect, index=$currentIndex/$totalLetters")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send letter result", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that word was completed successfully
+     */
+    fun sendWordComplete() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_WORD_COMPLETE,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Word complete notification sent")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send word complete", e)
+            }
+        }
+    }
+
+    /**
      * Request device info from connected watch
      */
     fun requestDeviceInfo() {
@@ -455,6 +518,22 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "⏭️ Received Learn Mode skip command from watch")
                 // Trigger skip by updating the timestamp
                 _learnModeSkipTrigger.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_LETTER_INPUT -> {
+                try {
+                    val jsonString = String(messageEvent.data)
+                    val json = org.json.JSONObject(jsonString)
+                    val letter = json.optString("letter", "").firstOrNull() ?: return
+                    val letterIndex = json.optInt("letterIndex", 0)
+                    Log.d(TAG, "🔤 Received letter input from watch: $letter at index $letterIndex")
+                    _letterInputEvent.value = LetterInputEvent(
+                        letter = letter,
+                        letterIndex = letterIndex,
+                        timestamp = System.currentTimeMillis()
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Failed to parse letter input", e)
+                }
             }
         }
     }

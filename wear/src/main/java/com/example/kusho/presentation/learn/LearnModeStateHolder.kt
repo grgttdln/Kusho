@@ -32,11 +32,25 @@ object LearnModeStateHolder {
         val timestamp: Long = 0L
     )
 
+    /**
+     * State for Write the Word mode - tracks letter input progress
+     */
+    data class WriteTheWordState(
+        val currentLetterIndex: Int = 0,
+        val completedIndices: Set<Int> = emptySet(),
+        val lastResultCorrect: Boolean? = null,
+        val isWordComplete: Boolean = false,
+        val timestamp: Long = 0L
+    )
+
     private val _wordData = MutableStateFlow(WordData())
     val wordData: StateFlow<WordData> = _wordData.asStateFlow()
 
     private val _sessionData = MutableStateFlow(SessionData())
     val sessionData: StateFlow<SessionData> = _sessionData.asStateFlow()
+
+    private val _writeTheWordState = MutableStateFlow(WriteTheWordState())
+    val writeTheWordState: StateFlow<WriteTheWordState> = _writeTheWordState.asStateFlow()
 
     /**
      * Called by WearMessageListenerService when word data is received
@@ -51,6 +65,8 @@ object LearnModeStateHolder {
                     configurationType = configurationType,
                     timestamp = System.currentTimeMillis()
                 )
+                // Reset Write the Word state for new word
+                _writeTheWordState.value = WriteTheWordState(timestamp = System.currentTimeMillis())
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error updating word data", e)
             }
@@ -101,6 +117,51 @@ object LearnModeStateHolder {
         runOnMainThread {
             _wordData.value = WordData()
             _sessionData.value = SessionData()
+            _writeTheWordState.value = WriteTheWordState()
+        }
+    }
+
+    /**
+     * Called when phone sends letter validation result for Write the Word mode
+     */
+    fun onLetterResult(isCorrect: Boolean, currentIndex: Int, totalLetters: Int) {
+        runOnMainThread {
+            try {
+                Log.d(TAG, "📝 Letter result: correct=$isCorrect, index=$currentIndex/$totalLetters")
+                val currentState = _writeTheWordState.value
+                _writeTheWordState.value = currentState.copy(
+                    currentLetterIndex = currentIndex,
+                    completedIndices = if (isCorrect && currentIndex > 0) {
+                        currentState.completedIndices + (currentIndex - 1)
+                    } else {
+                        currentState.completedIndices
+                    },
+                    lastResultCorrect = isCorrect,
+                    timestamp = System.currentTimeMillis()
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error updating letter result", e)
+            }
+        }
+    }
+
+    /**
+     * Called when phone notifies word is complete
+     */
+    fun onWordComplete() {
+        runOnMainThread {
+            try {
+                Log.d(TAG, "✅ Word complete!")
+                val currentWord = _wordData.value.word
+                _writeTheWordState.value = _writeTheWordState.value.copy(
+                    isWordComplete = true,
+                    completedIndices = currentWord.indices.toSet(),
+                    lastResultCorrect = true,
+                    timestamp = System.currentTimeMillis()
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error updating word complete", e)
+            }
         }
     }
 

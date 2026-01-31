@@ -42,6 +42,8 @@ import java.io.File
 
 private val PurpleColor = Color(0xFFAE8EFB)
 private val LightPurpleColor = Color(0xFFE7DDFE)
+private val CompletedLetterColor = Color(0xFFAE8EFB)
+private val PendingLetterColor = Color(0xFF808080)
 
 /**
  * Data class representing a word item in the learn mode session.
@@ -82,6 +84,10 @@ fun LearnModeSessionScreen(
     var words by remember(sessionKey) { mutableStateOf<List<WordItem>>(emptyList()) }
     var currentWordIndex by remember(sessionKey) { mutableIntStateOf(0) }
     var title by remember(sessionKey) { mutableStateOf(activityTitle) }
+
+    // State for Write the Word mode - tracks which letters have been correctly input
+    var completedLetterIndices by remember(sessionKey) { mutableStateOf<Set<Int>>(emptySet()) }
+    var currentLetterIndex by remember(sessionKey) { mutableIntStateOf(0) }
 
     val context = LocalContext.current
 
@@ -141,11 +147,61 @@ fun LearnModeSessionScreen(
     LaunchedEffect(currentWordIndex, words) {
         val currentWord = words.getOrNull(currentWordIndex)
         if (currentWord != null) {
+            // Reset letter tracking state for new word
+            completedLetterIndices = emptySet()
+            currentLetterIndex = 0
+
             watchConnectionManager.sendLearnModeWordData(
                 word = currentWord.word,
                 maskedIndex = currentWord.selectedLetterIndex,
                 configurationType = currentWord.configurationType
             )
+        }
+    }
+
+    // Listen for letter input events from watch (for Write the Word mode)
+    LaunchedEffect(sessionKey) {
+        val sessionStartTime = System.currentTimeMillis()
+        watchConnectionManager.letterInputEvent.collect { event ->
+            if (event.timestamp > sessionStartTime) {
+                val currentWord = words.getOrNull(currentWordIndex)
+                if (currentWord != null && currentWord.configurationType == "Write the Word") {
+                    // Get expected letter - match exact case (uppercase vs lowercase)
+                    val expectedLetter = currentWord.word.getOrNull(currentLetterIndex)
+                    
+                    // Check if input letter matches expected letter exactly (case-sensitive)
+                    // If expected is uppercase, input must be uppercase
+                    // If expected is lowercase, input must be lowercase
+                    val isCorrect = event.letter == expectedLetter
+
+                    if (isCorrect) {
+                        // Mark letter as completed
+                        completedLetterIndices = completedLetterIndices + currentLetterIndex
+                        currentLetterIndex++
+
+                        if (currentLetterIndex >= currentWord.word.length) {
+                            // Word complete - notify watch and move to next word
+                            watchConnectionManager.sendWordComplete()
+
+                            // Small delay before moving to next word
+                            kotlinx.coroutines.delay(500)
+
+                            if (currentWordIndex < words.size - 1) {
+                                currentWordIndex++
+                            } else {
+                                onSessionComplete()
+                            }
+                        } else {
+                            // Send correct result and move to next letter
+                            watchConnectionManager.sendLetterResult(true, currentLetterIndex, currentWord.word.length)
+                        }
+                    } else {
+                        // Wrong letter - send incorrect feedback but DON'T advance letter index
+                        // User must retry the same letter until correct (case-sensitive)
+                        watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
+                    }
+                }
+            }
         }
     }
 
@@ -315,23 +371,79 @@ fun LearnModeSessionScreen(
             if (currentWord != null) {
                 val isWriteTheWord = currentWord.configurationType == "Write the Word"
                 val isNameThePicture = currentWord.configurationType == "Name the Picture"
-                Text(
-                    text = when {
-                        isNameThePicture -> currentWord.getBlankWord()
-                        isWriteTheWord -> currentWord.getFullWord()
-                        else -> currentWord.getMaskedWord()
-                    },
-                    fontSize = if (currentWord.imagePath != null) 48.sp else 96.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isWriteTheWord) Color(0xFF808080) else Color.Black,
-                    letterSpacing = if (currentWord.imagePath != null) 4.sp else 8.sp
-                )
+
+                if (isWriteTheWord) {
+                    // Write the Word mode - show letters with color based on completion
+                    WriteTheWordDisplay(
+                        word = currentWord.word,
+                        completedIndices = completedLetterIndices,
+                        currentIndex = currentLetterIndex,
+                        hasImage = currentWord.imagePath != null
+                    )
+                } else {
+                    Text(
+                        text = when {
+                            isNameThePicture -> currentWord.getBlankWord()
+                            else -> currentWord.getMaskedWord()
+                        },
+                        fontSize = if (currentWord.imagePath != null) 48.sp else 96.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        letterSpacing = if (currentWord.imagePath != null) 4.sp else 8.sp
+                    )
+                }
             }
 
             Spacer(Modifier.weight(0.7f))
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Display for Write the Word mode showing each letter with color based on completion status.
+ * Current letter has an underline. Completed letters turn purple (#AE8EFB), pending letters are gray.
+ */
+@Composable
+private fun WriteTheWordDisplay(
+    word: String,
+    completedIndices: Set<Int>,
+    currentIndex: Int,
+    hasImage: Boolean
+) {
+    val fontSize = if (hasImage) 48.sp else 96.sp
+    val letterSpacing = if (hasImage) 12.dp else 16.dp
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(letterSpacing),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        word.forEachIndexed { index, letter ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = letter.toString(),
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        index in completedIndices -> CompletedLetterColor  // Completed - purple
+                        else -> Color.Black  // All other letters - black
+                    }
+                )
+
+                // Add underline for current letter being input
+                if (index == currentIndex) {
+                    Box(
+                        modifier = Modifier
+                            .width(fontSize.value.dp * 0.7f)
+                            .height(4.dp)
+                            .background(Color.Black, RoundedCornerShape(2.dp))
+                    )
+                }
+            }
+        }
     }
 }
 
