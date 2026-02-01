@@ -339,10 +339,24 @@ private fun FillInTheBlankMainContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
+    // Track last spoken prediction to avoid double TTS
+    var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
+
     // Speak the prediction when result is shown
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == LearnModeViewModel.State.RESULT && uiState.prediction != null) {
-            ttsManager.speakLetter(uiState.prediction!!)
+            // Only speak if we haven't already spoken this prediction
+            if (lastSpokenPrediction != uiState.prediction) {
+                lastSpokenPrediction = uiState.prediction
+                ttsManager.speakLetter(uiState.prediction!!)
+            }
+        }
+    }
+
+    // Reset last spoken prediction when going back to idle
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.IDLE) {
+            lastSpokenPrediction = null
         }
     }
 
@@ -614,7 +628,6 @@ private fun WriteTheWordMainContent(
     phoneCommunicationManager: PhoneCommunicationManager,
     onSkip: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(sensorManager, classifierResult)
     )
@@ -629,21 +642,38 @@ private fun WriteTheWordMainContent(
     var showingFeedback by remember { mutableStateOf(false) }
     var feedbackIsCorrect by remember { mutableStateOf(false) }
 
+    // Track when this content was composed to filter stale events
+    val contentStartTime = remember { System.currentTimeMillis() }
+
+    // Track last spoken prediction to avoid double TTS
+    var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
+
     // Send letter input to phone when prediction is made
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == LearnModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
-            // Speak the predicted letter
-            ttsManager.speakLetter(uiState.prediction!!)
+            // Only speak if we haven't already spoken this prediction
+            if (lastSpokenPrediction != uiState.prediction) {
+                lastSpokenPrediction = uiState.prediction
+                ttsManager.speakLetter(uiState.prediction!!)
+            }
 
             // Send letter input to phone for validation (preserve exact case)
             phoneCommunicationManager.sendLetterInput(uiState.prediction!!, currentLetterIndex)
         }
     }
 
+    // Reset last spoken prediction when going back to idle
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.IDLE) {
+            lastSpokenPrediction = null
+        }
+    }
+
     // Listen for letter result from phone
     LaunchedEffect(Unit) {
         phoneCommunicationManager.letterResultEvent.collect { result ->
-            if (result.timestamp > 0L) {
+            // Only process events that occurred after this content was composed
+            if (result.timestamp > contentStartTime) {
                 // Show feedback image
                 feedbackIsCorrect = result.isCorrect
                 showingFeedback = true
@@ -899,7 +929,6 @@ private fun NameThePictureMainContent(
     phoneCommunicationManager: PhoneCommunicationManager,
     onSkip: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(sensorManager, classifierResult)
     )
@@ -914,21 +943,38 @@ private fun NameThePictureMainContent(
     var showingFeedback by remember { mutableStateOf(false) }
     var feedbackIsCorrect by remember { mutableStateOf(false) }
 
+    // Track when this content was composed to filter stale events
+    val contentStartTime = remember { System.currentTimeMillis() }
+
+    // Track last spoken prediction to avoid double TTS
+    var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
+
     // Send letter input to phone when prediction is made
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == LearnModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
-            // Speak the predicted letter
-            ttsManager.speakLetter(uiState.prediction!!)
+            // Only speak if we haven't already spoken this prediction
+            if (lastSpokenPrediction != uiState.prediction) {
+                lastSpokenPrediction = uiState.prediction
+                ttsManager.speakLetter(uiState.prediction!!)
+            }
 
             // Send letter input to phone for validation (preserve exact case)
             phoneCommunicationManager.sendLetterInput(uiState.prediction!!, currentLetterIndex)
         }
     }
 
+    // Reset last spoken prediction when going back to idle
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.IDLE) {
+            lastSpokenPrediction = null
+        }
+    }
+
     // Listen for letter result from phone
     LaunchedEffect(Unit) {
         phoneCommunicationManager.letterResultEvent.collect { result ->
-            if (result.timestamp > 0L) {
+            // Only process events that occurred after this content was composed
+            if (result.timestamp > contentStartTime) {
                 // Show feedback image
                 feedbackIsCorrect = result.isCorrect
                 showingFeedback = true
@@ -1011,62 +1057,7 @@ private fun NameThePictureIdleContent(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-
-        // Overlay letter progress at the top - shows underlines that reveal letters when correct
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            NameThePictureLetterProgress(
-                word = wordData.word,
-                completedIndices = writeTheWordState.completedIndices,
-                currentIndex = writeTheWordState.currentLetterIndex
-            )
-        }
     }
 }
 
-/**
- * Letter progress display for Name the Picture mode
- * Shows underlines initially, reveals letters in purple when completed
- * Uses same underline style as Write the Word for consistency
- */
-@Composable
-private fun NameThePictureLetterProgress(
-    word: String,
-    completedIndices: Set<Int>,
-    currentIndex: Int
-) {
-    val completedColor = Color(0xFFAE8EFB) // Purple for completed/revealed
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        word.forEachIndexed { index, letter ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = if (index in completedIndices) letter.toString() else " ",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (index in completedIndices) completedColor else Color.Transparent
-                )
-
-                // Add underline for letters not yet completed
-                if (index !in completedIndices) {
-                    Box(
-                        modifier = Modifier
-                            .width(12.dp)
-                            .height(2.dp)
-                            .background(Color.White, RoundedCornerShape(1.dp))
-                    )
-                }
-            }
-        }
-    }
-}
 

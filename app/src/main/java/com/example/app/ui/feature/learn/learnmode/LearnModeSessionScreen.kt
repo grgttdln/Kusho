@@ -46,6 +46,30 @@ private val CompletedLetterColor = Color(0xFFAE8EFB)
 private val PendingLetterColor = Color(0xFF808080)
 
 /**
+ * Letters that have very similar writing structures between uppercase and lowercase
+ * in air writing. These letters should be checked case-insensitively.
+ */
+private val similarCaseLetters = setOf('c', 'k', 'o', 'p', 's', 'u', 'v', 'w', 'x', 'z',
+                                       'C', 'K', 'O', 'P', 'S', 'U', 'V', 'W', 'X', 'Z')
+
+/**
+ * Check if the input letter matches the expected letter.
+ * For letters with similar writing structures (c, k, o, p, s, u, v, w, x, z),
+ * the comparison is case-insensitive.
+ * For other letters, the comparison is case-sensitive.
+ */
+private fun isLetterMatch(inputLetter: Char?, expectedLetter: Char?): Boolean {
+    if (inputLetter == null || expectedLetter == null) return false
+
+    // If the expected letter is one with similar case writing structure, compare case-insensitively
+    return if (expectedLetter in similarCaseLetters) {
+        inputLetter.lowercaseChar() == expectedLetter.lowercaseChar()
+    } else {
+        inputLetter == expectedLetter
+    }
+}
+
+/**
  * Data class representing a word item in the learn mode session.
  */
 private data class WordItem(
@@ -173,7 +197,8 @@ fun LearnModeSessionScreen(
                         "Fill in the Blank" -> {
                             // For Fill in the Blank, check if the masked letter is correct
                             val expectedLetter = currentWord.word.getOrNull(currentWord.selectedLetterIndex)
-                            val isCorrect = event.letter == expectedLetter
+                            // Use case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
+                            val isCorrect = isLetterMatch(event.letter, expectedLetter)
 
                             if (isCorrect) {
                                 // Mark Fill in the Blank as correct to reveal the letter
@@ -196,13 +221,12 @@ fun LearnModeSessionScreen(
                             // For Fill in the Blank, wrong answers are already handled on the watch
                         }
                         "Write the Word", "Name the Picture" -> {
-                            // Get expected letter - match exact case (uppercase vs lowercase)
+                            // Get expected letter
                             val expectedLetter = currentWord.word.getOrNull(currentLetterIndex)
 
-                            // Check if input letter matches expected letter exactly (case-sensitive)
-                            // If expected is uppercase, input must be uppercase
-                            // If expected is lowercase, input must be lowercase
-                            val isCorrect = event.letter == expectedLetter
+                            // Check if input letter matches expected letter
+                            // Uses case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
+                            val isCorrect = isLetterMatch(event.letter, expectedLetter)
 
                             if (isCorrect) {
                                 // Mark letter as completed
