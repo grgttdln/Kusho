@@ -105,6 +105,7 @@ fun LearnModeActivitySelectionScreen(
                 alignment = Alignment.Center
             )
 
+            Spacer(Modifier.height(32.dp))
 
             when {
                 uiState.isLoading -> {
