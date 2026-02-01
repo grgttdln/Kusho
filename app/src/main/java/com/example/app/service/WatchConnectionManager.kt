@@ -94,6 +94,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_LETTER_INPUT = "/learn_mode_letter_input"
         private const val MESSAGE_PATH_LETTER_RESULT = "/learn_mode_letter_result"
         private const val MESSAGE_PATH_WORD_COMPLETE = "/learn_mode_word_complete"
+        private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
     
@@ -411,6 +412,27 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Word complete notification sent")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to send word complete", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the entire activity (all items in the set) is complete
+     */
+    fun notifyActivityComplete() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_ACTIVITY_COMPLETE,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Activity complete notification sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send activity complete", e)
             }
         }
     }

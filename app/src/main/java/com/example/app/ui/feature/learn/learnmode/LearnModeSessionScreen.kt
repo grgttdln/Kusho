@@ -99,12 +99,11 @@ fun LearnModeSessionScreen(
         watchConnectionManager.notifyLearnModeStarted()
     }
     
-    // Notify watch when session ends (cleanup)
-    androidx.compose.runtime.DisposableEffect(sessionKey) {
-        onDispose {
-            watchConnectionManager.notifyLearnModeEnded()
-        }
-    }
+    // Note: We don't call notifyLearnModeEnded() here on dispose anymore
+    // because we want the watch to keep showing the completion screen
+    // while the phone shows the analytics screen.
+    // notifyLearnModeEnded() is now called from LearnModeSessionAnalyticsScreen
+    // when the user leaves (Practice Again or Continue).
 
     // Load data when screen opens - using sessionKey as key ensures this runs fresh each time
     LaunchedEffect(setId, sessionKey) {
@@ -159,46 +158,74 @@ fun LearnModeSessionScreen(
         }
     }
 
-    // Listen for letter input events from watch (for Write the Word mode)
+    // Listen for letter input events from watch (for Write the Word, Name the Picture, and Fill in the Blank modes)
     LaunchedEffect(sessionKey) {
         val sessionStartTime = System.currentTimeMillis()
         watchConnectionManager.letterInputEvent.collect { event ->
             if (event.timestamp > sessionStartTime) {
                 val currentWord = words.getOrNull(currentWordIndex)
-                if (currentWord != null && currentWord.configurationType == "Write the Word") {
-                    // Get expected letter - match exact case (uppercase vs lowercase)
-                    val expectedLetter = currentWord.word.getOrNull(currentLetterIndex)
-                    
-                    // Check if input letter matches expected letter exactly (case-sensitive)
-                    // If expected is uppercase, input must be uppercase
-                    // If expected is lowercase, input must be lowercase
-                    val isCorrect = event.letter == expectedLetter
+                if (currentWord != null) {
+                    when (currentWord.configurationType) {
+                        "Fill in the Blank" -> {
+                            // For Fill in the Blank, check if the masked letter is correct
+                            val expectedLetter = currentWord.word.getOrNull(currentWord.selectedLetterIndex)
+                            val isCorrect = event.letter == expectedLetter
 
-                    if (isCorrect) {
-                        // Mark letter as completed
-                        completedLetterIndices = completedLetterIndices + currentLetterIndex
-                        currentLetterIndex++
+                            if (isCorrect) {
+                                // Correct answer - notify watch and move to next word
+                                watchConnectionManager.sendWordComplete()
 
-                        if (currentLetterIndex >= currentWord.word.length) {
-                            // Word complete - notify watch and move to next word
-                            watchConnectionManager.sendWordComplete()
+                                // Small delay before moving to next word
+                                kotlinx.coroutines.delay(500)
 
-                            // Small delay before moving to next word
-                            kotlinx.coroutines.delay(500)
-
-                            if (currentWordIndex < words.size - 1) {
-                                currentWordIndex++
-                            } else {
-                                onSessionComplete()
+                                if (currentWordIndex < words.size - 1) {
+                                    currentWordIndex++
+                                } else {
+                                    // All items complete - notify watch before navigating away
+                                    watchConnectionManager.notifyActivityComplete()
+                                    onSessionComplete()
+                                }
                             }
-                        } else {
-                            // Send correct result and move to next letter
-                            watchConnectionManager.sendLetterResult(true, currentLetterIndex, currentWord.word.length)
+                            // For Fill in the Blank, wrong answers are already handled on the watch
                         }
-                    } else {
-                        // Wrong letter - send incorrect feedback but DON'T advance letter index
-                        // User must retry the same letter until correct (case-sensitive)
-                        watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
+                        "Write the Word", "Name the Picture" -> {
+                            // Get expected letter - match exact case (uppercase vs lowercase)
+                            val expectedLetter = currentWord.word.getOrNull(currentLetterIndex)
+
+                            // Check if input letter matches expected letter exactly (case-sensitive)
+                            // If expected is uppercase, input must be uppercase
+                            // If expected is lowercase, input must be lowercase
+                            val isCorrect = event.letter == expectedLetter
+
+                            if (isCorrect) {
+                                // Mark letter as completed
+                                completedLetterIndices = completedLetterIndices + currentLetterIndex
+                                currentLetterIndex++
+
+                                if (currentLetterIndex >= currentWord.word.length) {
+                                    // Word complete - notify watch and move to next word
+                                    watchConnectionManager.sendWordComplete()
+
+                                    // Small delay before moving to next word
+                                    kotlinx.coroutines.delay(500)
+
+                                    if (currentWordIndex < words.size - 1) {
+                                        currentWordIndex++
+                                    } else {
+                                        // All items complete - notify watch before navigating away
+                                        watchConnectionManager.notifyActivityComplete()
+                                        onSessionComplete()
+                                    }
+                                } else {
+                                    // Send correct result and move to next letter
+                                    watchConnectionManager.sendLetterResult(true, currentLetterIndex, currentWord.word.length)
+                                }
+                            } else {
+                                // Wrong letter - send incorrect feedback but DON'T advance letter index
+                                // User must retry the same letter until correct (case-sensitive)
+                                watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
+                            }
+                        }
                     }
                 }
             }
@@ -219,6 +246,8 @@ fun LearnModeSessionScreen(
                 if (currentWordIndex < words.size - 1) {
                     currentWordIndex++
                 } else {
+                    // All items complete - notify watch before navigating away
+                    watchConnectionManager.notifyActivityComplete()
                     onSessionComplete()
                 }
             }
@@ -245,7 +274,8 @@ fun LearnModeSessionScreen(
         if (currentWordIndex < words.size - 1) {
             currentWordIndex++
         } else {
-            // Session complete - navigate away
+            // Session complete - notify watch and navigate away
+            watchConnectionManager.notifyActivityComplete()
             onSessionComplete()
         }
     }

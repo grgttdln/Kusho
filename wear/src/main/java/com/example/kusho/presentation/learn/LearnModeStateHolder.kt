@@ -29,6 +29,7 @@ object LearnModeStateHolder {
         val setTitle: String = "",
         val totalWords: Int = 0,
         val isActive: Boolean = false,
+        val isActivityComplete: Boolean = false,
         val timestamp: Long = 0L
     )
 
@@ -84,6 +85,7 @@ object LearnModeStateHolder {
                     setTitle = setTitle,
                     totalWords = totalWords,
                     isActive = true,
+                    isActivityComplete = false,
                     timestamp = System.currentTimeMillis()
                 )
             } catch (e: Exception) {
@@ -101,6 +103,7 @@ object LearnModeStateHolder {
                 Log.d(TAG, "🏁 Ending session")
                 _sessionData.value = SessionData(
                     isActive = false,
+                    isActivityComplete = false,
                     timestamp = System.currentTimeMillis()
                 )
                 _wordData.value = WordData()
@@ -161,6 +164,23 @@ object LearnModeStateHolder {
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error updating word complete", e)
+            }
+        }
+    }
+
+    /**
+     * Called when phone notifies the entire activity (all items in set) is complete
+     */
+    fun onActivityComplete() {
+        runOnMainThread {
+            try {
+                Log.d(TAG, "🎉 Activity complete!")
+                _sessionData.value = _sessionData.value.copy(
+                    isActivityComplete = true,
+                    timestamp = System.currentTimeMillis()
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error updating activity complete", e)
             }
         }
     }

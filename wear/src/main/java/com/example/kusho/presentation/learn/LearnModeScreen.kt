@@ -77,6 +77,7 @@ fun LearnModeScreen() {
     // Check if current word is Fill in the Blank type
     val isFillInTheBlank = wordData.configurationType == "Fill in the Blank"
     val isWriteTheWord = wordData.configurationType == "Write the Word"
+    val isNameThePicture = wordData.configurationType == "Name the Picture"
 
     CircularModeBorder(borderColor = AppColors.LearnModeColor) {
         Scaffold {
@@ -84,6 +85,10 @@ fun LearnModeScreen() {
                 modifier = Modifier.fillMaxSize()
             ) {
                 when {
+                    sessionData.isActivityComplete -> {
+                        // Activity complete - show completion image
+                        ActivityCompleteContent()
+                    }
                     !isPhoneInLearnMode -> {
                         // Waiting state - phone hasn't started Learn Mode session yet
                         WaitingContent()
@@ -92,6 +97,7 @@ fun LearnModeScreen() {
                         // Fill in the Blank mode - show gesture input
                         FillInTheBlankContent(
                             wordData = wordData,
+                            phoneCommunicationManager = phoneCommunicationManager,
                             onSkip = {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastSkipTime >= 500) {
@@ -106,6 +112,22 @@ fun LearnModeScreen() {
                     isWriteTheWord && wordData.word.isNotEmpty() -> {
                         // Write the Word mode - show letter-by-letter gesture input
                         WriteTheWordContent(
+                            wordData = wordData,
+                            phoneCommunicationManager = phoneCommunicationManager,
+                            onSkip = {
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastSkipTime >= 500) {
+                                    lastSkipTime = currentTime
+                                    scope.launch {
+                                        phoneCommunicationManager.sendSkipCommand()
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    isNameThePicture && wordData.word.isNotEmpty() -> {
+                        // Name the Picture mode - letter-by-letter gesture input without showing next letter
+                        NameThePictureContent(
                             wordData = wordData,
                             phoneCommunicationManager = phoneCommunicationManager,
                             onSkip = {
@@ -167,6 +189,23 @@ private fun WaitingContent() {
 }
 
 @Composable
+private fun ActivityCompleteContent() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.dis_watch_complete),
+            contentDescription = "Activity Complete",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+@Composable
 private fun DefaultLearnModeContent(onSkip: () -> Unit) {
     Box(
         modifier = Modifier
@@ -209,6 +248,7 @@ private fun DefaultLearnModeContent(onSkip: () -> Unit) {
 @Composable
 private fun FillInTheBlankContent(
     wordData: LearnModeStateHolder.WordData,
+    phoneCommunicationManager: PhoneCommunicationManager,
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
@@ -263,6 +303,7 @@ private fun FillInTheBlankContent(
             sensorManager = sensorManager!!,
             classifierResult = classifierResult!!,
             ttsManager = ttsManager,
+            phoneCommunicationManager = phoneCommunicationManager,
             onSkip = onSkip
         )
     }
@@ -274,6 +315,7 @@ private fun FillInTheBlankMainContent(
     sensorManager: MotionSensorManager,
     classifierResult: ClassifierLoadResult,
     ttsManager: TextToSpeechManager,
+    phoneCommunicationManager: PhoneCommunicationManager,
     onSkip: () -> Unit
 ) {
     val viewModel: LearnModeViewModel = viewModel(
@@ -286,6 +328,16 @@ private fun FillInTheBlankMainContent(
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == LearnModeViewModel.State.RESULT && uiState.prediction != null) {
             ttsManager.speakLetter(uiState.prediction!!)
+        }
+    }
+
+    // When answer is correct, send letter input to phone to trigger auto-advance
+    LaunchedEffect(uiState.state, uiState.isCorrect) {
+        if (uiState.state == LearnModeViewModel.State.RESULT && uiState.isCorrect == true && uiState.prediction != null) {
+            // Small delay to show the correct result before advancing
+            kotlinx.coroutines.delay(1000)
+            // Send letter input to phone - phone will advance to next word
+            phoneCommunicationManager.sendLetterInput(uiState.prediction!!, wordData.maskedIndex)
         }
     }
 
@@ -744,6 +796,198 @@ private fun WriteTheWordFeedbackContent(isCorrect: Boolean) {
                 .fillMaxSize()
                 .padding(16.dp),
             contentScale = ContentScale.Fit
+        )
+    }
+}
+
+/**
+ * Name the Picture mode content - letter-by-letter gesture input
+ * Similar to Write the Word but does NOT show the next letter to input
+ */
+@Composable
+private fun NameThePictureContent(
+    wordData: LearnModeStateHolder.WordData,
+    phoneCommunicationManager: PhoneCommunicationManager,
+    onSkip: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Observe Write the Word state (reuse the same state for letter tracking)
+    val writeTheWordState by LearnModeStateHolder.writeTheWordState.collectAsState()
+
+    // Initialize dependencies
+    var isInitialized by remember { mutableStateOf(false) }
+    var sensorManager by remember { mutableStateOf<MotionSensorManager?>(null) }
+    var classifierResult by remember { mutableStateOf<ClassifierLoadResult?>(null) }
+
+    // Initialize TextToSpeech manager
+    val ttsManager = remember { TextToSpeechManager(context) }
+
+    // Cleanup TTS when disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
+
+    // Initialize dependencies
+    LaunchedEffect(Unit) {
+        sensorManager = MotionSensorManager(context)
+        classifierResult = try {
+            ModelLoader.loadDefault(context)
+        } catch (e: Exception) {
+            ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
+        }
+        isInitialized = true
+    }
+
+    if (!isInitialized || sensorManager == null || classifierResult == null) {
+        // Loading state
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(40.dp),
+                strokeWidth = 4.dp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Loading...",
+                color = AppColors.TextSecondary,
+                fontSize = 12.sp
+            )
+        }
+    } else {
+        NameThePictureMainContent(
+            wordData = wordData,
+            writeTheWordState = writeTheWordState,
+            sensorManager = sensorManager!!,
+            classifierResult = classifierResult!!,
+            ttsManager = ttsManager,
+            phoneCommunicationManager = phoneCommunicationManager,
+            onSkip = onSkip
+        )
+    }
+}
+
+@Composable
+private fun NameThePictureMainContent(
+    wordData: LearnModeStateHolder.WordData,
+    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
+    sensorManager: MotionSensorManager,
+    classifierResult: ClassifierLoadResult,
+    ttsManager: TextToSpeechManager,
+    phoneCommunicationManager: PhoneCommunicationManager,
+    onSkip: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val viewModel: LearnModeViewModel = viewModel(
+        factory = LearnModeViewModelFactory(sensorManager, classifierResult)
+    )
+
+    val uiState by viewModel.uiState.collectAsState()
+
+    // Current letter to input - keep exact case (uppercase or lowercase)
+    val currentLetterIndex = writeTheWordState.currentLetterIndex
+    val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
+
+    // Track if we're showing feedback (correct/wrong image)
+    var showingFeedback by remember { mutableStateOf(false) }
+    var feedbackIsCorrect by remember { mutableStateOf(false) }
+
+    // Send letter input to phone when prediction is made
+    LaunchedEffect(uiState.state, uiState.prediction) {
+        if (uiState.state == LearnModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
+            // Speak the predicted letter
+            ttsManager.speakLetter(uiState.prediction!!)
+
+            // Send letter input to phone for validation (preserve exact case)
+            phoneCommunicationManager.sendLetterInput(uiState.prediction!!, currentLetterIndex)
+        }
+    }
+
+    // Listen for letter result from phone
+    LaunchedEffect(Unit) {
+        phoneCommunicationManager.letterResultEvent.collect { result ->
+            if (result.timestamp > 0L) {
+                // Show feedback image
+                feedbackIsCorrect = result.isCorrect
+                showingFeedback = true
+
+                // Auto-reset after showing feedback
+                kotlinx.coroutines.delay(1500) // Show feedback for 1.5 seconds
+                showingFeedback = false
+                viewModel.resetToIdle()
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (dragAmount < -50f) {
+                        change.consume()
+                        onSkip()
+                    }
+                }
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Show feedback image if we're in feedback state
+            if (showingFeedback) {
+                WriteTheWordFeedbackContent(isCorrect = feedbackIsCorrect)
+            } else {
+                when (uiState.state) {
+                    LearnModeViewModel.State.IDLE -> NameThePictureIdleContent(
+                        viewModel = viewModel
+                    )
+                    LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
+                    LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
+                    LearnModeViewModel.State.PROCESSING -> ProcessingContent()
+                    LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
+                    LearnModeViewModel.State.RESULT -> NameThePictureIdleContent(
+                        viewModel = viewModel
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Idle content for Name the Picture mode - shows mascot image (does NOT show next letter)
+ */
+@Composable
+private fun NameThePictureIdleContent(
+    viewModel: LearnModeViewModel
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.startRecording() },
+        contentAlignment = Alignment.Center
+    ) {
+        // Show mascot avatar image - user taps to start gesture recognition
+        // Does NOT show the expected letter like Write the Word mode
+        Image(
+            painter = painterResource(id = R.drawable.dis_watch_wait),
+            contentDescription = "Name the Picture mascot",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
         )
     }
 }

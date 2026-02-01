@@ -57,6 +57,7 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_LETTER_INPUT = "/learn_mode_letter_input"
         private const val MESSAGE_PATH_LETTER_RESULT = "/learn_mode_letter_result"
         private const val MESSAGE_PATH_WORD_COMPLETE = "/learn_mode_word_complete"
+        private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
         private const val BATTERY_UPDATE_INTERVAL_MS = 60000L // 1 minute
     }
     
@@ -212,6 +213,11 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                 _wordCompleteEvent.value = System.currentTimeMillis()
                 // Also update state holder
                 com.example.kusho.presentation.learn.LearnModeStateHolder.onWordComplete()
+            }
+            MESSAGE_PATH_ACTIVITY_COMPLETE -> {
+                android.util.Log.d("PhoneCommunicationMgr", "🎉 Activity complete received")
+                // Update state holder to show completion screen
+                com.example.kusho.presentation.learn.LearnModeStateHolder.onActivityComplete()
             }
         }
     }
