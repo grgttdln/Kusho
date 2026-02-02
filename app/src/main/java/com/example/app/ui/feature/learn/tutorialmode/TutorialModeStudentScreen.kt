@@ -37,8 +37,9 @@ import com.example.app.ui.components.tutorial.TutorialActivityCard
 fun TutorialModeStudentScreen(
     studentId: Long,
     classId: Long,
+    studentName: String = "",
     onBack: () -> Unit,
-    onStartSession: (String, String) -> Unit,
+    onStartSession: (String, String, String) -> Unit, // (title, letterType, studentName)
     modifier: Modifier = Modifier
 ) {
     var selectedSection by remember { mutableStateOf<String?>(null) }
@@ -140,7 +141,7 @@ fun TutorialModeStudentScreen(
             onSelectType = { letterType ->
                 showLetterTypeDialog = false
                 selectedSection?.let { section ->
-                    onStartSession(section, letterType)
+                    onStartSession(section, letterType, studentName)
                 }
             }
         )
@@ -272,8 +273,9 @@ fun TutorialModeStudentScreenPreview() {
     TutorialModeStudentScreen(
         studentId = 1L,
         classId = 1L,
+        studentName = "Test Student",
         onBack = {},
-        onStartSession = { _, _ -> }
+        onStartSession = { _, _, _ -> }
     )
 }
 

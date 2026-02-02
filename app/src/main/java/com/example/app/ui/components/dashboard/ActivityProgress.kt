@@ -113,7 +113,7 @@ fun ActivityProgressSection(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Create your first activity in the Learn tab\nto start tracking student progress.",
+                    text = "Create your first activity in the Learn tab\nto start tracking student progress.", 
                     fontSize = 12.sp,
                     color = Color(0xFF7A7A7A),
                     lineHeight = 18.sp,
