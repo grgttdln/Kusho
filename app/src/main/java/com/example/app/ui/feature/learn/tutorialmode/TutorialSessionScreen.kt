@@ -1,9 +1,10 @@
-// filepath: /Users/georgette/AndroidStudioProjects/Kusho/app/src/main/java/com/example/app/ui/feature/learn/tutorialmode/TutorialSessionScreen.kt
 package com.example.app.ui.feature.learn.tutorialmode
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -15,8 +16,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -24,12 +28,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
+import com.example.app.service.WatchConnectionManager
 
 private val YellowColor = Color(0xFFEDBB00)
 private val LightYellowColor = Color(0xFFFFF3C4)
@@ -39,6 +48,7 @@ private val BlueButtonColor = Color(0xFF3FA9F8)
 fun TutorialSessionScreen(
     title: String,
     letterType: String = "capital",
+    studentName: String = "",
     onEndSession: () -> Unit,
     modifier: Modifier = Modifier,
     initialStep: Int = 1,
@@ -46,7 +56,13 @@ fun TutorialSessionScreen(
     onSkip: () -> Unit = {},
     onAudioClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
+    
     var currentStep by remember { mutableIntStateOf(initialStep) }
+    var showProgressCheck by remember { mutableStateOf(false) }
+    var isCorrectGesture by remember { mutableStateOf(false) }
+    var predictedLetter by remember { mutableStateOf("") }
     
     // Define all letters based on the section
     val allLetters = remember(title) {
@@ -105,6 +121,134 @@ fun TutorialSessionScreen(
     
     // Calculate total steps from letters
     val calculatedTotalSteps = remember(letters) { letters.size }
+    
+    // Get letter names for watch sync
+    val letterNames = remember(title, letterType) {
+        when (title.lowercase()) {
+            "vowels" -> listOf("A", "E", "I", "O", "U")
+            "consonants" -> listOf("B", "C", "D", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "V", "W", "X", "Y", "Z")
+            else -> emptyList()
+        }
+    }
+    
+    val currentLetter = remember(currentStep, letterNames) {
+        if (letterNames.isNotEmpty() && currentStep > 0 && currentStep <= letterNames.size) {
+            letterNames[currentStep - 1]
+        } else ""
+    }
+
+    // Notify watch when Tutorial Mode session starts
+    LaunchedEffect(Unit) {
+        watchConnectionManager.notifyTutorialModeStarted(studentName, title)
+    }
+    
+    // Notify watch when session ends (cleanup)
+    DisposableEffect(Unit) {
+        onDispose {
+            watchConnectionManager.notifyTutorialModeEnded()
+        }
+    }
+    
+    // Send current letter data to watch whenever it changes
+    LaunchedEffect(currentStep, currentLetter) {
+        if (currentLetter.isNotEmpty()) {
+            watchConnectionManager.sendTutorialModeLetterData(
+                letter = currentLetter,
+                letterCase = letterType,
+                currentIndex = currentStep,
+                totalLetters = calculatedTotalSteps
+            )
+        }
+    }
+    
+    // Listen for skip commands from watch with debouncing
+    LaunchedEffect(Unit) {
+        val sessionStartTime = System.currentTimeMillis()
+        var lastSkipTime = 0L
+        watchConnectionManager.tutorialModeSkipTrigger.collect { skipTime ->
+            val timeSinceLastSkip = skipTime - lastSkipTime
+            if (skipTime > sessionStartTime && skipTime > lastSkipTime && timeSinceLastSkip >= 500) {
+                lastSkipTime = skipTime
+                val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                if (currentStep < maxSteps) {
+                    currentStep++
+                }
+                onSkip()
+            }
+        }
+    }
+    
+    // Listen for gesture results from watch
+    LaunchedEffect(Unit) {
+        var lastGestureTime = 0L
+        watchConnectionManager.tutorialModeGestureResult.collect { result ->
+            val timestamp = result["timestamp"] as? Long ?: 0L
+            if (timestamp > lastGestureTime && result.isNotEmpty()) {
+                lastGestureTime = timestamp
+                isCorrectGesture = result["isCorrect"] as? Boolean ?: false
+                predictedLetter = result["predictedLetter"] as? String ?: ""
+                showProgressCheck = true
+            }
+        }
+    }
+    
+    // Listen for feedback dismissal from watch
+    LaunchedEffect(Unit) {
+        var lastDismissTime = 0L
+        watchConnectionManager.tutorialModeFeedbackDismissed.collect { timestamp ->
+            if (timestamp > lastDismissTime && timestamp > 0L) {
+                lastDismissTime = timestamp
+                if (showProgressCheck) {
+                    showProgressCheck = false
+                    // If correct, move to next letter
+                    if (isCorrectGesture) {
+                        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                        if (currentStep < maxSteps) {
+                            currentStep++
+                        } else {
+                            onEndSession()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Progress Check Dialog
+    if (showProgressCheck) {
+        ProgressCheckDialog(
+            isCorrect = isCorrectGesture,
+            studentName = studentName,
+            targetLetter = currentLetter,
+            targetCase = letterType,
+            predictedLetter = predictedLetter,
+            onDismiss = {
+                showProgressCheck = false
+                // Notify watch that mobile dismissed feedback
+                watchConnectionManager.notifyTutorialModeFeedbackDismissed()
+                if (isCorrectGesture) {
+                    // Move to next letter on correct gesture
+                    val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                    if (currentStep < maxSteps) {
+                        currentStep++
+                    } else {
+                        onEndSession()
+                    }
+                } else {
+                    // On incorrect, notify watch to retry and resend letter data
+                    watchConnectionManager.notifyTutorialModeRetry()
+                    if (currentLetter.isNotEmpty()) {
+                        watchConnectionManager.sendTutorialModeLetterData(
+                            letter = currentLetter,
+                            letterCase = letterType,
+                            currentIndex = currentStep,
+                            totalLetters = calculatedTotalSteps
+                        )
+                    }
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -251,7 +395,131 @@ fun TutorialSessionScreenPreview() {
         title = "Vowels",
         initialStep = 1,
         totalSteps = 5,
+        studentName = "Test Student",
         onEndSession = {}
     )
 }
 
+@Composable
+private fun ProgressCheckDialog(
+    isCorrect: Boolean,
+    studentName: String,
+    targetLetter: String,
+    targetCase: String,
+    predictedLetter: String,
+    onDismiss: () -> Unit
+) {
+    // Extract first name only for more friendly tone
+    val firstName = studentName.split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: ""
+    
+    // Define similar shape letters (same as watch side)
+    val similarShapeLetters = setOf('C', 'K', 'O', 'P', 'S', 'V', 'W', 'X', 'Z')
+    
+    // Check if there's a case mismatch for similar letters
+    val targetUppercase = targetLetter.uppercase()
+    val isSimilarShape = targetUppercase.firstOrNull() in similarShapeLetters
+    val expectedCase = when (targetCase.lowercase()) {
+        "small", "lowercase" -> targetLetter.lowercase()
+        else -> targetLetter.uppercase()
+    }
+    val hasCaseMismatch = isCorrect && isSimilarShape && 
+                         predictedLetter.isNotEmpty() && 
+                         !predictedLetter.equals(expectedCase, ignoreCase = false)
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        // Full-screen dark overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .wrapContentHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Mascot Image
+                Image(
+                    painter = painterResource(
+                        id = if (isCorrect) R.drawable.dis_mobile_correct else R.drawable.dis_mobile_incorrect
+                    ),
+                    contentDescription = if (isCorrect) "Correct" else "Incorrect",
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .aspectRatio(1f),
+                    contentScale = ContentScale.Fit
+                )
+                
+                Spacer(Modifier.height(24.dp))
+                
+                // Title with first name only
+                Text(
+                    text = if (isCorrect) {
+                        "Great Job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                    } else {
+                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                    },
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isCorrect) Color(0xFFCCDB00) else Color(0xFFFF6B6B),
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(Modifier.height(12.dp))
+                
+                // Body text with optional case mismatch disclaimer
+                if (isCorrect && hasCaseMismatch) {
+                    Text(
+                        text = "You're doing super!\nKeep up the amazing work!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                    
+                    Spacer(Modifier.height(16.dp))
+                    
+                    Text(
+                        text = "Psst... you wrote ${if (predictedLetter.first().isUpperCase()) "uppercase" else "lowercase"} ${predictedLetter.uppercase()}, " +
+                              "but we're practicing ${if (targetCase.lowercase() in listOf("small", "lowercase")) "lowercase" else "uppercase"} letters! " +
+                              "They look similar, so that's still great! 😊",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                } else if (isCorrect) {
+                    Text(
+                        text = "You're doing super!\nKeep up the amazing work!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                } else {
+                    Text(
+                        text = "Let's give it another go!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                }
+            }
+        }
+    }
+}

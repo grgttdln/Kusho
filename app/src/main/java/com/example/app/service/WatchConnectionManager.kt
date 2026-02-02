@@ -55,7 +55,28 @@ class WatchConnectionManager private constructor(private val context: Context) {
     // Flow for Learn Mode skip commands from watch
     private val _learnModeSkipTrigger = MutableStateFlow(0L) // Timestamp of skip event
     val learnModeSkipTrigger: StateFlow<Long> = _learnModeSkipTrigger.asStateFlow()
-    
+
+    // Flow for letter input events from watch (for Write the Word mode)
+    data class LetterInputEvent(
+        val letter: Char = ' ',
+        val letterIndex: Int = 0,
+        val timestamp: Long = 0L
+    )
+    private val _letterInputEvent = MutableStateFlow(LetterInputEvent())
+    val letterInputEvent: StateFlow<LetterInputEvent> = _letterInputEvent.asStateFlow()
+
+    // Tutorial Mode flows
+    private val _tutorialModeSkipTrigger = MutableStateFlow(0L)
+    val tutorialModeSkipTrigger: StateFlow<Long> = _tutorialModeSkipTrigger.asStateFlow()
+
+    // Gesture result: {"isCorrect": true/false, "timestamp": 123456}
+    private val _tutorialModeGestureResult = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val tutorialModeGestureResult: StateFlow<Map<String, Any>> = _tutorialModeGestureResult.asStateFlow()
+
+    // Feedback dismissed from watch trigger
+    private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
+    val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
+
     companion object {
         @Volatile
         private var INSTANCE: WatchConnectionManager? = null
@@ -78,10 +99,28 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
         private const val MESSAGE_PATH_PING = "/kusho/ping"
         private const val MESSAGE_PATH_PONG = "/kusho/pong"
+
+        // Learn Mode message paths
         private const val MESSAGE_PATH_LEARN_MODE_SKIP = "/learn_mode_skip"
         private const val MESSAGE_PATH_LEARN_MODE_STARTED = "/learn_mode_started"
         private const val MESSAGE_PATH_LEARN_MODE_ENDED = "/learn_mode_ended"
         private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
+        private const val MESSAGE_PATH_LETTER_INPUT = "/learn_mode_letter_input"
+        private const val MESSAGE_PATH_LETTER_RESULT = "/learn_mode_letter_result"
+        private const val MESSAGE_PATH_WORD_COMPLETE = "/learn_mode_word_complete"
+        private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
+
+        // Tutorial Mode message paths
+        private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_ENDED = "/tutorial_mode_ended"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_LETTER_DATA = "/tutorial_mode_letter_data"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SKIP = "/tutorial_mode_skip"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT = "/tutorial_mode_gesture_result"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_COMPLETE = "/tutorial_mode_session_complete"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED = "/tutorial_mode_feedback_dismissed"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_RETRY = "/tutorial_mode_retry"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
+
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
     
@@ -298,7 +337,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
             }
         }
     }
-    
+
     /**
      * Notify watch that Learn Mode session has ended
      */
@@ -319,7 +358,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
             }
         }
     }
-    
+
     /**
      * Send word data to watch for fill-in-the-blanks mode
      * @param word The full word
@@ -330,14 +369,14 @@ class WatchConnectionManager private constructor(private val context: Context) {
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
-                
+
                 // Create JSON payload
                 val jsonPayload = org.json.JSONObject().apply {
                     put("word", word)
                     put("maskedIndex", maskedIndex)
                     put("configurationType", configurationType)
                 }.toString()
-                
+
                 nodes.forEach { node ->
                     messageClient.sendMessage(
                         node.id,
@@ -351,7 +390,79 @@ class WatchConnectionManager private constructor(private val context: Context) {
             }
         }
     }
-    
+
+    /**
+     * Send letter validation result back to watch for Write the Word mode
+     * @param isCorrect Whether the input letter was correct
+     * @param currentIndex Current letter index being spelled (next letter to input)
+     * @param totalLetters Total letters in the word
+     */
+    fun sendLetterResult(isCorrect: Boolean, currentIndex: Int, totalLetters: Int) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = org.json.JSONObject().apply {
+                    put("isCorrect", isCorrect)
+                    put("currentIndex", currentIndex)
+                    put("totalLetters", totalLetters)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LETTER_RESULT,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Letter result sent: correct=$isCorrect, index=$currentIndex/$totalLetters")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send letter result", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that word was completed successfully
+     */
+    fun sendWordComplete() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_WORD_COMPLETE,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Word complete notification sent")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send word complete", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the entire activity (all items in the set) is complete
+     */
+    fun notifyActivityComplete() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_ACTIVITY_COMPLETE,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Activity complete notification sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send activity complete", e)
+            }
+        }
+    }
+
     /**
      * Request device info from connected watch
      */
@@ -456,6 +567,46 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 // Trigger skip by updating the timestamp
                 _learnModeSkipTrigger.value = System.currentTimeMillis()
             }
+            MESSAGE_PATH_LETTER_INPUT -> {
+                try {
+                    val jsonString = String(messageEvent.data)
+                    val json = org.json.JSONObject(jsonString)
+                    val letter = json.optString("letter", "").firstOrNull() ?: return
+                    val letterIndex = json.optInt("letterIndex", 0)
+                    Log.d(TAG, "🔤 Received letter input from watch: $letter at index $letterIndex")
+                    _letterInputEvent.value = LetterInputEvent(
+                        letter = letter,
+                        letterIndex = letterIndex,
+                        timestamp = System.currentTimeMillis()
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Failed to parse letter input", e)
+                }
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_SKIP -> {
+                Log.d(TAG, "⏭️ Received Tutorial Mode skip command from watch")
+                _tutorialModeSkipTrigger.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT -> {
+                try {
+                    val jsonString = String(messageEvent.data)
+                    val json = org.json.JSONObject(jsonString)
+                    val isCorrect = json.getBoolean("isCorrect")
+                    val predictedLetter = json.optString("predictedLetter", "")
+                    Log.d(TAG, if (isCorrect) "✅ Gesture correct from watch" else "❌ Gesture incorrect from watch")
+                    _tutorialModeGestureResult.value = mapOf(
+                        "isCorrect" to isCorrect,
+                        "predictedLetter" to predictedLetter,
+                        "timestamp" to System.currentTimeMillis()
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Error parsing gesture result", e)
+                }
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED -> {
+                Log.d(TAG, "👆 Watch dismissed feedback - dismissing mobile dialog")
+                _tutorialModeFeedbackDismissed.value = System.currentTimeMillis()
+            }
         }
     }
     
@@ -528,6 +679,171 @@ class WatchConnectionManager private constructor(private val context: Context) {
         }
     }
     
+    /**
+     * Notify watch that Tutorial Mode session has started
+     */
+    fun notifyTutorialModeStarted(studentName: String, lessonTitle: String) {
+        // Clear previous state before starting new session
+        _tutorialModeSkipTrigger.value = 0L
+        _tutorialModeGestureResult.value = emptyMap()
+
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val jsonPayload = org.json.JSONObject().apply {
+                    put("studentName", studentName)
+                    put("lessonTitle", lessonTitle)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_STARTED,
+                        jsonPayload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Tutorial Mode started notification sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to notify watch of Tutorial Mode start", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that Tutorial Mode session has ended
+     */
+    fun notifyTutorialModeEnded() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_ENDED,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Tutorial Mode ended notification sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to notify watch of Tutorial Mode end", e)
+            }
+        }
+    }
+
+    /**
+     * Send letter data to watch for air writing practice
+     * @param letter The target letter (e.g., "A", "b")
+     * @param letterCase "uppercase" or "lowercase"
+     * @param currentIndex Current letter index (1-based)
+     * @param totalLetters Total number of letters in session
+     */
+    fun sendTutorialModeLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+
+                val jsonPayload = org.json.JSONObject().apply {
+                    put("letter", letter)
+                    put("letterCase", letterCase)
+                    put("currentIndex", currentIndex)
+                    put("totalLetters", totalLetters)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_LETTER_DATA,
+                        jsonPayload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Letter data sent to watch: $letter ($letterCase) [$currentIndex/$totalLetters]")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send letter data to watch", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the session is complete (show completion screen)
+     */
+    fun notifyTutorialModeSessionComplete() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_SESSION_COMPLETE,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Tutorial Mode session complete notification sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to notify watch of session complete", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that mobile has dismissed the feedback dialog
+     */
+    fun notifyTutorialModeFeedbackDismissed() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Mobile feedback dismissal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to notify watch of feedback dismissal", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch to retry gesture recognition (after incorrect result)
+     */
+    fun notifyTutorialModeRetry() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_RETRY,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Retry command sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send retry command to watch", e)
+            }
+        }
+    }
+
+    fun notifyTutorialModeSessionReset() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Session reset command sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send session reset command to watch", e)
+            }
+        }
+    }
+
     /**
      * Create notification channel for install prompts
      */

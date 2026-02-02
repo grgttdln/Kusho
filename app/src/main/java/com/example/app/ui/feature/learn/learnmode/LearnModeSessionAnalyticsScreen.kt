@@ -12,6 +12,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.R
+import com.example.app.service.WatchConnectionManager
 
 private val PurpleColor = Color(0xFFAE8EFB)
 private val LightPurpleBg = Color(0xFFE7DDFE)
@@ -40,6 +43,20 @@ fun LearnModeSessionAnalyticsScreen(
     gestureAccuracy: String = "78.6%",
     timeSpent: String = "2m 4s"
 ) {
+    val context = LocalContext.current
+    val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
+
+    // Wrapper functions to notify watch before navigating away
+    val handlePracticeAgain: () -> Unit = {
+        watchConnectionManager.notifyLearnModeEnded()
+        onPracticeAgain()
+    }
+
+    val handleContinue: () -> Unit = {
+        watchConnectionManager.notifyLearnModeEnded()
+        onContinue()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -136,7 +153,7 @@ fun LearnModeSessionAnalyticsScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             OutlinedButton(
-                onClick = onPracticeAgain,
+                onClick = handlePracticeAgain,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -154,7 +171,7 @@ fun LearnModeSessionAnalyticsScreen(
             Spacer(Modifier.height(12.dp))
 
             Button(
-                onClick = onContinue,
+                onClick = handleContinue,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

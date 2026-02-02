@@ -3,6 +3,9 @@ package com.example.kusho.wordformation
 /**
  * Trie-based word formation engine for efficient word matching.
  * This provides instant word lookup from the word bank as letters are predicted.
+ *
+ * Note: All letter matching is case-insensitive. Letters with similar writing
+ * structures (c, k, o, p, s, u, v, w, x, z) are handled by normalizing to uppercase.
  */
 class WordFormationEngine {
 

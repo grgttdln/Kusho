@@ -50,7 +50,9 @@ fun MainNavigationContainer(
     // --- TUTORIAL MODE STATE ---
     var tutorialModeStudentId by remember { mutableStateOf(0L) }
     var tutorialModeClassId by remember { mutableStateOf(0L) }
+    var tutorialModeStudentName by remember { mutableStateOf("") }
     var tutorialSessionTitle by remember { mutableStateOf("") }
+    var tutorialLetterType by remember { mutableStateOf("capital") }
 
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
@@ -119,9 +121,10 @@ fun MainNavigationContainer(
         )
         4 -> TutorialModeScreen(
             onBack = { currentScreen = 1 },
-            onStudentSelected = { studentId, classId ->
+            onStudentSelected = { studentId, classId, studentName ->
                 tutorialModeStudentId = studentId
                 tutorialModeClassId = classId
+                tutorialModeStudentName = studentName
                 currentScreen = 27
             },
             modifier = modifier
@@ -356,25 +359,30 @@ fun MainNavigationContainer(
         27 -> TutorialModeStudentScreen(
             studentId = tutorialModeStudentId,
             classId = tutorialModeClassId,
+            studentName = tutorialModeStudentName,
             onBack = { currentScreen = 4 },
-            onStartSession = { title, _ ->
+            onStartSession = { title, letterType, studentName ->
                 tutorialSessionTitle = title
+                tutorialLetterType = letterType
+                tutorialModeStudentName = studentName
                 currentScreen = 28
             },
             modifier = modifier
         )
         28 -> TutorialSessionScreen(
             title = tutorialSessionTitle,
+            letterType = tutorialLetterType,
+            studentName = tutorialModeStudentName,
             onEndSession = { currentScreen = 29 },
             modifier = modifier
         )
         29 -> SessionAnalyticsScreen(
-            onPracticeAgain = { currentScreen = 28 },
-            onContinue = { currentScreen = 30 },
+            onPracticeAgain = { currentScreen = 27 }, // Go back to vowels/consonants selection
+            onContinue = { currentScreen = 30 }, // Go to TutorialFinishedScreen
             modifier = modifier
         )
         30 -> TutorialFinishedScreen(
-            onEndSession = { currentScreen = 4 },
+            onEndSession = { currentScreen = 1 }, // Go back to LearnScreen
             modifier = modifier
         )
         31 -> LearnModeActivitySelectionScreen(

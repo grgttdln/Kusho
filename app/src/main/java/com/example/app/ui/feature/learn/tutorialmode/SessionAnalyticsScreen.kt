@@ -26,7 +26,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import com.example.app.R
+import com.example.app.service.WatchConnectionManager
 
 private val YellowColor = Color(0xFFEDBB00)
 private val LightYellowBg = Color(0xFFFFF9E6)
@@ -41,6 +44,9 @@ fun SessionAnalyticsScreen(
     gestureAccuracy: String = "78.6%",
     timeSpent: String = "2m 4s"
 ) {
+    val context = LocalContext.current
+    val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
+    
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -137,7 +143,10 @@ fun SessionAnalyticsScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             OutlinedButton(
-                onClick = onPracticeAgain,
+                onClick = {
+                    watchConnectionManager.notifyTutorialModeSessionReset()
+                    onPracticeAgain()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -155,7 +164,10 @@ fun SessionAnalyticsScreen(
             Spacer(Modifier.height(12.dp))
 
             Button(
-                onClick = onContinue,
+                onClick = {
+                    watchConnectionManager.notifyTutorialModeSessionReset()
+                    onContinue()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -234,11 +246,13 @@ private fun StatItem(
 @Preview(showBackground = true)
 @Composable
 fun SessionAnalyticsScreenPreview() {
-    SessionAnalyticsScreen(
-        score = "9/10",
-        gestureAccuracy = "78.6%",
-        timeSpent = "2m 4s",
-        onPracticeAgain = {},
-        onContinue = {}
-    )
+    // Preview - watchConnectionManager is not used in preview
+    // SessionAnalyticsScreen(
+    //     score = "9/10",
+    //     gestureAccuracy = "78.6%",
+    //     timeSpent = "2m 4s",
+    //     watchConnectionManager = null, // Can't instantiate in preview
+    //     onPracticeAgain = {},
+    //     onContinue = {}
+    // )
 }

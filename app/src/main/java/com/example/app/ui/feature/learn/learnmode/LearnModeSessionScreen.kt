@@ -42,6 +42,32 @@ import java.io.File
 
 private val PurpleColor = Color(0xFFAE8EFB)
 private val LightPurpleColor = Color(0xFFE7DDFE)
+private val CompletedLetterColor = Color(0xFFAE8EFB)
+private val PendingLetterColor = Color(0xFF808080)
+
+/**
+ * Letters that have very similar writing structures between uppercase and lowercase
+ * in air writing. These letters should be checked case-insensitively.
+ */
+private val similarCaseLetters = setOf('c', 'k', 'o', 'p', 's', 'u', 'v', 'w', 'x', 'z',
+                                       'C', 'K', 'O', 'P', 'S', 'U', 'V', 'W', 'X', 'Z')
+
+/**
+ * Check if the input letter matches the expected letter.
+ * For letters with similar writing structures (c, k, o, p, s, u, v, w, x, z),
+ * the comparison is case-insensitive.
+ * For other letters, the comparison is case-sensitive.
+ */
+private fun isLetterMatch(inputLetter: Char?, expectedLetter: Char?): Boolean {
+    if (inputLetter == null || expectedLetter == null) return false
+
+    // If the expected letter is one with similar case writing structure, compare case-insensitively
+    return if (expectedLetter in similarCaseLetters) {
+        inputLetter.lowercaseChar() == expectedLetter.lowercaseChar()
+    } else {
+        inputLetter == expectedLetter
+    }
+}
 
 /**
  * Data class representing a word item in the learn mode session.
@@ -83,6 +109,13 @@ fun LearnModeSessionScreen(
     var currentWordIndex by remember(sessionKey) { mutableIntStateOf(0) }
     var title by remember(sessionKey) { mutableStateOf(activityTitle) }
 
+    // State for Write the Word mode - tracks which letters have been correctly input
+    var completedLetterIndices by remember(sessionKey) { mutableStateOf<Set<Int>>(emptySet()) }
+    var currentLetterIndex by remember(sessionKey) { mutableIntStateOf(0) }
+
+    // State for Fill in the Blank mode - tracks if the masked letter has been correctly answered
+    var fillInBlankCorrect by remember(sessionKey) { mutableStateOf(false) }
+
     val context = LocalContext.current
 
     // Get WatchConnectionManager instance
@@ -93,12 +126,11 @@ fun LearnModeSessionScreen(
         watchConnectionManager.notifyLearnModeStarted()
     }
     
-    // Notify watch when session ends (cleanup)
-    androidx.compose.runtime.DisposableEffect(sessionKey) {
-        onDispose {
-            watchConnectionManager.notifyLearnModeEnded()
-        }
-    }
+    // Note: We don't call notifyLearnModeEnded() here on dispose anymore
+    // because we want the watch to keep showing the completion screen
+    // while the phone shows the analytics screen.
+    // notifyLearnModeEnded() is now called from LearnModeSessionAnalyticsScreen
+    // when the user leaves (Practice Again or Continue).
 
     // Load data when screen opens - using sessionKey as key ensures this runs fresh each time
     LaunchedEffect(setId, sessionKey) {
@@ -141,11 +173,93 @@ fun LearnModeSessionScreen(
     LaunchedEffect(currentWordIndex, words) {
         val currentWord = words.getOrNull(currentWordIndex)
         if (currentWord != null) {
+            // Reset letter tracking state for new word
+            completedLetterIndices = emptySet()
+            currentLetterIndex = 0
+            fillInBlankCorrect = false
+
             watchConnectionManager.sendLearnModeWordData(
                 word = currentWord.word,
                 maskedIndex = currentWord.selectedLetterIndex,
                 configurationType = currentWord.configurationType
             )
+        }
+    }
+
+    // Listen for letter input events from watch (for Write the Word, Name the Picture, and Fill in the Blank modes)
+    LaunchedEffect(sessionKey) {
+        val sessionStartTime = System.currentTimeMillis()
+        watchConnectionManager.letterInputEvent.collect { event ->
+            if (event.timestamp > sessionStartTime) {
+                val currentWord = words.getOrNull(currentWordIndex)
+                if (currentWord != null) {
+                    when (currentWord.configurationType) {
+                        "Fill in the Blank" -> {
+                            // For Fill in the Blank, check if the masked letter is correct
+                            val expectedLetter = currentWord.word.getOrNull(currentWord.selectedLetterIndex)
+                            // Use case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
+                            val isCorrect = isLetterMatch(event.letter, expectedLetter)
+
+                            if (isCorrect) {
+                                // Mark Fill in the Blank as correct to reveal the letter
+                                fillInBlankCorrect = true
+
+                                // Correct answer - notify watch and move to next word
+                                watchConnectionManager.sendWordComplete()
+
+                                // Small delay before moving to next word
+                                kotlinx.coroutines.delay(500)
+
+                                if (currentWordIndex < words.size - 1) {
+                                    currentWordIndex++
+                                } else {
+                                    // All items complete - notify watch before navigating away
+                                    watchConnectionManager.notifyActivityComplete()
+                                    onSessionComplete()
+                                }
+                            }
+                            // For Fill in the Blank, wrong answers are already handled on the watch
+                        }
+                        "Write the Word", "Name the Picture" -> {
+                            // Get expected letter
+                            val expectedLetter = currentWord.word.getOrNull(currentLetterIndex)
+
+                            // Check if input letter matches expected letter
+                            // Uses case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
+                            val isCorrect = isLetterMatch(event.letter, expectedLetter)
+
+                            if (isCorrect) {
+                                // Mark letter as completed
+                                completedLetterIndices = completedLetterIndices + currentLetterIndex
+                                currentLetterIndex++
+
+                                if (currentLetterIndex >= currentWord.word.length) {
+                                    // Word complete - notify watch and move to next word
+                                    watchConnectionManager.sendWordComplete()
+
+                                    // Small delay before moving to next word
+                                    kotlinx.coroutines.delay(500)
+
+                                    if (currentWordIndex < words.size - 1) {
+                                        currentWordIndex++
+                                    } else {
+                                        // All items complete - notify watch before navigating away
+                                        watchConnectionManager.notifyActivityComplete()
+                                        onSessionComplete()
+                                    }
+                                } else {
+                                    // Send correct result and move to next letter
+                                    watchConnectionManager.sendLetterResult(true, currentLetterIndex, currentWord.word.length)
+                                }
+                            } else {
+                                // Wrong letter - send incorrect feedback but DON'T advance letter index
+                                // User must retry the same letter until correct (case-sensitive)
+                                watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -163,6 +277,8 @@ fun LearnModeSessionScreen(
                 if (currentWordIndex < words.size - 1) {
                     currentWordIndex++
                 } else {
+                    // All items complete - notify watch before navigating away
+                    watchConnectionManager.notifyActivityComplete()
                     onSessionComplete()
                 }
             }
@@ -189,7 +305,8 @@ fun LearnModeSessionScreen(
         if (currentWordIndex < words.size - 1) {
             currentWordIndex++
         } else {
-            // Session complete - navigate away
+            // Session complete - notify watch and navigate away
+            watchConnectionManager.notifyActivityComplete()
             onSessionComplete()
         }
     }
@@ -315,23 +432,189 @@ fun LearnModeSessionScreen(
             if (currentWord != null) {
                 val isWriteTheWord = currentWord.configurationType == "Write the Word"
                 val isNameThePicture = currentWord.configurationType == "Name the Picture"
-                Text(
-                    text = when {
-                        isNameThePicture -> currentWord.getBlankWord()
-                        isWriteTheWord -> currentWord.getFullWord()
-                        else -> currentWord.getMaskedWord()
-                    },
-                    fontSize = if (currentWord.imagePath != null) 48.sp else 96.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isWriteTheWord) Color(0xFF808080) else Color.Black,
-                    letterSpacing = if (currentWord.imagePath != null) 4.sp else 8.sp
-                )
+                val isFillInTheBlank = currentWord.configurationType == "Fill in the Blank"
+
+                when {
+                    isWriteTheWord -> {
+                        // Write the Word mode - show letters with color based on completion
+                        WriteTheWordDisplay(
+                            word = currentWord.word,
+                            completedIndices = completedLetterIndices,
+                            currentIndex = currentLetterIndex,
+                            hasImage = currentWord.imagePath != null
+                        )
+                    }
+                    isFillInTheBlank -> {
+                        // Fill in the Blank mode - show masked word, reveal correct letter in violet when answered
+                        FillInTheBlankDisplay(
+                            word = currentWord.word,
+                            maskedIndex = currentWord.selectedLetterIndex,
+                            isCorrect = fillInBlankCorrect,
+                            hasImage = currentWord.imagePath != null
+                        )
+                    }
+                    isNameThePicture -> {
+                        // Name the Picture mode - show blanks that reveal letters when correct
+                        NameThePictureDisplay(
+                            word = currentWord.word,
+                            completedIndices = completedLetterIndices,
+                            currentIndex = currentLetterIndex,
+                            hasImage = currentWord.imagePath != null
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = currentWord.getMaskedWord(),
+                            fontSize = if (currentWord.imagePath != null) 48.sp else 96.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            letterSpacing = if (currentWord.imagePath != null) 4.sp else 8.sp
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.weight(0.7f))
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Display for Write the Word mode showing each letter with color based on completion status.
+ * Current letter has an underline. Completed letters turn purple (#AE8EFB), pending letters are gray.
+ */
+@Composable
+private fun WriteTheWordDisplay(
+    word: String,
+    completedIndices: Set<Int>,
+    currentIndex: Int,
+    hasImage: Boolean
+) {
+    val fontSize = if (hasImage) 48.sp else 96.sp
+    val letterSpacing = if (hasImage) 12.dp else 16.dp
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(letterSpacing),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        word.forEachIndexed { index, letter ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = letter.toString(),
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        index in completedIndices -> CompletedLetterColor  // Completed - purple
+                        else -> PendingLetterColor  // Pending letters - gray
+                    }
+                )
+
+                // Add underline for current letter being input
+                if (index == currentIndex) {
+                    Box(
+                        modifier = Modifier
+                            .width(fontSize.value.dp * 0.7f)
+                            .height(4.dp)
+                            .background(Color.Black, RoundedCornerShape(2.dp))
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Display for Fill in the Blank mode showing the word with a masked letter.
+ * When the correct letter is written, it's revealed in violet/purple color.
+ * Uses the same underline style as Write the Word for consistency.
+ */
+@Composable
+private fun FillInTheBlankDisplay(
+    word: String,
+    maskedIndex: Int,
+    isCorrect: Boolean,
+    hasImage: Boolean
+) {
+    val fontSize = if (hasImage) 48.sp else 96.sp
+    val letterSpacing = if (hasImage) 12.dp else 16.dp
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(letterSpacing),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        word.forEachIndexed { index, letter ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = if (index == maskedIndex && !isCorrect) " " else letter.toString(),
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        index == maskedIndex && isCorrect -> CompletedLetterColor  // Revealed - purple
+                        else -> Color.Black  // Other letters - black
+                    }
+                )
+
+                // Add underline for the masked letter (current letter being input)
+                if (index == maskedIndex && !isCorrect) {
+                    Box(
+                        modifier = Modifier
+                            .width(fontSize.value.dp * 0.7f)
+                            .height(4.dp)
+                            .background(Color.Black, RoundedCornerShape(2.dp))
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Display for Name the Picture mode showing blanks initially.
+ * Completed letters are revealed in purple, pending letters show as underlines.
+ * Current letter has an underline (same style as Write the Word).
+ */
+@Composable
+private fun NameThePictureDisplay(
+    word: String,
+    completedIndices: Set<Int>,
+    currentIndex: Int,
+    hasImage: Boolean
+) {
+    val fontSize = if (hasImage) 48.sp else 96.sp
+    val letterSpacing = if (hasImage) 12.dp else 16.dp
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(letterSpacing),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        word.forEachIndexed { index, letter ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = if (index in completedIndices) letter.toString() else " ",
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = if (index in completedIndices) CompletedLetterColor else Color.Transparent
+                )
+
+                // Add underline for letters not yet completed
+                if (index !in completedIndices) {
+                    Box(
+                        modifier = Modifier
+                            .width(fontSize.value.dp * 0.7f)
+                            .height(4.dp)
+                            .background(Color.Black, RoundedCornerShape(2.dp))
+                    )
+                }
+            }
+        }
     }
 }
 
