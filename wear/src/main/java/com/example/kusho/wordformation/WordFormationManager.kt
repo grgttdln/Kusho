@@ -73,6 +73,7 @@ class WordFormationManager(
     fun addLetter(letter: String, confidence: Float = 1.0f) {
         if (!wordFormationEnabled) return
 
+        // Normalize using LetterMatchingUtils - handles similar case letters
         val normalizedLetter = letter.uppercase().firstOrNull()?.toString() ?: return
 
         letterBuffer.add(LetterPrediction(
@@ -84,7 +85,7 @@ class WordFormationManager(
         // Track total letters in session
         totalLettersInSession++
 
-        Log.d(TAG, "Added letter: $normalizedLetter, buffer: ${letterBuffer.map { it.letter }.joinToString("")}, total letters: $totalLettersInSession")
+        Log.d(TAG, "Added letter: $normalizedLetter (original: $letter), buffer: ${letterBuffer.map { it.letter }.joinToString("")}, total letters: $totalLettersInSession")
 
         // Limit buffer size
         if (letterBuffer.size > maxWordLength) {

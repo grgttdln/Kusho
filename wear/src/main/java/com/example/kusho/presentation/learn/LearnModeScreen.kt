@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -63,10 +65,19 @@ import kotlinx.coroutines.launch
 @Composable
 fun LearnModeScreen() {
     val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
     val phoneCommunicationManager = remember { PhoneCommunicationManager(context) }
     val isPhoneInLearnMode by phoneCommunicationManager.isPhoneInLearnMode.collectAsState()
     
+    // Keep screen on during Learn Mode to prevent sleep during air writing
+    DisposableEffect(Unit) {
+        view.keepScreenOn = true
+        onDispose {
+            view.keepScreenOn = false
+        }
+    }
+
     // Observe word data from LearnModeStateHolder
     val wordData by LearnModeStateHolder.wordData.collectAsState()
     val sessionData by LearnModeStateHolder.sessionData.collectAsState()
@@ -164,26 +175,28 @@ fun LearnModeScreen() {
 @Composable
 private fun WaitingContent() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(36.dp))
+
+        // Text at the top
         Text(
             text = "Waiting...",
-            color = AppColors.LearnModeColor,
+            color = Color.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
 
-        Text(
-            text = "Start Learn Mode\non your phone",
-            color = AppColors.LearnModeColor.copy(alpha = 0.7f),
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp)
+         // Mascot below the text
+        Image(
+            painter = painterResource(id = R.drawable.dis_watch_learn_start),
+            contentDescription = "Learn Mode waiting mascot",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 14.dp),
+            contentScale = ContentScale.Crop
         )
     }
 }
@@ -199,7 +212,9 @@ private fun ActivityCompleteContent() {
         Image(
             painter = painterResource(id = R.drawable.dis_watch_complete),
             contentDescription = "Activity Complete",
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             contentScale = ContentScale.Fit
         )
     }
@@ -324,10 +339,24 @@ private fun FillInTheBlankMainContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
+    // Track last spoken prediction to avoid double TTS
+    var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
+
     // Speak the prediction when result is shown
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == LearnModeViewModel.State.RESULT && uiState.prediction != null) {
-            ttsManager.speakLetter(uiState.prediction!!)
+            // Only speak if we haven't already spoken this prediction
+            if (lastSpokenPrediction != uiState.prediction) {
+                lastSpokenPrediction = uiState.prediction
+                ttsManager.speakLetter(uiState.prediction!!)
+            }
+        }
+    }
+
+    // Reset last spoken prediction when going back to idle
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.IDLE) {
+            lastSpokenPrediction = null
         }
     }
 
@@ -393,16 +422,17 @@ private fun IdleContent(
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
-            ) { viewModel.startRecording() },
-        contentAlignment = Alignment.Center
+            ) { viewModel.startRecording() }
     ) {
-        // Mascot avatar image - centered and fills the screen
+        // Mascot image fills the entire background
         Image(
             painter = painterResource(id = R.drawable.dis_watch_wait),
             contentDescription = "Learn mascot",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
+
+
     }
 }
 
@@ -598,7 +628,6 @@ private fun WriteTheWordMainContent(
     phoneCommunicationManager: PhoneCommunicationManager,
     onSkip: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(sensorManager, classifierResult)
     )
@@ -613,21 +642,38 @@ private fun WriteTheWordMainContent(
     var showingFeedback by remember { mutableStateOf(false) }
     var feedbackIsCorrect by remember { mutableStateOf(false) }
 
+    // Track when this content was composed to filter stale events
+    val contentStartTime = remember { System.currentTimeMillis() }
+
+    // Track last spoken prediction to avoid double TTS
+    var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
+
     // Send letter input to phone when prediction is made
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == LearnModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
-            // Speak the predicted letter
-            ttsManager.speakLetter(uiState.prediction!!)
+            // Only speak if we haven't already spoken this prediction
+            if (lastSpokenPrediction != uiState.prediction) {
+                lastSpokenPrediction = uiState.prediction
+                ttsManager.speakLetter(uiState.prediction!!)
+            }
 
             // Send letter input to phone for validation (preserve exact case)
             phoneCommunicationManager.sendLetterInput(uiState.prediction!!, currentLetterIndex)
         }
     }
 
+    // Reset last spoken prediction when going back to idle
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.IDLE) {
+            lastSpokenPrediction = null
+        }
+    }
+
     // Listen for letter result from phone
     LaunchedEffect(Unit) {
         phoneCommunicationManager.letterResultEvent.collect { result ->
-            if (result.timestamp > 0L) {
+            // Only process events that occurred after this content was composed
+            if (result.timestamp > contentStartTime) {
                 // Show feedback image
                 feedbackIsCorrect = result.isCorrect
                 showingFeedback = true
@@ -883,7 +929,6 @@ private fun NameThePictureMainContent(
     phoneCommunicationManager: PhoneCommunicationManager,
     onSkip: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(sensorManager, classifierResult)
     )
@@ -898,21 +943,38 @@ private fun NameThePictureMainContent(
     var showingFeedback by remember { mutableStateOf(false) }
     var feedbackIsCorrect by remember { mutableStateOf(false) }
 
+    // Track when this content was composed to filter stale events
+    val contentStartTime = remember { System.currentTimeMillis() }
+
+    // Track last spoken prediction to avoid double TTS
+    var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
+
     // Send letter input to phone when prediction is made
     LaunchedEffect(uiState.state, uiState.prediction) {
         if (uiState.state == LearnModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
-            // Speak the predicted letter
-            ttsManager.speakLetter(uiState.prediction!!)
+            // Only speak if we haven't already spoken this prediction
+            if (lastSpokenPrediction != uiState.prediction) {
+                lastSpokenPrediction = uiState.prediction
+                ttsManager.speakLetter(uiState.prediction!!)
+            }
 
             // Send letter input to phone for validation (preserve exact case)
             phoneCommunicationManager.sendLetterInput(uiState.prediction!!, currentLetterIndex)
         }
     }
 
+    // Reset last spoken prediction when going back to idle
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.IDLE) {
+            lastSpokenPrediction = null
+        }
+    }
+
     // Listen for letter result from phone
     LaunchedEffect(Unit) {
         phoneCommunicationManager.letterResultEvent.collect { result ->
-            if (result.timestamp > 0L) {
+            // Only process events that occurred after this content was composed
+            if (result.timestamp > contentStartTime) {
                 // Show feedback image
                 feedbackIsCorrect = result.isCorrect
                 showingFeedback = true
@@ -950,6 +1012,8 @@ private fun NameThePictureMainContent(
             } else {
                 when (uiState.state) {
                     LearnModeViewModel.State.IDLE -> NameThePictureIdleContent(
+                        wordData = wordData,
+                        writeTheWordState = writeTheWordState,
                         viewModel = viewModel
                     )
                     LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
@@ -957,6 +1021,8 @@ private fun NameThePictureMainContent(
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
                     LearnModeViewModel.State.RESULT -> NameThePictureIdleContent(
+                        wordData = wordData,
+                        writeTheWordState = writeTheWordState,
                         viewModel = viewModel
                     )
                 }
@@ -966,10 +1032,13 @@ private fun NameThePictureMainContent(
 }
 
 /**
- * Idle content for Name the Picture mode - shows mascot image (does NOT show next letter)
+ * Idle content for Name the Picture mode - shows mascot image with letter progress
+ * Completed letters are revealed in purple, pending letters show as underlines
  */
 @Composable
 private fun NameThePictureIdleContent(
+    wordData: LearnModeStateHolder.WordData,
+    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
     viewModel: LearnModeViewModel
 ) {
     Box(
@@ -982,7 +1051,6 @@ private fun NameThePictureIdleContent(
         contentAlignment = Alignment.Center
     ) {
         // Show mascot avatar image - user taps to start gesture recognition
-        // Does NOT show the expected letter like Write the Word mode
         Image(
             painter = painterResource(id = R.drawable.dis_watch_wait),
             contentDescription = "Name the Picture mascot",
@@ -991,4 +1059,5 @@ private fun NameThePictureIdleContent(
         )
     }
 }
+
 

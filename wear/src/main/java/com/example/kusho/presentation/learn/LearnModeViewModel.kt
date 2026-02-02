@@ -32,6 +32,40 @@ class LearnModeViewModel(
         private const val PREDICTION_DISPLAY_MS = 1500L // 1.5 seconds
         private const val RESULT_DISPLAY_SECONDS = 3
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
+
+        /**
+         * Letters that have very similar writing structures between uppercase and lowercase
+         * in air writing. These letters should be checked case-insensitively.
+         */
+        private val similarCaseLetters = setOf(
+            'c', 'C', 'k', 'K', 'o', 'O', 'p', 'P', 's', 'S',
+            'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'z', 'Z'
+        )
+
+        /**
+         * Check if the input letter matches the expected letter.
+         * For letters with similar writing structures (c, k, o, p, s, u, v, w, x, z),
+         * the comparison is case-insensitive.
+         * For other letters, the comparison is case-sensitive.
+         */
+        private fun isLetterMatch(inputLetter: String?, expectedLetter: String?): Boolean {
+            if (inputLetter.isNullOrEmpty() || expectedLetter.isNullOrEmpty()) {
+                Log.d(TAG, "isLetterMatch: null/empty input=$inputLetter, expected=$expectedLetter")
+                return false
+            }
+            val input = inputLetter.firstOrNull() ?: return false
+            val expected = expectedLetter.firstOrNull() ?: return false
+
+            val isSimilarCase = expected in similarCaseLetters
+            val result = if (isSimilarCase) {
+                input.lowercaseChar() == expected.lowercaseChar()
+            } else {
+                input == expected
+            }
+
+            Log.d(TAG, "isLetterMatch: input='$input', expected='$expected', isSimilarCase=$isSimilarCase, result=$result")
+            return result
+        }
     }
 
     enum class State {
@@ -226,11 +260,11 @@ class LearnModeViewModel(
 
                 // === Phase 4: Show the predicted letter first ===
                 // Keep the predicted letter as the raw input from the user (no case conversion)
-                val predictedLetter = result.label
-                // Compare case-sensitively - user must write the correct case
-                val isCorrect = predictedLetter == currentMaskedLetter
+                val predictedLetter = result.label?.trim()
+                // Use case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
+                val isCorrect = isLetterMatch(predictedLetter, currentMaskedLetter.trim())
 
-                Log.d(TAG, "Predicted: $predictedLetter, Expected: $currentMaskedLetter, Correct: $isCorrect")
+                Log.d(TAG, "Predicted: '$predictedLetter', Expected: '$currentMaskedLetter', Correct: $isCorrect")
 
                 // Show the predicted letter for 1.5 seconds
                 _uiState.update {

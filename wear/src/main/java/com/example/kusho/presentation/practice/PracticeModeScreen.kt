@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +52,7 @@ import com.example.kusho.speech.TextToSpeechManager
 @Composable
 fun PracticeModeScreen() {
     val context = LocalContext.current
+    val view = LocalView.current
 
     // Use state to track if initialization is complete
     var isInitialized by remember { mutableStateOf(false) }
@@ -60,9 +62,11 @@ fun PracticeModeScreen() {
     // Initialize TextToSpeech manager
     val ttsManager = remember { TextToSpeechManager(context) }
 
-    // Cleanup TTS when the composable is disposed
+    // Keep screen on during Practice Mode to prevent sleep during air writing
     DisposableEffect(Unit) {
+        view.keepScreenOn = true
         onDispose {
+            view.keepScreenOn = false
             ttsManager.shutdown()
         }
     }
