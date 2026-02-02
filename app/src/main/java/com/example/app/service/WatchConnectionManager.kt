@@ -402,9 +402,11 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     val jsonString = String(messageEvent.data)
                     val json = org.json.JSONObject(jsonString)
                     val isCorrect = json.getBoolean("isCorrect")
+                    val predictedLetter = json.optString("predictedLetter", "")
                     Log.d(TAG, if (isCorrect) "✅ Gesture correct from watch" else "❌ Gesture incorrect from watch")
                     _tutorialModeGestureResult.value = mapOf(
                         "isCorrect" to isCorrect,
+                        "predictedLetter" to predictedLetter,
                         "timestamp" to System.currentTimeMillis()
                     )
                 } catch (e: Exception) {

@@ -36,6 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 import com.example.app.service.WatchConnectionManager
 
@@ -61,6 +62,7 @@ fun TutorialSessionScreen(
     var currentStep by remember { mutableIntStateOf(initialStep) }
     var showProgressCheck by remember { mutableStateOf(false) }
     var isCorrectGesture by remember { mutableStateOf(false) }
+    var predictedLetter by remember { mutableStateOf("") }
     
     // Define all letters based on the section
     val allLetters = remember(title) {
@@ -184,6 +186,7 @@ fun TutorialSessionScreen(
             if (timestamp > lastGestureTime && result.isNotEmpty()) {
                 lastGestureTime = timestamp
                 isCorrectGesture = result["isCorrect"] as? Boolean ?: false
+                predictedLetter = result["predictedLetter"] as? String ?: ""
                 showProgressCheck = true
             }
         }
@@ -215,6 +218,10 @@ fun TutorialSessionScreen(
     if (showProgressCheck) {
         ProgressCheckDialog(
             isCorrect = isCorrectGesture,
+            studentName = studentName,
+            targetLetter = currentLetter,
+            targetCase = letterType,
+            predictedLetter = predictedLetter,
             onDismiss = {
                 showProgressCheck = false
                 // Notify watch that mobile dismissed feedback
@@ -396,55 +403,122 @@ fun TutorialSessionScreenPreview() {
 @Composable
 private fun ProgressCheckDialog(
     isCorrect: Boolean,
+    studentName: String,
+    targetLetter: String,
+    targetCase: String,
+    predictedLetter: String,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
+    // Extract first name only for more friendly tone
+    val firstName = studentName.split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: ""
+    
+    // Define similar shape letters (same as watch side)
+    val similarShapeLetters = setOf('C', 'K', 'O', 'P', 'S', 'V', 'W', 'X', 'Z')
+    
+    // Check if there's a case mismatch for similar letters
+    val targetUppercase = targetLetter.uppercase()
+    val isSimilarShape = targetUppercase.firstOrNull() in similarShapeLetters
+    val expectedCase = when (targetCase.lowercase()) {
+        "small", "lowercase" -> targetLetter.lowercase()
+        else -> targetLetter.uppercase()
+    }
+    val hasCaseMismatch = isCorrect && isSimilarShape && 
+                         predictedLetter.isNotEmpty() && 
+                         !predictedLetter.equals(expectedCase, ignoreCase = false)
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        // Full-screen dark overlay
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .wrapContentHeight()
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) { onDismiss() },
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+            contentAlignment = Alignment.Center
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
+                    .fillMaxWidth(0.85f)
+                    .wrapContentHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.Center
             ) {
+                // Mascot Image
                 Image(
                     painter = painterResource(
                         id = if (isCorrect) R.drawable.dis_mobile_correct else R.drawable.dis_mobile_incorrect
                     ),
                     contentDescription = if (isCorrect) "Correct" else "Incorrect",
-                    modifier = Modifier.size(120.dp),
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .aspectRatio(1f),
                     contentScale = ContentScale.Fit
                 )
                 
+                Spacer(Modifier.height(24.dp))
+                
+                // Title with first name only
                 Text(
-                    text = if (isCorrect) "Correct!" else "Try Again",
-                    fontSize = 24.sp,
+                    text = if (isCorrect) {
+                        "Great Job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                    } else {
+                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                    },
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isCorrect) Color(0xFF4CAF50) else Color(0xFFF44336),
+                    color = if (isCorrect) Color(0xFFCCDB00) else Color(0xFFFF6B6B),
                     textAlign = TextAlign.Center
                 )
                 
-                Text(
-                    text = if (isCorrect) {
-                        "Great job! Tap to continue."
-                    } else {
-                        "Let's practice this letter again."
-                    },
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color.Gray,
-                    textAlign = TextAlign.Center
-                )
+                Spacer(Modifier.height(12.dp))
+                
+                // Body text with optional case mismatch disclaimer
+                if (isCorrect && hasCaseMismatch) {
+                    Text(
+                        text = "You're doing super!\nKeep up the amazing work!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                    
+                    Spacer(Modifier.height(16.dp))
+                    
+                    Text(
+                        text = "Psst... you wrote ${if (predictedLetter.first().isUpperCase()) "uppercase" else "lowercase"} ${predictedLetter.uppercase()}, " +
+                              "but we're practicing ${if (targetCase.lowercase() in listOf("small", "lowercase")) "lowercase" else "uppercase"} letters! " +
+                              "They look similar, so that's still great! 😊",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                } else if (isCorrect) {
+                    Text(
+                        text = "You're doing super!\nKeep up the amazing work!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                } else {
+                    Text(
+                        text = "Let's give it another go!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                }
             }
         }
     }

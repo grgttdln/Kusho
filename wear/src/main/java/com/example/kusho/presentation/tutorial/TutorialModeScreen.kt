@@ -164,9 +164,9 @@ fun TutorialModeScreen() {
                             ttsManager = ttsManager,
                             needsReset = needsReset,
                             onResetHandled = { needsReset = false },
-                            onGestureResult = { isCorrect ->
+                            onGestureResult = { isCorrect, predictedLetter ->
                                 scope.launch {
-                                    phoneCommunicationManager.sendTutorialModeGestureResult(isCorrect)
+                                    phoneCommunicationManager.sendTutorialModeGestureResult(isCorrect, predictedLetter)
                                 }
                                 TutorialModeStateHolder.showFeedback(isCorrect)
                                 isRecognizing = false
@@ -428,7 +428,7 @@ private fun GestureRecognitionContent(
     ttsManager: TextToSpeechManager,
     needsReset: Boolean,
     onResetHandled: () -> Unit,
-    onGestureResult: (Boolean) -> Unit,
+    onGestureResult: (Boolean, String) -> Unit,
     onSkip: () -> Unit
 ) {
     // Convert letter to appropriate case for display

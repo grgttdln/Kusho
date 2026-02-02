@@ -278,12 +278,14 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
     /**
      * Send gesture recognition result to phone app
      * @param isCorrect Whether the gesture was recognized correctly
+     * @param predictedLetter The letter that was predicted by the model
      */
-    suspend fun sendTutorialModeGestureResult(isCorrect: Boolean) {
+    suspend fun sendTutorialModeGestureResult(isCorrect: Boolean, predictedLetter: String = "") {
         try {
             val nodes = nodeClient.connectedNodes.await()
             val jsonPayload = org.json.JSONObject().apply {
                 put("isCorrect", isCorrect)
+                put("predictedLetter", predictedLetter)
             }.toString()
             
             nodes.forEach { node ->

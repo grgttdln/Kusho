@@ -25,7 +25,7 @@ class TutorialModeViewModel(
     private val classifierResult: ClassifierLoadResult,
     private val targetLetter: String,
     private val letterCase: String,
-    private val onGestureResult: (isCorrect: Boolean) -> Unit
+    private val onGestureResult: (isCorrect: Boolean, predictedLetter: String) -> Unit
 ) : ViewModel() {
 
     companion object {
@@ -33,6 +33,11 @@ class TutorialModeViewModel(
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 3
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
+        
+        // Letters with similar shapes in uppercase and lowercase
+        private val SIMILAR_SHAPE_LETTERS = setOf(
+            'C', 'K', 'O', 'P', 'S', 'V', 'W', 'X', 'Z'
+        )
     }
 
     enum class State {
@@ -100,7 +105,7 @@ class TutorialModeViewModel(
                     statusMessage = "Error"
                 )
             }
-            onGestureResult(false)
+            onGestureResult(false, "")
             return
         }
 
@@ -185,7 +190,7 @@ class TutorialModeViewModel(
                             recordingProgress = 0f
                         )
                     }
-                    onGestureResult(false)
+                    onGestureResult(false, "")
                     return@launch
                 }
 
@@ -202,7 +207,7 @@ class TutorialModeViewModel(
                             recordingProgress = 0f
                         )
                     }
-                    onGestureResult(false)
+                    onGestureResult(false, "")
                     return@launch
                 }
 
@@ -215,10 +220,19 @@ class TutorialModeViewModel(
                     else -> targetLetter.uppercase()
                 }
                 
-                // Case-sensitive comparison
-                val isCorrect = predictedLetter.equals(expectedLetter, ignoreCase = false)
+                // Check if this letter has similar shapes in both cases
+                val targetUppercase = targetLetter.uppercase().firstOrNull()
+                val isSimilarShape = targetUppercase != null && targetUppercase in SIMILAR_SHAPE_LETTERS
                 
-                Log.d(TAG, "Predicted: $predictedLetter, Expected: $expectedLetter (case: $letterCase), Correct: $isCorrect")
+                // For similar shape letters, use case-insensitive comparison
+                // For others (like A/a), enforce case-sensitive
+                val isCorrect = if (isSimilarShape) {
+                    predictedLetter.equals(expectedLetter, ignoreCase = true)
+                } else {
+                    predictedLetter.equals(expectedLetter, ignoreCase = false)
+                }
+                
+                Log.d(TAG, "Predicted: $predictedLetter, Expected: $expectedLetter (case: $letterCase), Similar: $isSimilarShape, Correct: $isCorrect")
                 
                 // First show the result with prediction
                 _uiState.update {
@@ -246,7 +260,7 @@ class TutorialModeViewModel(
                 }
 
                 // Send result to phone
-                onGestureResult(isCorrect)
+                onGestureResult(isCorrect, predictedLetter)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Recognition error: ${e.message}", e)
@@ -258,7 +272,7 @@ class TutorialModeViewModel(
                         recordingProgress = 0f
                     )
                 }
-                onGestureResult(false)
+                onGestureResult(false, "")
             }
         }
     }
@@ -288,7 +302,7 @@ class TutorialModeViewModelFactory(
     private val classifierResult: ClassifierLoadResult,
     private val targetLetter: String,
     private val letterCase: String,
-    private val onGestureResult: (Boolean) -> Unit
+    private val onGestureResult: (Boolean, String) -> Unit
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(TutorialModeViewModel::class.java)) {
