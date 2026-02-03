@@ -82,21 +82,21 @@ class PracticeModeViewModel(
 
             // Uppercase & Lowercase Practice
             PracticeQuestion("Can you write an uppercase A?", "A", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase b?", "B", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase b?", "b", QuestionCategory.UPPERCASE_LOWERCASE),
             PracticeQuestion("Can you write an uppercase C?", "C", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase d?", "D", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase d?", "d", QuestionCategory.UPPERCASE_LOWERCASE),
             PracticeQuestion("Can you write an uppercase E?", "E", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase f?", "F", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase f?", "f", QuestionCategory.UPPERCASE_LOWERCASE),
             PracticeQuestion("Can you write an uppercase G?", "G", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase h?", "H", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase h?", "h", QuestionCategory.UPPERCASE_LOWERCASE),
             PracticeQuestion("Can you write an uppercase I?", "I", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase j?", "J", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase j?", "j", QuestionCategory.UPPERCASE_LOWERCASE),
             PracticeQuestion("Can you write an uppercase K?", "K", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase l?", "L", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase l?", "l", QuestionCategory.UPPERCASE_LOWERCASE),
             PracticeQuestion("Can you write an uppercase M?", "M", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase n?", "N", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase n?", "n", QuestionCategory.UPPERCASE_LOWERCASE),
             PracticeQuestion("Can you write an uppercase O?", "O", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase p?", "P", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase p?", "p", QuestionCategory.UPPERCASE_LOWERCASE),
 
             // Letter Sound Match (Phonics) - TTS friendly (sound + example word)
             PracticeQuestion("Which letter makes the sound \"b\" as in \"ball\"?", "B", QuestionCategory.LETTER_SOUND),
@@ -147,6 +147,7 @@ class PracticeModeViewModel(
         COUNTDOWN,
         RECORDING,
         PROCESSING,
+        SHOWING_PREDICTION,  // Show the user's predicted letter
         RESULT
     }
 
@@ -364,19 +365,33 @@ class PracticeModeViewModel(
                     return@launch
                 }
 
-                // === Phase 4: Show Result ===
+                // === Phase 4: Show Prediction ===
                 val predictedLetter = result.label
                 val currentQuestion = _uiState.value.currentQuestion
-                val isCorrect = predictedLetter?.uppercase() == currentQuestion?.expectedAnswer?.uppercase()
+
+                // Case-sensitive comparison for TRACING_COPYING and UPPERCASE_LOWERCASE
+                // Case-insensitive for other categories (LETTER_SOUND, PICTURE_MATCH)
+                val isCorrect = when (currentQuestion?.category) {
+                    QuestionCategory.TRACING_COPYING,
+                    QuestionCategory.UPPERCASE_LOWERCASE -> {
+                        // Case-sensitive comparison
+                        predictedLetter == currentQuestion.expectedAnswer
+                    }
+                    else -> {
+                        // Case-insensitive comparison for other categories
+                        predictedLetter?.uppercase() == currentQuestion?.expectedAnswer?.uppercase()
+                    }
+                }
 
                 Log.d(TAG, "Predicted: $predictedLetter, Expected: ${currentQuestion?.expectedAnswer}, Correct: $isCorrect")
 
+                // First show the predicted letter
                 _uiState.update {
                     it.copy(
-                        state = State.RESULT,
+                        state = State.SHOWING_PREDICTION,
                         prediction = predictedLetter,
                         confidence = result.confidence,
-                        statusMessage = if (isCorrect) "Correct! ✓" else "Try again!",
+                        statusMessage = "You wrote:",
                         errorMessage = null,
                         recordingProgress = 0f,
                         isAnswerCorrect = isCorrect,
@@ -385,16 +400,46 @@ class PracticeModeViewModel(
                     )
                 }
 
+                // Show prediction for 2 seconds, then show result
+                delay(2000L)
+                if (isActive && _uiState.value.state == State.SHOWING_PREDICTION) {
+                    _uiState.update {
+                        it.copy(
+                            state = State.RESULT,
+                            statusMessage = if (isCorrect) "Correct! ✓" else "Try again!"
+                        )
+                    }
+                }
+
                 // Auto-reset after showing result
                 delay(RESULT_DISPLAY_SECONDS * 1000L)
                 if (isActive && _uiState.value.state == State.RESULT) {
-                    _uiState.update {
-                        it.copy(
-                            state = State.IDLE,
-                            statusMessage = "Tap to Start",
-                            currentQuestion = null,
-                            isAnswerCorrect = null
-                        )
+                    val wasCorrect = _uiState.value.isAnswerCorrect == true
+                    val sameQuestion = _uiState.value.currentQuestion
+                    
+                    if (wasCorrect) {
+                        // Correct answer: Move to IDLE, ready for next question
+                        _uiState.update {
+                            it.copy(
+                                state = State.IDLE,
+                                statusMessage = "Tap to Start",
+                                currentQuestion = null,
+                                isAnswerCorrect = null,
+                                prediction = null,
+                                confidence = null
+                            )
+                        }
+                    } else {
+                        // Wrong answer: Stay on same question, go back to QUESTION state
+                        _uiState.update {
+                            it.copy(
+                                state = State.QUESTION,
+                                statusMessage = sameQuestion?.question ?: "Try again",
+                                isAnswerCorrect = null,
+                                prediction = null,
+                                confidence = null
+                            )
+                        }
                     }
                 }
 

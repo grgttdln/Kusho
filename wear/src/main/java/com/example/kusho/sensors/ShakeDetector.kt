@@ -16,34 +16,34 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
 
     companion object {
         private const val TAG = "ShakeDetector"
-
+        
         // Shake detection thresholds
         private const val SHAKE_THRESHOLD_GRAVITY = 2.5f  // Acceleration threshold (in G)
-        private const val SHAKE_SLOP_TIME_MS = 2500        // Minimum time between shakes
-        private const val SHAKE_COUNT_RESET_TIME_MS = 3000 // Reset shake count after this time
-
-        // Tilt detection thresholds
+        private const val SHAKE_SLOP_TIME_MS = 1500        // Minimum time between shakes
+        private const val SHAKE_COUNT_RESET_TIME_MS = 2000 // Reset shake count after this time
+        
+        // Tilt detection thresholds  
         private const val TILT_THRESHOLD_DEGREES = 45f    // Tilt angle threshold
-        private const val TILT_COOLDOWN_MS = 2500         // Cooldown between tilt detections
+        private const val TILT_COOLDOWN_MS = 1200         // Cooldown between tilt detections
     }
 
     private val sensorManager: SensorManager? =
         context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
 
     private var accelerometer: Sensor? = null
-
+    
     // Shake detection state
     private var shakeTimestamp: Long = 0
     private var shakeCount: Int = 0
-
+    
     // Tilt detection state
     private var lastTiltTimestamp: Long = 0
     private var initialGravity: FloatArray? = null
     private var gravityValues = FloatArray(3)
-
+    
     // Listener for shake/tilt events
     private var onShakeListener: (() -> Unit)? = null
-
+    
     @Volatile
     private var isListening: Boolean = false
 
@@ -59,7 +59,7 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
      */
     fun startListening() {
         if (isListening) return
-
+        
         val sm = sensorManager ?: run {
             Log.e(TAG, "SensorManager not available")
             return
@@ -74,7 +74,7 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
         isListening = true
         shakeCount = 0
         initialGravity = null
-
+        
         // Use a slower sampling rate since we don't need high precision
         sm.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
         Log.d(TAG, "Started listening for shake/tilt gestures")
@@ -85,7 +85,7 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
      */
     fun stopListening() {
         if (!isListening) return
-
+        
         isListening = false
         sensorManager?.unregisterListener(this)
         shakeCount = 0
@@ -109,7 +109,7 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
 
         // Check for shake (sudden acceleration)
         checkForShake(x, y, z)
-
+        
         // Check for tilt (orientation change)
         checkForTilt()
     }
@@ -128,7 +128,7 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
 
         if (gForce > SHAKE_THRESHOLD_GRAVITY) {
             val now = System.currentTimeMillis()
-
+            
             // Check if enough time has passed since last shake
             if (shakeTimestamp + SHAKE_SLOP_TIME_MS > now) {
                 return
@@ -143,7 +143,7 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
             shakeCount++
 
             Log.d(TAG, "Shake detected! Count: $shakeCount, G-force: $gForce")
-
+            
             // Trigger callback on first shake (no need to wait for multiple shakes)
             if (shakeCount >= 1) {
                 onShakeListener?.invoke()
@@ -157,7 +157,7 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
      */
     private fun checkForTilt() {
         val now = System.currentTimeMillis()
-
+        
         // Check cooldown
         if (now - lastTiltTimestamp < TILT_COOLDOWN_MS) {
             return
@@ -170,16 +170,16 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
         }
 
         val initial = initialGravity!!
-
+        
         // Calculate the angle difference using dot product
         val magnitude1 = sqrt(initial[0] * initial[0] + initial[1] * initial[1] + initial[2] * initial[2])
         val magnitude2 = sqrt(gravityValues[0] * gravityValues[0] + gravityValues[1] * gravityValues[1] + gravityValues[2] * gravityValues[2])
-
+        
         if (magnitude1 < 0.1f || magnitude2 < 0.1f) return
-
+        
         val dotProduct = (initial[0] * gravityValues[0] + initial[1] * gravityValues[1] + initial[2] * gravityValues[2])
         val cosAngle = dotProduct / (magnitude1 * magnitude2)
-
+        
         // Clamp to valid range for acos
         val clampedCos = cosAngle.coerceIn(-1f, 1f)
         val angleDegrees = Math.toDegrees(kotlin.math.acos(clampedCos).toDouble()).toFloat()
@@ -204,4 +204,3 @@ class ShakeDetector(private val context: Context) : SensorEventListener {
         onShakeListener = null
     }
 }
-

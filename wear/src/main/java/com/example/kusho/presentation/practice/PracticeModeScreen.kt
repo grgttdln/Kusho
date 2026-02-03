@@ -159,10 +159,44 @@ private fun PracticeModeContent(
         }
     }
 
-    // Speak the prediction when we enter RESULT state
-    LaunchedEffect(uiState.state, uiState.prediction) {
-        if (uiState.state == PracticeModeViewModel.State.RESULT && uiState.prediction != null) {
-            ttsManager.speakLetter(uiState.prediction!!)
+    // Random affirmations for correct and wrong answers
+    val correctAffirmations = remember {
+        listOf(
+            "You are Correct!",
+            "Great job!",
+            "Awesome!",
+            "Well done!",
+            "Perfect!",
+            "Excellent!",
+            "Amazing!",
+            "You got it!",
+            "Fantastic!",
+            "Super!"
+        )
+    }
+
+    val wrongAffirmations = remember {
+        listOf(
+            "Try again!",
+            "Not quite, try again!",
+            "Almost there!",
+            "Keep trying!",
+            "You can do it!",
+            "Give it another shot!",
+            "Let's try once more!",
+            "Don't give up!"
+        )
+    }
+
+    // Speak feedback when we enter RESULT state
+    LaunchedEffect(uiState.state, uiState.isAnswerCorrect) {
+        if (uiState.state == PracticeModeViewModel.State.RESULT) {
+            val isCorrect = uiState.isAnswerCorrect == true
+            if (isCorrect) {
+                ttsManager.speak(correctAffirmations.random())
+            } else {
+                ttsManager.speak(wrongAffirmations.random())
+            }
         }
     }
 
@@ -179,6 +213,7 @@ private fun PracticeModeContent(
             PracticeModeViewModel.State.COUNTDOWN -> CountdownContent(uiState, viewModel)
             PracticeModeViewModel.State.RECORDING -> RecordingContent(uiState, viewModel)
             PracticeModeViewModel.State.PROCESSING -> ProcessingContent(uiState)
+            PracticeModeViewModel.State.SHOWING_PREDICTION -> PredictionContent(uiState)
             PracticeModeViewModel.State.RESULT -> ResultContent(uiState, viewModel)
         }
     }
@@ -283,7 +318,7 @@ private fun QuestionContent(
             Image(
                 painter = painterResource(id = R.drawable.dis_question),
                 contentDescription = "Question avatar",
-                modifier = Modifier.size(140.dp),
+                modifier = Modifier.size(120.dp),
                 contentScale = ContentScale.Fit
             )
         } else {
@@ -392,53 +427,42 @@ private fun ProcessingContent(uiState: PracticeModeViewModel.UiState) {
 }
 
 @Composable
+private fun PredictionContent(uiState: PracticeModeViewModel.UiState) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Show the user's predicted letter in white
+        Text(
+            text = uiState.prediction ?: "?",
+            color = Color.White,
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
 private fun ResultContent(
     uiState: PracticeModeViewModel.UiState,
     viewModel: PracticeModeViewModel
 ) {
     val isCorrect = uiState.isAnswerCorrect == true
-    val resultColor = if (isCorrect) Color.Green else Color.Red
 
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Show the user's answer
-            Text(
-                text = uiState.prediction ?: "?",
-                color = resultColor,
-                textAlign = TextAlign.Center,
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.display1
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Show correct/incorrect feedback
-            Text(
-                text = if (isCorrect) "Correct! ✓" else "Expected: ${uiState.currentQuestion?.expectedAnswer ?: "?"}",
-                color = if (isCorrect) Color.Green else Color.Yellow,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
-            )
-
-            // Show confidence
-            uiState.confidence?.let { conf ->
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${(conf * 100).toInt()}% confidence",
-                    color = AppColors.TextSecondary,
-                    fontSize = 10.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
+        // Show correct or wrong image
+        Image(
+            painter = painterResource(
+                id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+            ),
+            contentDescription = if (isCorrect) "Correct answer" else "Wrong answer",
+            modifier = Modifier.size(120.dp),
+            contentScale = ContentScale.Fit
+        )
     }
 }
 
