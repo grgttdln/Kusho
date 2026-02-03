@@ -7,9 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
-import com.example.kusho.wordformation.WordFormationManager
-import com.example.kusho.wordformation.WordFormationResult
-import com.example.kusho.wordformation.WordFormationState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -20,9 +17,25 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
+ * Data class representing a practice question
+ */
+data class PracticeQuestion(
+    val question: String,
+    val expectedAnswer: String, // The letter or answer expected
+    val category: QuestionCategory,
+    val emoji: String? = null // Optional emoji for PICTURE_MATCH questions
+)
+
+enum class QuestionCategory {
+    TRACING_COPYING,
+    UPPERCASE_LOWERCASE,
+    LETTER_SOUND,
+    PICTURE_MATCH
+}
+
+/**
  * ViewModel for Practice Mode.
- * Handles: countdown -> gesture recording -> classification -> result display
- * Now with word formation support!
+ * New flow: Tap to start -> Show random question -> User answers by air-writing
  */
 class PracticeModeViewModel(
     private val sensorManager: MotionSensorManager,
@@ -36,10 +49,101 @@ class PracticeModeViewModel(
         private const val RECORDING_SECONDS = 3
         private const val RESULT_DISPLAY_SECONDS = 3
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
+
+        // Practice questions
+        private val PRACTICE_QUESTIONS = listOf(
+            // Tracing & Copying Letters
+            PracticeQuestion("Can you trace the letter A?", "A", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter B using your finger?", "B", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter L?", "L", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter C?", "C", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter D?", "D", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter E?", "E", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter F?", "F", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter G?", "G", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter H?", "H", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter I?", "I", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter J?", "J", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter K?", "K", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter M?", "M", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter N?", "N", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter O?", "O", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter P?", "P", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter Q?", "Q", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter R?", "R", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter S?", "S", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter T?", "T", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter U?", "U", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter V?", "V", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter W?", "W", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter X?", "X", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter Y?", "Y", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you copy the letter Z?", "Z", QuestionCategory.TRACING_COPYING),
+
+            // Uppercase & Lowercase Practice
+            PracticeQuestion("Can you write an uppercase A?", "A", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase b?", "B", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase C?", "C", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase d?", "D", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase E?", "E", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase f?", "F", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase G?", "G", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase h?", "H", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase I?", "I", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase j?", "J", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase K?", "K", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase l?", "L", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase M?", "M", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase n?", "N", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase O?", "O", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write a lowercase p?", "P", QuestionCategory.UPPERCASE_LOWERCASE),
+
+            // Letter Sound Match (Phonics) - TTS friendly (sound + example word)
+            PracticeQuestion("Which letter makes the sound \"b\" as in \"ball\"?", "B", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"a\" as in \"apple\"?", "A", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"s\" as in \"sun\"?", "S", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"m\" as in \"moon\"?", "M", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"d\" as in \"dog\"?", "D", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"f\" as in \"fish\"?", "F", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"z\" as in \"zebra\"?", "Z", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"k\" as in \"kite\"?", "K", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"t\" as in \"top\"?", "T", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"h\" as in \"hat\"?", "H", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"p\" as in \"pen\"?", "P", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"r\" as in \"run\"?", "R", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"n\" as in \"nose\"?", "N", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"j\" as in \"jump\"?", "J", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"l\" as in \"lion\"?", "L", QuestionCategory.LETTER_SOUND),
+            PracticeQuestion("Which letter makes the sound \"g\" as in \"goat\"?", "G", QuestionCategory.LETTER_SOUND),
+
+            // Picture → Letter Match
+            PracticeQuestion("What letter does cat start with?", "C", QuestionCategory.PICTURE_MATCH, "🐱"),
+            PracticeQuestion("What letter does apple start with?", "A", QuestionCategory.PICTURE_MATCH, "🍎"),
+            PracticeQuestion("What letter does elephant start with?", "E", QuestionCategory.PICTURE_MATCH, "🐘"),
+            PracticeQuestion("What letter does dog start with?", "D", QuestionCategory.PICTURE_MATCH, "🐕"),
+            PracticeQuestion("What letter does fish start with?", "F", QuestionCategory.PICTURE_MATCH, "🐟"),
+            PracticeQuestion("What letter does lion start with?", "L", QuestionCategory.PICTURE_MATCH, "🦁"),
+            PracticeQuestion("What letter does monkey start with?", "M", QuestionCategory.PICTURE_MATCH, "🐵"),
+            PracticeQuestion("What letter does snake start with?", "S", QuestionCategory.PICTURE_MATCH, "🐍"),
+            PracticeQuestion("What letter does turtle start with?", "T", QuestionCategory.PICTURE_MATCH, "🐢"),
+            PracticeQuestion("What letter does bear start with?", "B", QuestionCategory.PICTURE_MATCH, "🐻"),
+            PracticeQuestion("What letter does frog start with?", "F", QuestionCategory.PICTURE_MATCH, "🐸"),
+            PracticeQuestion("What letter does rabbit start with?", "R", QuestionCategory.PICTURE_MATCH, "🐰"),
+            PracticeQuestion("What letter does giraffe start with?", "G", QuestionCategory.PICTURE_MATCH, "🦒"),
+            PracticeQuestion("What letter does pig start with?", "P", QuestionCategory.PICTURE_MATCH, "🐷"),
+            PracticeQuestion("What letter does fox start with?", "F", QuestionCategory.PICTURE_MATCH, "🦊"),
+            PracticeQuestion("What letter does butterfly start with?", "B", QuestionCategory.PICTURE_MATCH, "🦋"),
+            PracticeQuestion("What letter does banana start with?", "B", QuestionCategory.PICTURE_MATCH, "🍌"),
+            PracticeQuestion("What letter does sunflower start with?", "S", QuestionCategory.PICTURE_MATCH, "🌻"),
+            PracticeQuestion("What letter does grapes start with?", "G", QuestionCategory.PICTURE_MATCH, "🍇"),
+            PracticeQuestion("What letter does car start with?", "C", QuestionCategory.PICTURE_MATCH, "🚗"),
+
+            )
     }
 
     enum class State {
         IDLE,
+        QUESTION,      // Show the question to the user
         COUNTDOWN,
         RECORDING,
         PROCESSING,
@@ -52,26 +156,15 @@ class PracticeModeViewModel(
         val recordingProgress: Float = 0f,
         val prediction: String? = null,
         val confidence: Float? = null,
-        val statusMessage: String = "Tap Start",
+        val statusMessage: String = "Tap to Start",
         val errorMessage: String? = null,
         val modelInfo: String? = null,
         val isModelLoaded: Boolean = false,
-        // Word formation fields
-        val wordFormationEnabled: Boolean = false,
-        val currentLetterSequence: String = "",
-        val formedWord: String? = null,
-        val isWordComplete: Boolean = false,
-        val wordSuggestions: List<String> = emptyList(),
-        // Session tracking (resets after 3 letters)
-        val formedWords: List<String> = emptyList(),
-        val wordsFormedCount: Int = 0,
-        val totalLettersInSession: Int = 0,
-        val lettersUntilReset: Int = 3,
-        val isSessionComplete: Boolean = false,
-        val wordBankSize: Int = 0,
-        // Word just formed tracking
-        val wordJustFormed: Boolean = false,
-        val lastFormedWord: String? = null
+        // Question-based practice fields
+        val currentQuestion: PracticeQuestion? = null,
+        val isAnswerCorrect: Boolean? = null,
+        val questionsAnswered: Int = 0,
+        val correctAnswers: Int = 0
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -80,9 +173,8 @@ class PracticeModeViewModel(
     private var recordingJob: Job? = null
     private val classifier: AirWritingClassifier?
 
-    // Word formation manager
-    private val wordFormationManager = WordFormationManager()
-    val wordFormationState: StateFlow<WordFormationState> = wordFormationManager.state
+    // Track used questions to avoid repetition
+    private val usedQuestionIndices = mutableSetOf<Int>()
 
     init {
         // Process classifier load result
@@ -95,7 +187,7 @@ class PracticeModeViewModel(
                     it.copy(
                         modelInfo = info,
                         isModelLoaded = true,
-                        statusMessage = "Tap Start"
+                        statusMessage = "Tap to Start"
                     )
                 }
             }
@@ -114,7 +206,25 @@ class PracticeModeViewModel(
     }
 
     /**
-     * Start the recording flow: countdown -> record -> classify -> show result
+     * Get a random question that hasn't been used recently
+     */
+    private fun getRandomQuestion(): PracticeQuestion {
+        // Reset if all questions have been used
+        if (usedQuestionIndices.size >= PRACTICE_QUESTIONS.size) {
+            usedQuestionIndices.clear()
+        }
+
+        var index: Int
+        do {
+            index = (0 until PRACTICE_QUESTIONS.size).random()
+        } while (index in usedQuestionIndices)
+
+        usedQuestionIndices.add(index)
+        return PRACTICE_QUESTIONS[index]
+    }
+
+    /**
+     * Start the practice flow: show question -> countdown -> record -> classify -> show result
      */
     fun startRecording() {
         if (_uiState.value.state != State.IDLE) {
@@ -130,6 +240,32 @@ class PracticeModeViewModel(
             return
         }
 
+        // Get a random question and show it
+        val question = getRandomQuestion()
+        Log.d(TAG, "Selected question: ${question.question}")
+
+        _uiState.update {
+            it.copy(
+                state = State.QUESTION,
+                currentQuestion = question,
+                statusMessage = question.question,
+                errorMessage = null,
+                prediction = null,
+                confidence = null,
+                isAnswerCorrect = null
+            )
+        }
+    }
+
+    /**
+     * Called when user taps to start answering after seeing the question
+     */
+    fun startAnswering() {
+        if (_uiState.value.state != State.QUESTION) {
+            Log.d(TAG, "Not in QUESTION state, ignoring")
+            return
+        }
+
         recordingJob?.cancel()
         recordingJob = viewModelScope.launch(Dispatchers.Default) {
             try {
@@ -142,9 +278,7 @@ class PracticeModeViewModel(
                             state = State.COUNTDOWN,
                             countdownSeconds = i,
                             statusMessage = "Get ready...",
-                            errorMessage = null,
-                            prediction = null,
-                            confidence = null
+                            errorMessage = null
                         )
                     }
                     delay(1000)
@@ -162,7 +296,7 @@ class PracticeModeViewModel(
                     )
                 }
 
-                // Start sensor recording (same as data collection app)
+                // Start sensor recording
                 sensorManager.startRecording()
 
                 // Wait for recording duration with progress updates
@@ -198,7 +332,7 @@ class PracticeModeViewModel(
                 Log.d(TAG, "Collected ${samples.size} samples")
 
                 // Check if we have enough data
-                val minSamples = classifier.windowSize / 2
+                val minSamples = classifier!!.windowSize / 2
                 if (samples.size < minSamples) {
                     Log.w(TAG, "Not enough samples: ${samples.size} < $minSamples")
                     _uiState.update {
@@ -206,7 +340,8 @@ class PracticeModeViewModel(
                             state = State.IDLE,
                             errorMessage = "Not enough motion (${samples.size} samples)",
                             statusMessage = "Move more during recording",
-                            recordingProgress = 0f
+                            recordingProgress = 0f,
+                            currentQuestion = null
                         )
                     }
                     return@launch
@@ -222,7 +357,8 @@ class PracticeModeViewModel(
                             state = State.IDLE,
                             errorMessage = result.errorMessage,
                             statusMessage = "Try again",
-                            recordingProgress = 0f
+                            recordingProgress = 0f,
+                            currentQuestion = null
                         )
                     }
                     return@launch
@@ -230,78 +366,35 @@ class PracticeModeViewModel(
 
                 // === Phase 4: Show Result ===
                 val predictedLetter = result.label
+                val currentQuestion = _uiState.value.currentQuestion
+                val isCorrect = predictedLetter?.uppercase() == currentQuestion?.expectedAnswer?.uppercase()
 
-                // Add letter to word formation if enabled
-                if (_uiState.value.wordFormationEnabled && predictedLetter != null) {
-                    wordFormationManager.addLetter(predictedLetter, result.confidence)
-                    val wfState = wordFormationManager.state.value
+                Log.d(TAG, "Predicted: $predictedLetter, Expected: ${currentQuestion?.expectedAnswer}, Correct: $isCorrect")
 
+                _uiState.update {
+                    it.copy(
+                        state = State.RESULT,
+                        prediction = predictedLetter,
+                        confidence = result.confidence,
+                        statusMessage = if (isCorrect) "Correct! ✓" else "Try again!",
+                        errorMessage = null,
+                        recordingProgress = 0f,
+                        isAnswerCorrect = isCorrect,
+                        questionsAnswered = it.questionsAnswered + 1,
+                        correctAnswers = if (isCorrect) it.correctAnswers + 1 else it.correctAnswers
+                    )
+                }
+
+                // Auto-reset after showing result
+                delay(RESULT_DISPLAY_SECONDS * 1000L)
+                if (isActive && _uiState.value.state == State.RESULT) {
                     _uiState.update {
                         it.copy(
-                            state = State.RESULT,
-                            prediction = predictedLetter,
-                            confidence = result.confidence,
-                            statusMessage = "${predictedLetter} (${(result.confidence * 100).toInt()}%)",
-                            errorMessage = null,
-                            recordingProgress = 0f,
-                            currentLetterSequence = wfState.currentSequence,
-                            isWordComplete = wfState.isWordComplete,
-                            formedWord = if (wfState.isWordComplete) wfState.currentSequence else null,
-                            wordSuggestions = wfState.suggestions,
-                            // Session tracking
-                            formedWords = wfState.formedWords,
-                            wordsFormedCount = wfState.wordsFormedCount,
-                            totalLettersInSession = wfState.totalLettersInSession,
-                            lettersUntilReset = wfState.lettersUntilReset,
-                            isSessionComplete = wfState.isSessionComplete,
-                            wordBankSize = wfState.wordBankSize,
-                            // Word just formed tracking
-                            wordJustFormed = wfState.wordJustFormed,
-                            lastFormedWord = wfState.lastFormedWord
+                            state = State.IDLE,
+                            statusMessage = "Tap to Start",
+                            currentQuestion = null,
+                            isAnswerCorrect = null
                         )
-                    }
-
-                    Log.d(TAG, "Word formation state - wordJustFormed: ${wfState.wordJustFormed}, lastFormedWord: ${wfState.lastFormedWord}")
-
-                    // Auto-reset session if 3 letters written
-                    if (wfState.isSessionComplete) {
-                        Log.d(TAG, "Session complete! Total letters: ${wfState.totalLettersInSession}, Formed words: ${wfState.formedWords}")
-                        delay(2000) // Show completion state briefly
-                        wordFormationManager.resetSession()
-                        _uiState.update {
-                            it.copy(
-                                formedWords = emptyList(),
-                                wordsFormedCount = 0,
-                                totalLettersInSession = 0,
-                                lettersUntilReset = 3,
-                                isSessionComplete = false,
-                                currentLetterSequence = "",
-                                formedWord = null
-                            )
-                        }
-                    }
-                    // Don't auto-reset here - let the screen handle the timing for word display
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            state = State.RESULT,
-                            prediction = predictedLetter,
-                            confidence = result.confidence,
-                            statusMessage = "${predictedLetter} (${(result.confidence * 100).toInt()}%)",
-                            errorMessage = null,
-                            recordingProgress = 0f
-                        )
-                    }
-
-                    // Auto-reset after showing result (only when word formation is disabled)
-                    delay(RESULT_DISPLAY_SECONDS * 1000L)
-                    if (isActive && _uiState.value.state == State.RESULT) {
-                        _uiState.update {
-                            it.copy(
-                                state = State.IDLE,
-                                statusMessage = "Tap Start"
-                            )
-                        }
                     }
                 }
 
@@ -312,7 +405,8 @@ class PracticeModeViewModel(
                         state = State.IDLE,
                         errorMessage = "Error: ${e.message}",
                         statusMessage = "Try again",
-                        recordingProgress = 0f
+                        recordingProgress = 0f,
+                        currentQuestion = null
                     )
                 }
             }
@@ -330,10 +424,11 @@ class PracticeModeViewModel(
         _uiState.update {
             it.copy(
                 state = State.IDLE,
-                statusMessage = "Tap Start",
+                statusMessage = "Tap to Start",
                 errorMessage = null,
                 recordingProgress = 0f,
-                countdownSeconds = 0
+                countdownSeconds = 0,
+                currentQuestion = null
             )
         }
     }
@@ -346,105 +441,14 @@ class PracticeModeViewModel(
         _uiState.update {
             it.copy(
                 state = State.IDLE,
-                statusMessage = "Tap Start",
+                statusMessage = "Tap to Start",
                 errorMessage = null,
                 recordingProgress = 0f,
-                countdownSeconds = 0
+                countdownSeconds = 0,
+                currentQuestion = null,
+                isAnswerCorrect = null
             )
         }
-    }
-
-    // ==================== Word Formation Methods ====================
-
-    /**
-     * Enable/disable word formation mode
-     */
-    fun setWordFormationEnabled(enabled: Boolean) {
-        Log.d(TAG, "Word formation enabled: $enabled")
-        _uiState.update {
-            it.copy(wordFormationEnabled = enabled)
-        }
-        if (!enabled) {
-            wordFormationManager.clearBuffer()
-        }
-    }
-
-    /**
-     * Load word bank for word formation
-     */
-    fun loadWordBank(words: List<String>) {
-        Log.d(TAG, "Loading word bank with ${words.size} words")
-        wordFormationManager.loadWordBank(words)
-    }
-
-    /**
-     * Acknowledge that the formed word has been displayed
-     */
-    fun acknowledgeFormedWord() {
-        Log.d(TAG, "Acknowledging formed word")
-        wordFormationManager.acknowledgeFormedWord()
-        _uiState.update {
-            it.copy(wordJustFormed = false)
-        }
-    }
-
-    /**
-     * Clear the current letter sequence
-     */
-    fun clearLetterSequence() {
-        Log.d(TAG, "Clearing letter sequence")
-        wordFormationManager.clearBuffer()
-        _uiState.update {
-            it.copy(
-                currentLetterSequence = "",
-                formedWord = null,
-                isWordComplete = false,
-                wordSuggestions = emptyList()
-            )
-        }
-    }
-
-    /**
-     * Undo the last letter
-     */
-    fun undoLastLetter() {
-        Log.d(TAG, "Undoing last letter")
-        wordFormationManager.removeLast()
-        val wfState = wordFormationManager.state.value
-        _uiState.update {
-            it.copy(
-                currentLetterSequence = wfState.currentSequence,
-                isWordComplete = wfState.isWordComplete,
-                formedWord = if (wfState.isWordComplete) wfState.currentSequence else null,
-                wordSuggestions = wfState.suggestions
-            )
-        }
-    }
-
-    /**
-     * Confirm the formed word
-     */
-    fun confirmWord(): String? {
-        val word = wordFormationManager.confirmWord()
-        if (word != null) {
-            Log.d(TAG, "Word confirmed: $word")
-            _uiState.update {
-                it.copy(
-                    currentLetterSequence = "",
-                    formedWord = null,
-                    isWordComplete = false,
-                    wordSuggestions = emptyList()
-                )
-            }
-        }
-        return word
-    }
-
-    /**
-     * Get current letter sequence
-     */
-    fun getCurrentLetterSequence(): String {
-        return wordFormationManager.getCurrentSequence()
     }
 
     override fun onCleared() {

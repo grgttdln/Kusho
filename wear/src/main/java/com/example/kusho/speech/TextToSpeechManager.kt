@@ -1,7 +1,6 @@
 package com.example.kusho.speech
 
 import android.content.Context
-import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
@@ -18,14 +17,32 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
         private const val TAG = "TextToSpeechManager"
         private const val DEFAULT_VOLUME = 1.0f // Range: 0.0 to 1.0
 
-        // Voice settings tuned to match ElevenLabs "Cassidy" characteristics:
-        // Crisp, Direct, Clear, Confident female voice
-        private const val KID_FRIENDLY_PITCH = 1.08f   // Slightly higher than normal, confident tone (1.0 is normal)
-        private const val KID_FRIENDLY_SPEED = 1.0f    // Normal speed for crisp, direct delivery (1.0 is normal)
+        // Kid-friendly voice settings
+        // Slightly higher pitch sounds more friendly and engaging for children
+        private const val KID_FRIENDLY_PITCH = 1.15f   // Higher pitch (1.0 is normal, 1.15 is friendlier)
+        private const val KID_FRIENDLY_SPEED = 0.85f   // Slightly slower for better comprehension
+
+        // Preferred voice names (in order of preference)
+        private val PREFERRED_VOICE_NAMES = listOf(
+            "en-us-x-tpf-local",    // Google's friendly female voice (current voice!)
+            "en-us-x-sfg-local",    // Google's standard female
+            "en-us-x-iom-local",    // Google Assistant voice
+            "en-us-x-iob-local",    // Another Google voice
+            "samantha",             // iOS-style friendly voice
+            "karen",                // Australian female
+            "female"                // Generic female indicator
+        )
     }
 
+    // Class-level properties
+    private val appContext: Context = context.applicationContext
     private var tts: TextToSpeech? = null
     private var isInitialized = false
+    private var initRetryCount = 0
+    private val maxRetries = 3
+
+    // Queue for speech requests that come before TTS is initialized
+    private val pendingSpeechQueue = mutableListOf<String>()
 
     /** Volume level from 0.0 (silent) to 1.0 (max) */
     var volume: Float = DEFAULT_VOLUME
@@ -33,14 +50,14 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             field = value.coerceIn(0.0f, 1.0f)
         }
 
-    /** Pitch level - higher values sound more child-like (0.5 to 2.0, default 1.3) */
+    /** Pitch level - higher values sound more child-like (0.5 to 2.0, default 1.15) */
     var pitch: Float = KID_FRIENDLY_PITCH
         set(value) {
             field = value.coerceIn(0.5f, 2.0f)
             tts?.setPitch(field)
         }
 
-    /** Speech rate - controls how fast the voice speaks (0.5 to 2.0, default 0.9) */
+    /** Speech rate - controls how fast the voice speaks (0.5 to 2.0, default 0.85) */
     var speechRate: Float = KID_FRIENDLY_SPEED
         set(value) {
             field = value.coerceIn(0.5f, 2.0f)
@@ -48,24 +65,125 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
         }
 
     init {
-        tts = TextToSpeech(context.applicationContext, this)
+        initializeWithPreferredEngine()
+    }
+
+    /**
+     * Initialize TTS with default engine.
+     * Includes retry mechanism for timeout issues.
+     */
+    private fun initializeWithPreferredEngine() {
+        Log.i(TAG, "Starting TTS initialization (attempt ${initRetryCount + 1}/$maxRetries)...")
+
+        tts = TextToSpeech(appContext) { status ->
+            Log.i(TAG, "TTS callback received, status: $status")
+
+            if (status == TextToSpeech.SUCCESS) {
+                onInit(status)
+            } else {
+                // TTS failed - try to retry
+                initRetryCount++
+                if (initRetryCount < maxRetries) {
+                    Log.w(TAG, "TTS init failed, retrying in 2 seconds (attempt ${initRetryCount + 1}/$maxRetries)...")
+                    tts?.shutdown()
+                    tts = null
+
+                    // Retry after a delay using a handler
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        initializeWithPreferredEngine()
+                    }, 2000)
+                } else {
+                    Log.e(TAG, "TTS initialization failed after $maxRetries attempts")
+                    onInit(status)
+                }
+            }
+        }
     }
 
     override fun onInit(status: Int) {
+        Log.i(TAG, "onInit called with status: $status")
+
         if (status == TextToSpeech.SUCCESS) {
             val result = tts?.setLanguage(Locale.US)
+            Log.i(TAG, "setLanguage result: $result")
+
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.e(TAG, "Language not supported")
             } else {
                 isInitialized = true
+                Log.i(TAG, "TTS is now initialized!")
 
                 // Apply kid-friendly voice settings
                 applyKidFriendlySettings()
 
+                // Check SSML support
+                checkSSMLSupport()
+
                 Log.i(TAG, "TextToSpeech initialized successfully with kid-friendly settings")
+
+                // Process any pending speech requests
+                processPendingQueue()
             }
         } else {
             Log.e(TAG, "TextToSpeech initialization failed with status: $status")
+        }
+    }
+
+    /**
+     * Process any speech requests that were queued before TTS was initialized
+     */
+    private fun processPendingQueue() {
+        if (pendingSpeechQueue.isNotEmpty()) {
+            Log.d(TAG, "Processing ${pendingSpeechQueue.size} pending speech requests")
+            val firstItem = pendingSpeechQueue.removeAt(0)
+            speak(firstItem)
+            // Clear remaining items (we only want to speak the most recent)
+            pendingSpeechQueue.clear()
+        }
+    }
+
+    /**
+     * Check if the TTS engine supports SSML.
+     * Logs the results for debugging purposes.
+     */
+    private fun checkSSMLSupport() {
+        try {
+            val engine = tts?.defaultEngine
+            Log.i(TAG, "=== TTS Engine Info ===")
+            Log.i(TAG, "Default engine: $engine")
+
+            // Check voice features for SSML support indicators
+            val currentVoice = tts?.voice
+            if (currentVoice != null) {
+                Log.i(TAG, "Current voice: ${currentVoice.name}")
+                Log.i(TAG, "Voice locale: ${currentVoice.locale}")
+                Log.i(TAG, "Voice quality: ${currentVoice.quality}")
+                Log.i(TAG, "Voice features: ${currentVoice.features}")
+
+                // Check for specific SSML-related features
+                val features = currentVoice.features ?: emptySet<String>()
+                @Suppress("DEPRECATION")
+                val hasEmbeddedSynthesis = features.contains(TextToSpeech.Engine.KEY_FEATURE_EMBEDDED_SYNTHESIS)
+                @Suppress("DEPRECATION")
+                val hasNetworkSynthesis = features.contains(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS)
+
+                Log.i(TAG, "Has embedded synthesis: $hasEmbeddedSynthesis")
+                Log.i(TAG, "Has network synthesis: $hasNetworkSynthesis")
+                Log.i(TAG, "Network connection required: ${currentVoice.isNetworkConnectionRequired}")
+            } else {
+                Log.w(TAG, "No voice currently selected")
+            }
+
+            // Test SSML by trying to speak a simple SSML string
+            // Note: This is just for logging - actual SSML support varies by engine
+            Log.i(TAG, "=== SSML Support Test ===")
+            Log.i(TAG, "Note: Android TTS does NOT reliably support SSML across devices")
+            Log.i(TAG, "Google TTS may support basic SSML, but <phoneme> tags are often ignored")
+            Log.i(TAG, "Recommendation: Use phonetic spelling (e.g., 'buh' for /b/) instead of SSML")
+            Log.i(TAG, "========================")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking SSML support: ${e.message}")
         }
     }
 
@@ -81,138 +199,124 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             setSpeechRate(speechRate)
 
             // Try to find a female voice (often sounds friendlier for kids)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                selectBestVoiceForKids()
-            }
+            selectBestVoiceForKids()
         }
     }
 
     /**
      * Try to select a voice that's more suitable for children.
-     * Prefers female voices as they tend to sound friendlier.
+     * Prefers high-quality female voices as they tend to sound friendlier.
+     * Your watch has: en-us-x-tpf-local (quality 400) which is excellent!
      */
     private fun selectBestVoiceForKids() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
-
         try {
             val voices = tts?.voices ?: return
 
             // Log available voices for debugging
-            voices.forEach { voice ->
-                Log.d(TAG, "Available voice: ${voice.name}, locale: ${voice.locale}, quality: ${voice.quality}")
+            Log.i(TAG, "=== Available Voices ===")
+            voices.filter { it.locale.language == "en" }.forEach { voice: Voice ->
+                Log.d(TAG, "Voice: ${voice.name}, locale: ${voice.locale}, quality: ${voice.quality}, network: ${voice.isNetworkConnectionRequired}")
+            }
+            Log.i(TAG, "========================")
+
+            // Filter to US English voices that don't require network
+            val usEnglishVoices = voices.filter { voice: Voice ->
+                voice.locale.language == "en" &&
+                (voice.locale.country == "US" || voice.locale.country.isEmpty()) &&
+                !voice.isNetworkConnectionRequired
             }
 
-            // Priority order for voice selection:
-            // 1. Neural/high-quality female US English voice (most natural)
-            // 2. Any female English voice with high quality
-            // 3. High quality US English voice
-            // 4. Keep default
-
-            val usEnglishVoices = voices.filter {
-                it.locale.language == "en" &&
-                !it.isNetworkConnectionRequired &&
-                it.features?.contains("notInstalled") != true
+            if (usEnglishVoices.isEmpty()) {
+                Log.w(TAG, "No suitable US English voices found")
+                return
             }
 
-            // Prioritize high-quality voices first (neural voices sound most natural)
-            val veryHighQualityVoices = usEnglishVoices.filter { 
-                it.quality >= Voice.QUALITY_VERY_HIGH // Best quality voices
-            }
-            
-            val highQualityVoices = usEnglishVoices.filter { 
-                it.quality >= Voice.QUALITY_HIGH 
-            }
-
-            // Try to find a female neural voice from highest quality voices first
-            val voicePool = when {
-                veryHighQualityVoices.isNotEmpty() -> veryHighQualityVoices
-                highQualityVoices.isNotEmpty() -> highQualityVoices
-                else -> usEnglishVoices
-            }
-
-            // Try to find a female neural voice (most natural for children)
-            val femaleVoice = voicePool.find { voice ->
-                voice.name.lowercase().let { name ->
-                    name.contains("neural") ||     // Neural voices are most natural
-                    name.contains("wavenet") ||    // Google's WaveNet voices
-                    name.contains("female") ||
-                    name.contains("samantha") ||
-                    name.contains("karen") ||
-                    name.contains("moira") ||
-                    name.contains("tessa") ||
-                    name.contains("fiona") ||
-                    name.contains("en-us-x-sfg") || // Google's female voice
-                    name.contains("en-us-x-tpf") || // Another female variant
-                    name.contains("en-us-x-iob") || // Google Assistant female
-                    name.contains("-f-") // Common female indicator
+            // First, try to find a preferred voice by name
+            var selectedVoice: Voice? = null
+            for (preferredName in PREFERRED_VOICE_NAMES) {
+                selectedVoice = usEnglishVoices.find { voice: Voice ->
+                    voice.name.lowercase().contains(preferredName.lowercase())
+                }
+                if (selectedVoice != null) {
+                    Log.i(TAG, "Found preferred voice: ${selectedVoice.name}")
+                    break
                 }
             }
 
-            // If no female voice found, pick the highest quality English voice
-            val selectedVoice = femaleVoice ?: voicePool.maxByOrNull { it.quality }
+            // If no preferred voice found, pick the highest quality one
+            if (selectedVoice == null) {
+                selectedVoice = usEnglishVoices.maxByOrNull { it.quality }
+                Log.i(TAG, "Using highest quality voice: ${selectedVoice?.name}")
+            }
 
-            selectedVoice?.let { voice ->
-                val result = tts?.setVoice(voice)
+            // Apply the selected voice
+            if (selectedVoice != null) {
+                val result = tts?.setVoice(selectedVoice)
                 if (result == TextToSpeech.SUCCESS) {
-                    Log.i(TAG, "Selected kid-friendly voice: ${voice.name}")
+                    Log.i(TAG, "✓ Selected kid-friendly voice: ${selectedVoice.name} (quality: ${selectedVoice.quality})")
                 } else {
-                    Log.w(TAG, "Failed to set voice: ${voice.name}")
+                    Log.w(TAG, "✗ Failed to set voice: ${selectedVoice.name}")
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error selecting voice: ${e.message}")
+            Log.e(TAG, "Error selecting voice: ${e.message}")
         }
     }
 
     /**
-     * Get list of available voices (for debugging/selection).
+     * Set a specific voice by name.
+     * @param voiceName The name of the voice to use (e.g., "en-us-x-tpf-local")
+     * @return true if voice was set successfully
      */
-    fun getAvailableVoices(): List<Voice>? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            tts?.voices?.toList()
-        } else {
-            null
-        }
-    }
+    fun setVoiceByName(voiceName: String): Boolean {
+        try {
+            val voices = tts?.voices ?: return false
+            val voice = voices.find { it.name.equals(voiceName, ignoreCase = true) }
 
-    /**
-     * Speak the predicted letter with encouraging, child-friendly phrasing.
-     * Designed to be engaging and natural for young learners.
-     */
-    fun speakLetter(letter: String) {
-        if (!isInitialized) {
-            Log.w(TAG, "TTS not initialized, cannot speak")
-            return
-        }
-
-        if (letter.isBlank() || letter == "?") {
-            return
-        }
-
-        // Determine what to speak - keep it simple and natural
-        val textToSpeak = when {
-            letter.length == 1 && letter[0].isLetter() -> {
-                if (letter[0].isUpperCase()) {
-                    // For uppercase: Just say "Capital A" or simply "A"
-                    "Capital ${letter.uppercase()}"
+            return if (voice != null) {
+                val result = tts?.setVoice(voice)
+                if (result == TextToSpeech.SUCCESS) {
+                    Log.i(TAG, "Voice set to: ${voice.name}")
+                    true
                 } else {
-                    // For lowercase: Just say the letter naturally "a", "b", "c"
-                    letter.lowercase()
+                    Log.w(TAG, "Failed to set voice: $voiceName")
+                    false
                 }
+            } else {
+                Log.w(TAG, "Voice not found: $voiceName")
+                false
             }
-            else -> letter
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting voice: ${e.message}")
+            return false
         }
-
-        Log.d(TAG, "Speaking: $textToSpeak (volume: $volume)")
-
-        val params = Bundle().apply {
-            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
-        }
-        tts?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, params, "prediction_${System.currentTimeMillis()}")
     }
 
     /**
-     * Speak a word naturally (e.g., "cat", "dog", "ball").
+     * Get current voice information
+     */
+    fun getCurrentVoiceInfo(): String {
+        val voice = tts?.voice
+        return if (voice != null) {
+            "Voice: ${voice.name}, Quality: ${voice.quality}, Locale: ${voice.locale}"
+        } else {
+            "No voice selected"
+        }
+    }
+
+    /**
+     * Adjust settings for even more kid-friendly output
+     * @param pitchLevel 0.5 (deep) to 2.0 (high), default 1.15
+     * @param speedLevel 0.5 (slow) to 2.0 (fast), default 0.85
+     */
+    fun setKidFriendlySettings(pitchLevel: Float = KID_FRIENDLY_PITCH, speedLevel: Float = KID_FRIENDLY_SPEED) {
+        pitch = pitchLevel
+        speechRate = speedLevel
+        Log.i(TAG, "Kid-friendly settings applied: pitch=$pitch, speed=$speechRate")
+    }
+
+    /**
+     * Speak a complete word.
      * Perfect for when multiple letters form a word.
      */
     fun speakWord(word: String) {
@@ -229,6 +333,62 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
         }
         tts?.speak(word.lowercase(), TextToSpeech.QUEUE_FLUSH, params, "word_${System.currentTimeMillis()}")
+    }
+
+    /**
+     * Speak a single letter clearly.
+     * Handles special pronunciation for letters that might be unclear.
+     * @param letter The letter to speak (e.g., "A", "B", "a", "b")
+     */
+    fun speakLetter(letter: String) {
+        if (letter.isBlank()) return
+
+        if (!isInitialized) {
+            Log.w(TAG, "TTS not initialized yet, queueing letter: $letter")
+            pendingSpeechQueue.add(letter)
+            return
+        }
+
+        // Convert to uppercase for consistent pronunciation
+        val upperLetter = letter.uppercase().trim()
+
+        // Special pronunciation for letters that might be unclear
+        val textToSpeak = when (upperLetter) {
+            "A" -> "Capital A"
+            "B" -> "Capital B"
+            "C" -> "Capital C"
+            "D" -> "Capital D"
+            "E" -> "Capital E"
+            "F" -> "Capital F"
+            "G" -> "Capital G"
+            "H" -> "Capital H"
+            "I" -> "Capital I"
+            "J" -> "Capital J"
+            "K" -> "Capital K"
+            "L" -> "Capital L"
+            "M" -> "Capital M"
+            "N" -> "Capital N"
+            "O" -> "Capital O"
+            "P" -> "Capital P"
+            "Q" -> "Capital Q"
+            "R" -> "Capital R"
+            "S" -> "Capital S"
+            "T" -> "Capital T"
+            "U" -> "Capital U"
+            "V" -> "Capital V"
+            "W" -> "Capital W"
+            "X" -> "Capital X"
+            "Y" -> "Capital Y"
+            "Z" -> "Capital Z"
+            else -> upperLetter
+        }
+
+        Log.d(TAG, "Speaking letter: $letter as '$textToSpeak' (volume: $volume)")
+
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
+        }
+        tts?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, params, "letter_${System.currentTimeMillis()}")
     }
 
     /**
@@ -255,12 +415,13 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
      * Speak custom text.
      */
     fun speak(text: String) {
+        if (text.isBlank()) return
+
         if (!isInitialized) {
-            Log.w(TAG, "TTS not initialized, cannot speak")
+            Log.w(TAG, "TTS not initialized yet, queueing: $text")
+            pendingSpeechQueue.add(text)
             return
         }
-
-        if (text.isBlank()) return
 
         Log.d(TAG, "Speaking: $text (volume: $volume)")
 
@@ -288,3 +449,4 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
         Log.d(TAG, "TextToSpeech shutdown")
     }
 }
+
