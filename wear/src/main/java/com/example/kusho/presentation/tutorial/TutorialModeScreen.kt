@@ -26,6 +26,7 @@ import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import com.example.kusho.R
 import com.example.kusho.ml.ClassifierLoadResult
+import com.example.kusho.ml.ModelConfig
 import com.example.kusho.ml.ModelLoader
 import com.example.kusho.presentation.components.CircularModeBorder
 import com.example.kusho.presentation.service.PhoneCommunicationManager
@@ -80,27 +81,65 @@ fun TutorialModeScreen() {
     var classifierResult by remember { mutableStateOf<ClassifierLoadResult?>(null) }
     var isModelInitialized by remember { mutableStateOf(false) }
     var modelLoadError by remember { mutableStateOf<String?>(null) }
+    var currentModelCase by remember { mutableStateOf("") }
     
-    // Initialize sensor manager and model
+    // Initialize sensor manager once
     LaunchedEffect(Unit) {
         try {
             sensorManager = MotionSensorManager(context)
-            val loadResult = ModelLoader.loadDefault(context)
-            classifierResult = loadResult
-            
-            when (loadResult) {
-                is ClassifierLoadResult.Success -> {
-                    isModelInitialized = true
-                    Log.d("TutorialMode", "✅ Model loaded successfully")
-                }
-                is ClassifierLoadResult.Error -> {
-                    modelLoadError = loadResult.message
-                    Log.e("TutorialMode", "❌ Model load failed: ${loadResult.message}")
-                }
-            }
+            Log.d("TutorialMode", "✅ Sensor manager initialized")
         } catch (e: Exception) {
-            modelLoadError = "Failed to initialize: ${e.message}"
-            Log.e("TutorialMode", "❌ Initialization error", e)
+            modelLoadError = "Failed to initialize sensor: ${e.message}"
+            Log.e("TutorialMode", "❌ Sensor initialization error", e)
+        }
+    }
+    
+    // Clean up resources when screen is disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            Log.d("TutorialMode", "🧹 Cleaning up resources")
+            // Close the TFLite model to free native memory
+            (classifierResult as? ClassifierLoadResult.Success)?.classifier?.close()
+            classifierResult = null
+            isModelInitialized = false
+        }
+    }
+    
+    // Load appropriate model when letterCase changes
+    LaunchedEffect(letterData.letterCase) {
+        if (letterData.letterCase.isNotEmpty() && letterData.letterCase != currentModelCase) {
+            try {
+                Log.d("TutorialMode", "🔄 Loading model for case: ${letterData.letterCase}")
+                
+                // CRITICAL: Close the old model before loading a new one to prevent memory leak
+                val oldClassifier = (classifierResult as? ClassifierLoadResult.Success)?.classifier
+                if (oldClassifier != null) {
+                    Log.d("TutorialMode", "🧹 Closing old model: $currentModelCase")
+                    oldClassifier.close()
+                }
+                
+                val modelConfig = ModelConfig.getTutorialModeModel(letterData.letterCase)
+                val loadResult = ModelLoader.load(context, modelConfig)
+                classifierResult = loadResult
+                
+                when (loadResult) {
+                    is ClassifierLoadResult.Success -> {
+                        isModelInitialized = true
+                        currentModelCase = letterData.letterCase
+                        modelLoadError = null
+                        Log.d("TutorialMode", "✅ Model loaded: ${modelConfig.displayName}")
+                    }
+                    is ClassifierLoadResult.Error -> {
+                        modelLoadError = loadResult.message
+                        isModelInitialized = false
+                        Log.e("TutorialMode", "❌ Model load failed: ${loadResult.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                modelLoadError = "Failed to load model: ${e.message}"
+                isModelInitialized = false
+                Log.e("TutorialMode", "❌ Model loading error", e)
+            }
         }
     }
     
@@ -310,6 +349,7 @@ private fun WaitScreenContent(
     onTap: () -> Unit,
     onSkip: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -323,9 +363,10 @@ private fun WaitScreenContent(
                 }
             }
             .clickable(
+                interactionSource = interactionSource,
                 indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { onTap() },
+                onClick = onTap
+            ),
         contentAlignment = Alignment.Center
     ) {
         Image(
@@ -383,13 +424,15 @@ private fun FeedbackContent(
     isCorrect: Boolean,
     onDismiss: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .clickable(
+                interactionSource = interactionSource,
                 indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { onDismiss() },
+                onClick = onDismiss
+            ),
         contentAlignment = Alignment.Center
     ) {
         Image(
@@ -461,9 +504,14 @@ private fun GestureRecognitionContent(
     }
     
     // Speak the prediction when we enter RESULT state
-    LaunchedEffect(uiState.state, uiState.prediction) {
+    // Only speak the letter if correct; otherwise speak encouraging try-again message
+    LaunchedEffect(uiState.state, uiState.prediction, uiState.isCorrect) {
         if (uiState.state == TutorialModeViewModel.State.RESULT && uiState.prediction != null) {
-            ttsManager.speakLetter(uiState.prediction!!)
+            if (uiState.isCorrect) {
+                ttsManager.speakLetter(uiState.prediction!!)
+            } else {
+                ttsManager.speakTryAgain()
+            }
         }
     }
     
@@ -546,24 +594,42 @@ private fun GestureRecognitionContent(
                 }
             }
             TutorialModeViewModel.State.RESULT -> {
-                // Show predicted letter with TTS
+                // Show result - only display predicted letter if correct
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = uiState.prediction ?: "",
-                        fontSize = 72.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AppColors.TutorialModeColor
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (uiState.isCorrect) "Correct!" else "Try again",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (uiState.isCorrect) Color.Green else Color.Red,
-                        textAlign = TextAlign.Center
-                    )
+                    if (uiState.isCorrect) {
+                        // Show the correct prediction
+                        Text(
+                            text = uiState.prediction ?: "",
+                            fontSize = 72.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppColors.TutorialModeColor
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Correct!",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Green,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        // Don't show the incorrect prediction (model forced a classification)
+                        // Just show encouraging message
+                        Text(
+                            text = "😊",
+                            fontSize = 64.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Try again!",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = AppColors.TutorialModeColor,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
             TutorialModeViewModel.State.COMPLETE -> {

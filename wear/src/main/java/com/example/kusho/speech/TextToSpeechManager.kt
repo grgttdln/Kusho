@@ -349,37 +349,39 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             return
         }
 
-        // Convert to uppercase for consistent pronunciation
+        // Determine if it's uppercase or lowercase
+        val isUpperCase = letter.length == 1 && letter[0].isUpperCase()
         val upperLetter = letter.uppercase().trim()
 
         // Special pronunciation for letters that might be unclear
+        // Only say "Capital" for uppercase letters
         val textToSpeak = when (upperLetter) {
-            "A" -> "Capital A"
-            "B" -> "Capital B"
-            "C" -> "Capital C"
-            "D" -> "Capital D"
-            "E" -> "Capital E"
-            "F" -> "Capital F"
-            "G" -> "Capital G"
-            "H" -> "Capital H"
-            "I" -> "Capital I"
-            "J" -> "Capital J"
-            "K" -> "Capital K"
-            "L" -> "Capital L"
-            "M" -> "Capital M"
-            "N" -> "Capital N"
-            "O" -> "Capital O"
-            "P" -> "Capital P"
-            "Q" -> "Capital Q"
-            "R" -> "Capital R"
-            "S" -> "Capital S"
-            "T" -> "Capital T"
-            "U" -> "Capital U"
-            "V" -> "Capital V"
-            "W" -> "Capital W"
-            "X" -> "Capital X"
-            "Y" -> "Capital Y"
-            "Z" -> "Capital Z"
+            "A" -> if (isUpperCase) "Capital A" else "A"
+            "B" -> if (isUpperCase) "Capital B" else "B"
+            "C" -> if (isUpperCase) "Capital C" else "C"
+            "D" -> if (isUpperCase) "Capital D" else "D"
+            "E" -> if (isUpperCase) "Capital E" else "E"
+            "F" -> if (isUpperCase) "Capital F" else "F"
+            "G" -> if (isUpperCase) "Capital G" else "G"
+            "H" -> if (isUpperCase) "Capital H" else "H"
+            "I" -> if (isUpperCase) "Capital I" else "I"
+            "J" -> if (isUpperCase) "Capital J" else "J"
+            "K" -> if (isUpperCase) "Capital K" else "K"
+            "L" -> if (isUpperCase) "Capital L" else "L"
+            "M" -> if (isUpperCase) "Capital M" else "M"
+            "N" -> if (isUpperCase) "Capital N" else "N"
+            "O" -> if (isUpperCase) "Capital O" else "O"
+            "P" -> if (isUpperCase) "Capital P" else "P"
+            "Q" -> if (isUpperCase) "Capital Q" else "Q"
+            "R" -> if (isUpperCase) "Capital R" else "R"
+            "S" -> if (isUpperCase) "Capital S" else "S"
+            "T" -> if (isUpperCase) "Capital T" else "T"
+            "U" -> if (isUpperCase) "Capital U" else "U"
+            "V" -> if (isUpperCase) "Capital V" else "V"
+            "W" -> if (isUpperCase) "Capital W" else "W"
+            "X" -> if (isUpperCase) "Capital X" else "X"
+            "Y" -> if (isUpperCase) "Capital Y" else "Y"
+            "Z" -> if (isUpperCase) "Capital Z" else "Z"
             else -> upperLetter
         }
 
@@ -409,6 +411,22 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
         }
         tts?.speak(phrase, TextToSpeech.QUEUE_FLUSH, params, "encourage_${System.currentTimeMillis()}")
+    }
+
+    /**
+     * Speak a kid-friendly "try again" message when the gesture is incorrect.
+     * Randomly selects from encouraging phrases to keep it engaging.
+     */
+    fun speakTryAgain() {
+        val tryAgainPhrases = listOf(
+            "Oops! Let's try that again!",
+            "Not quite! You can do it!",
+            "Almost! Give it another try!",
+            "Let's try one more time!",
+            "Nice try! Let's do it again!"
+        )
+        val randomPhrase = tryAgainPhrases.random()
+        speakEncouragement(randomPhrase)
     }
 
     /**
