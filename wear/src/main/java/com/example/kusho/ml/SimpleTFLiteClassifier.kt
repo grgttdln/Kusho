@@ -140,9 +140,15 @@ class SimpleTFLiteClassifier(
                 }
             }
 
-            val label = labels.getOrElse(maxIdx) { "class_$maxIdx" }
+            // Apply index offset for specialized models
+            // For example, small letter model outputs indices 26-51, but we map them to labels 0-25
+            val labelIdx = maxIdx - config.indexOffset
+            val label = labels.getOrElse(labelIdx) { "class_$maxIdx" }
             
-            Log.d(TAG, "Probs: ${probs.joinToString { "%.2f".format(it) }} -> $label")
+            Log.d(TAG, "Model: ${config.fileName}")
+            Log.d(TAG, "Output shape: actualNumClasses=$actualNumClasses, maxIdx=$maxIdx, indexOffset=${config.indexOffset}, labelIdx=$labelIdx")
+            Log.d(TAG, "Labels size: ${labels.size}, Label result: $label")
+            Log.d(TAG, "Top 5 probs: ${probs.withIndex().sortedByDescending { it.value }.take(5).joinToString { "(${it.index}:%.2f)".format(it.value) }}")
 
             PredictionResult(
                 label = label,
