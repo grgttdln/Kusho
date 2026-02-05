@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -44,6 +43,7 @@ import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.ml.ModelLoader
 import com.example.kusho.presentation.theme.AppColors
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.sensors.ShakeDetector
 import com.example.kusho.speech.TextToSpeechManager
 
 /**
@@ -62,12 +62,16 @@ fun PracticeModeScreen() {
     // Initialize TextToSpeech manager
     val ttsManager = remember { TextToSpeechManager(context) }
 
+    // Initialize ShakeDetector for repeating questions
+    val shakeDetector = remember { ShakeDetector(context) }
+
     // Keep screen on during Practice Mode to prevent sleep during air writing
     DisposableEffect(Unit) {
         view.keepScreenOn = true
         onDispose {
             view.keepScreenOn = false
             ttsManager.shutdown()
+            shakeDetector.release()
         }
     }
 
@@ -108,7 +112,8 @@ fun PracticeModeScreen() {
             PracticeModeContent(
                 sensorManager = sensorManager!!,
                 classifierResult = classifierResult!!,
-                ttsManager = ttsManager
+                ttsManager = ttsManager,
+                shakeDetector = shakeDetector
             )
         }
     }
@@ -118,7 +123,8 @@ fun PracticeModeScreen() {
 private fun PracticeModeContent(
     sensorManager: MotionSensorManager,
     classifierResult: ClassifierLoadResult,
-    ttsManager: TextToSpeechManager
+    ttsManager: TextToSpeechManager,
+    shakeDetector: ShakeDetector
 ) {
     val viewModel: PracticeModeViewModel = viewModel(
         factory = PracticeModeViewModelFactory(sensorManager, classifierResult)
@@ -126,110 +132,73 @@ private fun PracticeModeContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
-    // Initialize word formation with hardcoded 3-letter CVC words
-    LaunchedEffect(Unit) {
-        // Enable word formation by default
-        viewModel.setWordFormationEnabled(true)
-
-        val cvcWords = listOf(
-            // --- CVC (expanded heavily) ---
-            "CAT","BAT","HAT","MAT","RAT","PAT","SAT","FAT",
-            "BED","RED","LED","FED",
-            "BIG","DIG","FIG","JIG","PIG","RIG","WIG",
-            "SIT","HIT","KIT","LIT","PIT","FIT","BIT","WIT",
-            "DOG","LOG","FOG","HOG","JOG",
-            "CUP","PUP","SUP",
-            "BUG","HUG","MUG","RUG","TUG","DUG",
-            "SUN","FUN","RUN","BUN","GUN","PUN","NUN",
-            "BOX","FOX","POX",
-            "COW","HOW","NOW","WOW","SOW","ROW",
-            "POT","HOT","NOT","LOT","DOT","ROT",
-            "JAM","RAM","YAM","HAM","DAM","CAM",
-            "CAP","MAP","TAP","NAP","LAP","RAP","SAP","GAP","ZAP",
-            "CAR","BAR","FAR","JAR","TAR","WAR",
-            "HEN","PEN","TEN","MEN","DEN","KEN",
-            "WEB","WAX","YAK","ZIP","MIX","FIX","SIX",
-            "LEG","PEG","BEG",
-            "LIP","TIP","RIP","DIP","NIP","SIP","HIP",
-            "HID","DID","KID","LID","RID",
-            "GAS","HAS","WAS",
-            "GUM","HUM","MUM","SUM","YUM",
-            "JET","NET","VET","MET","BET","LET","PET","SET","YET",
-            "PAN","TIN","PIN","BIN","WIN","SIN","FIN",
-            "SAD","MAD","BAD","PAD","LAD",
-            "RAN","CAN","MAN","DAN","FAN","TAN","VAN",
-            "JUG","MUD","BUD",
-            "JOB","MOB","ROB","SOB",
-            "COD","ROD","NOD","POD",
-            "TAG","RAG","WAG","BAG",
-            "JAW","LAW","RAW","SAW",
-            "VAN","TAX","MAX","SAX",
-
-            // --- CVV (long vowels / vowel pairs) ---
-            "SEE","BEE","TEE","ZOO","TOO","FOO",
-            "TOE","PIE","DUE","CUE","SEA","SKI",
-            "LAY","DAY","PAY","SAY","WAY","BOY",
-            "JOY","TOY","CRY","TRY","FLY",
-            "PAW","JAW","LAW","RAW",
-            "FEE","LEE","PEE",
-            "LIE","DIE","TIE",
-            "DAY","MAY","RAY","HAY",
-            "YOU","TWO","WHY",
-
-            // --- VCV ---
-            "EYE","AGE","ICE","APE","ORE","USE","EGO","EEL","OIL",
-            "ARM","ARK","ASH","ILL","OFF",
-
-            // --- CCV / VCC ---
-            "SKY","FLY","DRY","TRY",
-            "ANT","INK","ELM","OLD","AND","END","ASK","ACT","AGO","EAT","OAK",
-            "SKI","SPY",
-            "PLY","SHY",
-
-            // --- Common sight / function words ---
-            "THE","YOU","FOR","ARE","WAS","NOT",
-            "ALL","ANY","CAN","HER","HIM","HIS",
-            "OUT","GET","HAS","HAD","LET","PUT","TOO",
-            "YES","YET","NOW","HOW","WHO","WHY",
-            "OWN","DID","DOO","TOO",
-
-
-            // --- People / familiar nouns ---
-            "MOM","DAD","BOY","GIR","PET","TOY",
-            "BAG","HAT","BAT","CUP","CAR","BUS",
-            "BED","SUN","MOON","COW","PIG","HEN",
-            "EAT","RUN","SIT","HOP","JOG","DIG","HUG","TRY","FLY",
-
-            // --- Animals ---
-            "CAT","DOG","RAT","BAT","COW","PIG","HEN","BUG","ANT",
-
-            // --- Action words ---
-            "RUN","HOP","JOG","SIT","EAT","SEE","GET","PUT","TRY",
-            "EGG","HAT","CAP","MAP","PEN","CUP","BAT","BALL","ICE","SKY","SEA","SUN","ZOO"
-        ).distinct()
-
-        viewModel.loadWordBank(cvcWords)
-        android.util.Log.d("PracticeModeScreen", "Loaded ${cvcWords.distinct().size} CVC words")
-    }
-
-    // Speak the prediction when we enter RESULT state
-    LaunchedEffect(uiState.state, uiState.prediction) {
-        if (uiState.state == PracticeModeViewModel.State.RESULT && uiState.prediction != null) {
-            ttsManager.speakLetter(uiState.prediction!!)
+    // Speak the question when entering QUESTION state
+    LaunchedEffect(uiState.state, uiState.currentQuestion) {
+        if (uiState.state == PracticeModeViewModel.State.QUESTION && uiState.currentQuestion != null) {
+            ttsManager.speak(uiState.currentQuestion!!.question)
         }
     }
 
-    // Speak the formed word (just the word, no encouragement)
-    // Triggered when wordJustFormed becomes true
-    LaunchedEffect(uiState.wordJustFormed, uiState.lastFormedWord) {
-        if (uiState.wordJustFormed && uiState.lastFormedWord != null) {
-            // Wait for letter TTS to finish before speaking the word
-            kotlinx.coroutines.delay(1000)
-            ttsManager.speakWord(uiState.lastFormedWord!!)
-            android.util.Log.d("PracticeModeScreen", "TTS speaking word: ${uiState.lastFormedWord}")
+    // Manage shake detector for repeating questions in QUESTION state
+    DisposableEffect(uiState.state, uiState.currentQuestion) {
+        if (uiState.state == PracticeModeViewModel.State.QUESTION && uiState.currentQuestion != null) {
+            // Set up shake listener to repeat the question
+            shakeDetector.setOnShakeListener {
+                uiState.currentQuestion?.let { question ->
+                    ttsManager.speak(question.question)
+                }
+            }
+            shakeDetector.startListening()
+        } else {
+            // Stop listening when not in QUESTION state
+            shakeDetector.stopListening()
+        }
+
+        onDispose {
+            shakeDetector.stopListening()
         }
     }
 
+    // Random affirmations for correct and wrong answers
+    val correctAffirmations = remember {
+        listOf(
+            "You are Correct!",
+            "Great job!",
+            "Awesome!",
+            "Well done!",
+            "Perfect!",
+            "Excellent!",
+            "Amazing!",
+            "You got it!",
+            "Fantastic!",
+            "Super!"
+        )
+    }
+
+    val wrongAffirmations = remember {
+        listOf(
+            "Try again!",
+            "Not quite, try again!",
+            "Almost there!",
+            "Keep trying!",
+            "You can do it!",
+            "Give it another shot!",
+            "Let's try once more!",
+            "Don't give up!"
+        )
+    }
+
+    // Speak feedback when we enter RESULT state
+    LaunchedEffect(uiState.state, uiState.isAnswerCorrect) {
+        if (uiState.state == PracticeModeViewModel.State.RESULT) {
+            val isCorrect = uiState.isAnswerCorrect == true
+            if (isCorrect) {
+                ttsManager.speak(correctAffirmations.random())
+            } else {
+                ttsManager.speak(wrongAffirmations.random())
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -240,9 +209,11 @@ private fun PracticeModeContent(
     ) {
         when (uiState.state) {
             PracticeModeViewModel.State.IDLE -> IdleContent(uiState, viewModel)
+            PracticeModeViewModel.State.QUESTION -> QuestionContent(uiState, viewModel)
             PracticeModeViewModel.State.COUNTDOWN -> CountdownContent(uiState, viewModel)
             PracticeModeViewModel.State.RECORDING -> RecordingContent(uiState, viewModel)
             PracticeModeViewModel.State.PROCESSING -> ProcessingContent(uiState)
+            PracticeModeViewModel.State.SHOWING_PREDICTION -> PredictionContent(uiState)
             PracticeModeViewModel.State.RESULT -> ResultContent(uiState, viewModel)
         }
     }
@@ -285,6 +256,16 @@ private fun IdleContent(
                     .padding(bottom = 32.dp),
                 contentScale = ContentScale.Fit
             )
+
+            // Show score if any questions have been answered
+            if (uiState.questionsAnswered > 0) {
+                Text(
+                    text = "Score: ${uiState.correctAnswers}/${uiState.questionsAnswered}",
+                    color = AppColors.TextSecondary,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 
@@ -292,6 +273,94 @@ private fun IdleContent(
     uiState.errorMessage?.let { error ->
         Spacer(modifier = Modifier.height(8.dp))
         ErrorBox(error)
+    }
+}
+
+@Composable
+private fun QuestionContent(
+    uiState: PracticeModeViewModel.UiState,
+    viewModel: PracticeModeViewModel
+) {
+    val question = uiState.currentQuestion
+    val isPictureMatch = question?.category == QuestionCategory.PICTURE_MATCH
+    val isTracingCopying = question?.category == QuestionCategory.TRACING_COPYING
+    val isUppercaseLowercase = question?.category == QuestionCategory.UPPERCASE_LOWERCASE
+    val isLetterSound = question?.category == QuestionCategory.LETTER_SOUND
+    val emoji = question?.emoji
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            ) { viewModel.startAnswering() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isPictureMatch && emoji != null) {
+            // For Picture Match: Show ONLY the emoji centered, no text
+            Text(
+                text = emoji,
+                fontSize = 80.sp,
+                textAlign = TextAlign.Center
+            )
+        } else if (isTracingCopying || isUppercaseLowercase) {
+            // For Tracing & Copying and Uppercase/Lowercase: Show ONLY the letter centered, no text
+            Text(
+                text = question?.expectedAnswer ?: "",
+                color = AppColors.PracticeModeColor,
+                fontSize = 80.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        } else if (isLetterSound) {
+            // For Letter Sound Match (Phonics): Show ONLY the question avatar
+            Image(
+                painter = painterResource(id = R.drawable.dis_question),
+                contentDescription = "Question avatar",
+                modifier = Modifier.size(120.dp),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            // For other categories: Show question text with expected letter
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                // Question text
+                Text(
+                    text = question?.question ?: "",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Expected letter (hint)
+                Text(
+                    text = question?.expectedAnswer ?: "",
+                    color = AppColors.PracticeModeColor,
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Tap to continue instruction
+                Text(
+                    text = "Tap to answer",
+                    color = AppColors.TextSecondary,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 
@@ -358,65 +427,42 @@ private fun ProcessingContent(uiState: PracticeModeViewModel.UiState) {
 }
 
 @Composable
+private fun PredictionContent(uiState: PracticeModeViewModel.UiState) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Show the user's predicted letter in white
+        Text(
+            text = uiState.prediction ?: "?",
+            color = Color.White,
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
 private fun ResultContent(
     uiState: PracticeModeViewModel.UiState,
     viewModel: PracticeModeViewModel
 ) {
-    // Track display phase: LETTER -> WORD (if formed)
-    var showFormedWord by remember { mutableStateOf(false) }
-
-    // Use lastFormedWord from uiState - this is reliable
-    val formedWord = uiState.lastFormedWord
-    val hasFormedWord = uiState.wordJustFormed && formedWord != null
-
-    // Reset showFormedWord when prediction changes (new letter)
-    LaunchedEffect(uiState.prediction) {
-        showFormedWord = false
-    }
-
-    // Auto-transition logic
-    LaunchedEffect(uiState.prediction, hasFormedWord) {
-        if (hasFormedWord) {
-            // Word formed: Show letter -> wait -> show word -> wait -> IDLE
-            android.util.Log.d("ResultContent", "Word formed: $formedWord, showing letter first")
-            kotlinx.coroutines.delay(1000) // Wait for letter TTS
-            showFormedWord = true
-            android.util.Log.d("ResultContent", "Now showing formed word: $formedWord")
-            kotlinx.coroutines.delay(2000) // Wait for word TTS and display
-            viewModel.acknowledgeFormedWord()
-            viewModel.resetToIdle()
-        } else {
-            // No word formed: Show letter -> wait -> IDLE
-            kotlinx.coroutines.delay(1500) // Wait for letter TTS and brief display
-            viewModel.resetToIdle()
-        }
-    }
+    val isCorrect = uiState.isAnswerCorrect == true
 
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // Show formed word after letter has been displayed and spoken
-        if (showFormedWord && formedWord != null) {
-            Text(
-                text = formedWord,
-                color = AppColors.PracticeModeColor,
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        } else {
-            // Show predicted letter only
-            Text(
-                text = uiState.prediction ?: "?",
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                fontSize = 80.sp,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.display1,
-                modifier = Modifier.wrapContentSize(Alignment.Center)
-            )
-        }
+        // Show correct or wrong image
+        Image(
+            painter = painterResource(
+                id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+            ),
+            contentDescription = if (isCorrect) "Correct answer" else "Wrong answer",
+            modifier = Modifier.size(120.dp),
+            contentScale = ContentScale.Fit
+        )
     }
 }
 
