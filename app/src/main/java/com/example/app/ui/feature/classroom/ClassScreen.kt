@@ -303,25 +303,47 @@ fun ClassScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    Text(
-                        text = "No Students Yet",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF4A4A4A),
-                        textAlign = TextAlign.Center
-                    )
+                    if (searchQuery.isNotBlank()) {
+                        Text(
+                            text = "No students found",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF4A4A4A),
+                            textAlign = TextAlign.Center
+                        )
 
-                    Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(12.dp))
 
-                    Text(
-                        text = "Add students to get started.\nUse the button below to create a new student.",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF7A7A7A),
-                        lineHeight = 24.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 24.dp)
-                    )
+                        Text(
+                            text = "We couldn't find any students matching \"$searchQuery\".\nTry a different search term.",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF7A7A7A),
+                            lineHeight = 24.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "No Students Yet",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF4A4A4A),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            text = "Add students to get started.\nUse the button below to create a new student.",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF7A7A7A),
+                            lineHeight = 24.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
