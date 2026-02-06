@@ -102,13 +102,13 @@ fun AddSetScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Header with back button and logo
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                // Back Button (left)
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.offset(x = (-12).dp)
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -117,19 +117,17 @@ fun AddSetScreen(
                     )
                 }
 
+                // Kusho Logo (centered)
                 Image(
                     painter = painterResource(id = R.drawable.ic_kusho),
                     contentDescription = "Kusho Logo",
                     modifier = Modifier
+                        .fillMaxWidth()
                         .height(54.dp)
-                        .weight(1f)
-                        .padding(horizontal = 30.dp)
-                        .offset(x = 10.dp),
-                    contentScale = ContentScale.Fit,
+                        .offset(x = 10.dp)
+                        .align(Alignment.Center),
                     alignment = Alignment.Center
                 )
-
-                Spacer(modifier = Modifier.width(48.dp))
             }
 
             Spacer(modifier = Modifier.height(32.dp))

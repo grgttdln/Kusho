@@ -96,7 +96,8 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
                                 SetRepository.SelectedWordConfig(
                                     wordName = word.word,
                                     configurationType = word.configurationType,
-                                    selectedLetterIndex = word.selectedLetterIndex
+                                    selectedLetterIndex = word.selectedLetterIndex,
+                                    imagePath = word.imagePath
                                 )
                             },
                             isLoading = false

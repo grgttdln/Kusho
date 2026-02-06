@@ -39,7 +39,8 @@ class SetRepository(
     data class SelectedWordConfig(
         val wordName: String,
         val configurationType: String,
-        val selectedLetterIndex: Int = 0 // Index of the selected letter for "Fill in the Blank"
+        val selectedLetterIndex: Int = 0, // Index of the selected letter for "Fill in the Blank"
+        val imagePath: String? = null // Optional image path for "Name the Picture" question type
     )
 
     /**

@@ -161,6 +161,7 @@ fun MainNavigationContainer(
                     },
                     onEditSetClick = { setId ->
                         selectedSetId = setId
+                        selectedActivityId = 0L // Reset to ensure back navigation goes to YourSetsScreen
                         wordsForEdit = emptyList()
                         currentScreen = 14
                     },

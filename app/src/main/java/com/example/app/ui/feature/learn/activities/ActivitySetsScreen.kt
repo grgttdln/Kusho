@@ -73,13 +73,13 @@ fun ActivitySetsScreen(
             Spacer(Modifier.height(24.dp))
 
             // Back Button, Kusho Logo, and Edit Button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                // Back Button (left)
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.offset(x = (-12).dp)
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -88,20 +88,22 @@ fun ActivitySetsScreen(
                     )
                 }
 
+                // Kusho Logo (centered)
                 Image(
                     painter = painterResource(id = R.drawable.ic_kusho),
                     contentDescription = "Kusho Logo",
                     modifier = Modifier
+                        .fillMaxWidth()
                         .height(54.dp)
                         .offset(x = 10.dp)
-                        .weight(1f),
+                        .align(Alignment.Center),
                     alignment = Alignment.Center
                 )
 
-                // Edit/Delete mode toggle button
+                // Edit/Delete mode toggle button (right)
                 IconButton(
                     onClick = { isEditMode = !isEditMode },
-                    modifier = Modifier.offset(x = 12.dp)
+                    modifier = Modifier.align(Alignment.CenterEnd)
                 ) {
                     Icon(
                         imageVector = if (isEditMode) Icons.Default.Delete else Icons.Default.Edit,
