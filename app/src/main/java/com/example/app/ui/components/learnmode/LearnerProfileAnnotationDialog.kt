@@ -1,15 +1,24 @@
-package com.example.app.ui.components
+package com.example.app.ui.components.learnmode
 
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,10 +94,16 @@ fun SelectableChip(
  * Learner Profile Annotation Dialog
  * Shows when the annotate button is clicked to allow teachers to record observations
  * Features scrollable content and smooth slide-up/down animation
+ *
+ * @param studentName The name of the student being annotated
+ * @param existingData Optional existing annotation data to pre-populate the dialog
+ * @param onDismiss Callback when the dialog is dismissed without saving
+ * @param onAddNote Callback when the user saves the annotation
  */
 @Composable
 fun LearnerProfileAnnotationDialog(
     studentName: String,
+    existingData: AnnotationData = AnnotationData.empty(),
     onDismiss: () -> Unit,
     onAddNote: (
         levelOfProgress: String?,
@@ -102,14 +117,14 @@ fun LearnerProfileAnnotationDialog(
     var isVisible by remember { mutableStateOf(false) }
     var isClosing by remember { mutableStateOf(false) }
 
-    val slideOffset by androidx.compose.animation.core.animateFloatAsState(
+    val slideOffset by animateFloatAsState(
         targetValue = if (isVisible && !isClosing) 0f else 1f,
-        animationSpec = androidx.compose.animation.core.tween(
+        animationSpec = tween(
             durationMillis = 300,
             easing = if (isClosing)
-                androidx.compose.animation.core.FastOutLinearInEasing
+                FastOutLinearInEasing
             else
-                androidx.compose.animation.core.FastOutSlowInEasing
+                FastOutSlowInEasing
         ),
         finishedListener = {
             if (isClosing) {
@@ -118,9 +133,9 @@ fun LearnerProfileAnnotationDialog(
         },
         label = "slideOffset"
     )
-    val backgroundAlpha by androidx.compose.animation.core.animateFloatAsState(
+    val backgroundAlpha by animateFloatAsState(
         targetValue = if (isVisible && !isClosing) 0.5f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(
+        animationSpec = tween(
             durationMillis = 300
         ),
         label = "backgroundAlpha"
@@ -143,22 +158,23 @@ fun LearnerProfileAnnotationDialog(
         ChipOption("Proficient", Color(0xFF4CAF50)),
         ChipOption("Advanced", Color(0xFF2196F3))
     )
-    var selectedLevel by remember { mutableStateOf<String?>(null) }
+    // Initialize with existing data
+    var selectedLevel by remember { mutableStateOf(existingData.levelOfProgress) }
 
     // Strengths Observed options
     val strengthOptions = listOf("Recognition", "Fluency", "Formation")
-    var selectedStrengths by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var strengthsNote by remember { mutableStateOf("") }
-    var showStrengthsNoteField by remember { mutableStateOf(false) }
+    var selectedStrengths by remember { mutableStateOf(existingData.strengthsObserved) }
+    var strengthsNote by remember { mutableStateOf(existingData.strengthsNote) }
+    var showStrengthsNoteField by remember { mutableStateOf(existingData.strengthsNote.isNotBlank()) }
 
     // Challenges options
     val challengeOptions = listOf("Recognition", "Fluency", "Formation")
-    var selectedChallenges by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var challengesNote by remember { mutableStateOf("") }
-    var showChallengesNoteField by remember { mutableStateOf(false) }
+    var selectedChallenges by remember { mutableStateOf(existingData.challenges) }
+    var challengesNote by remember { mutableStateOf(existingData.challengesNote) }
+    var showChallengesNoteField by remember { mutableStateOf(existingData.challengesNote.isNotBlank()) }
 
     // Scroll state for content
-    val scrollState = androidx.compose.foundation.rememberScrollState()
+    val scrollState = rememberScrollState()
 
     Dialog(
         onDismissRequest = animateClose,
@@ -311,12 +327,12 @@ fun LearnerProfileAnnotationDialog(
 
                         // Add Note for Strengths
                         if (showStrengthsNoteField) {
-                            androidx.compose.material3.OutlinedTextField(
+                            OutlinedTextField(
                                 value = strengthsNote,
                                 onValueChange = { strengthsNote = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 placeholder = { Text("Add a note...", color = Color.Gray) },
-                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = PurpleColor,
                                     unfocusedBorderColor = Color.LightGray
                                 ),
@@ -373,12 +389,12 @@ fun LearnerProfileAnnotationDialog(
 
                         // Add Note for Challenges
                         if (showChallengesNoteField) {
-                            androidx.compose.material3.OutlinedTextField(
+                            OutlinedTextField(
                                 value = challengesNote,
                                 onValueChange = { challengesNote = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 placeholder = { Text("Add a note...", color = Color.Gray) },
-                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = PurpleColor,
                                     unfocusedBorderColor = Color.LightGray
                                 ),
@@ -411,7 +427,7 @@ fun LearnerProfileAnnotationDialog(
                             .background(Color.White)
                             .padding(24.dp)
                     ) {
-                        androidx.compose.material3.Button(
+                        Button(
                             onClick = {
                                 onAddNote(
                                     selectedLevel,
@@ -426,7 +442,7 @@ fun LearnerProfileAnnotationDialog(
                                 .fillMaxWidth()
                                 .height(56.dp),
                             shape = RoundedCornerShape(16.dp),
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF4A90D9)
                             )
                         ) {

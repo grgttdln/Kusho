@@ -14,6 +14,7 @@ import com.example.app.data.dao.ActivityDao
 import com.example.app.data.dao.SetDao
 import com.example.app.data.dao.SetWordDao
 import com.example.app.data.dao.StudentTeacherDao
+import com.example.app.data.dao.LearnerProfileAnnotationDao
 // Import all Entities
 import com.example.app.data.entity.User
 import com.example.app.data.entity.Word
@@ -25,6 +26,7 @@ import com.example.app.data.entity.Set
 import com.example.app.data.entity.SetWord
 import com.example.app.data.entity.ActivitySet
 import com.example.app.data.entity.StudentTeacher
+import com.example.app.data.entity.LearnerProfileAnnotation
 
 /**
  * Room Database for the Kusho application.
@@ -41,9 +43,10 @@ import com.example.app.data.entity.StudentTeacher
         Set::class, 
         SetWord::class, 
         ActivitySet::class,
-        StudentTeacher::class
+        StudentTeacher::class,
+        LearnerProfileAnnotation::class
     ],
-    version = 7, // Incrementing version for selectedLetterIndex column in SetWord
+    version = 8, // Incrementing version for LearnerProfileAnnotation table
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -58,6 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun setDao(): SetDao
     abstract fun setWordDao(): SetWordDao
     abstract fun studentTeacherDao(): StudentTeacherDao
+    abstract fun learnerProfileAnnotationDao(): LearnerProfileAnnotationDao
 
     companion object {
         private const val DATABASE_NAME = "kusho_database"

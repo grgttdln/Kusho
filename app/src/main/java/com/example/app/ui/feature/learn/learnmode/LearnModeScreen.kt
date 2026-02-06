@@ -31,7 +31,7 @@ import com.example.app.ui.feature.classroom.ClassroomViewModel
 fun LearnModeScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onStudentSelected: (studentId: Long, classId: Long) -> Unit = { _, _ -> },
+    onStudentSelected: (studentId: Long, classId: Long, studentName: String) -> Unit = { _, _, _ -> },
     classroomViewModel: ClassroomViewModel = viewModel()
 ) {
     val students by classroomViewModel.allStudents.collectAsState()
@@ -125,7 +125,7 @@ fun LearnModeScreen(
                                     studentName = student.fullName,
                                     profileImagePath = student.pfpPath,
                                     onClick = {
-                                        onStudentSelected(student.studentId, 0L)
+                                        onStudentSelected(student.studentId, 0L, student.fullName)
                                     },
                                     modifier = Modifier.weight(1f)
                                 )

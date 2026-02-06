@@ -132,8 +132,9 @@ fun MainNavigationContainer(
         )
         5 -> LearnModeScreen(
             onBack = { currentScreen = 1 },
-            onStudentSelected = { studentId, classId ->
+            onStudentSelected = { studentId, classId, studentName ->
                 selectedStudentId = studentId.toString()
+                selectedStudentName = studentName
                 selectedClassId = classId.toString()
                 currentScreen = 31 // Navigate to activity selection screen
             },
@@ -430,6 +431,8 @@ fun MainNavigationContainer(
                 setId = selectedSetId,
                 activityTitle = tutorialSessionTitle,
                 sessionKey = learnModeSessionKey,
+                studentId = selectedStudentId,
+                studentName = selectedStudentName,
                 modifier = modifier,
                 onSessionComplete = { currentScreen = 34 }
             )
