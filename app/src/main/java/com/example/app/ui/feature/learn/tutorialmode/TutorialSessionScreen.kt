@@ -39,6 +39,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 import com.example.app.service.WatchConnectionManager
+import com.example.app.ui.components.common.ProgressCheckDialog
+import com.example.app.ui.components.common.ProgressIndicator
 
 private val YellowColor = Color(0xFFEDBB00)
 private val LightYellowColor = Color(0xFFFFF3C4)
@@ -261,7 +263,9 @@ fun TutorialSessionScreen(
         ProgressIndicator(
             currentStep = currentStep,
             totalSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            activeColor = YellowColor,
+            inactiveColor = LightYellowColor
         )
 
         Spacer(Modifier.height(12.dp))
@@ -399,6 +403,7 @@ fun TutorialSessionScreenPreview() {
         onEndSession = {}
     )
 }
+
 
 @Composable
 private fun ProgressCheckDialog(

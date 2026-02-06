@@ -3,15 +3,15 @@ package com.example.app.ui.feature.learn.learnmode
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,15 +27,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.data.repository.SetRepository
 import com.example.app.service.WatchConnectionManager
+import com.example.app.ui.components.LearnerProfileAnnotationDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -98,6 +102,7 @@ fun LearnModeSessionScreen(
     setId: Long = 0L,
     activityTitle: String = "",
     sessionKey: Int = 0,
+    studentName: String = "",
     modifier: Modifier = Modifier,
     onSkip: () -> Unit = {},
     onAudioClick: () -> Unit = {},
@@ -115,6 +120,19 @@ fun LearnModeSessionScreen(
 
     // State for Fill in the Blank mode - tracks if the masked letter has been correctly answered
     var fillInBlankCorrect by remember(sessionKey) { mutableStateOf(false) }
+
+    // State for ProgressCheckDialog
+    var showProgressCheckDialog by remember(sessionKey) { mutableStateOf(false) }
+    var isCorrectGesture by remember(sessionKey) { mutableStateOf(false) }
+    var predictedLetter by remember(sessionKey) { mutableStateOf("") }
+    var targetLetter by remember(sessionKey) { mutableStateOf("") }
+    var targetCase by remember(sessionKey) { mutableStateOf("") }
+    
+    // Store pending state changes to apply after dialog dismissal
+    var pendingCorrectAction by remember(sessionKey) { mutableStateOf<(() -> Unit)?>(null) }
+
+    // State for Learner Profile Annotation Dialog
+    var showAnnotationDialog by remember(sessionKey) { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -187,11 +205,16 @@ fun LearnModeSessionScreen(
     }
 
     // Listen for letter input events from watch (for Write the Word, Name the Picture, and Fill in the Blank modes)
-    LaunchedEffect(sessionKey) {
-        val sessionStartTime = System.currentTimeMillis()
+    LaunchedEffect(Unit) {
+        var lastEventTime = 0L
         watchConnectionManager.letterInputEvent.collect { event ->
-            if (event.timestamp > sessionStartTime) {
+            android.util.Log.d("LearnModeSession", "📥 Received letterInputEvent: letter=${event.letter}, timestamp=${event.timestamp}, lastEventTime=$lastEventTime")
+
+            // Process event only if timestamp is valid (> 0) and newer than last processed event
+            if (event.timestamp > 0L && event.timestamp > lastEventTime) {
+                lastEventTime = event.timestamp
                 val currentWord = words.getOrNull(currentWordIndex)
+                android.util.Log.d("LearnModeSession", "📥 Processing event: currentWord=${currentWord?.word}, type=${currentWord?.configurationType}, currentWordIndex=$currentWordIndex")
                 if (currentWord != null) {
                     when (currentWord.configurationType) {
                         "Fill in the Blank" -> {
@@ -199,26 +222,49 @@ fun LearnModeSessionScreen(
                             val expectedLetter = currentWord.word.getOrNull(currentWord.selectedLetterIndex)
                             // Use case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
                             val isCorrect = isLetterMatch(event.letter, expectedLetter)
+                            android.util.Log.d("LearnModeSession", "📝 Fill in the Blank: input=${event.letter}, expected=$expectedLetter, isCorrect=$isCorrect")
 
+                            // Set up dialog state
+                            targetLetter = expectedLetter?.toString() ?: ""
+                            targetCase = if (expectedLetter?.isUpperCase() == true) "capital" else "small"
+                            predictedLetter = event.letter.toString()
+                            isCorrectGesture = isCorrect
+                            
+                            // Send feedback to watch so it shows the same screen
+                            watchConnectionManager.sendLearnModeFeedback(isCorrect, event.letter.toString())
+
+                            android.util.Log.d("LearnModeSession", "🎭 Setting showProgressCheckDialog = true for Fill in the Blank")
+                            showProgressCheckDialog = true
+
+                            // Store pending action to execute on dialog dismiss
                             if (isCorrect) {
-                                // Mark Fill in the Blank as correct to reveal the letter
-                                fillInBlankCorrect = true
-
-                                // Correct answer - notify watch and move to next word
-                                watchConnectionManager.sendWordComplete()
-
-                                // Small delay before moving to next word
-                                kotlinx.coroutines.delay(500)
-
-                                if (currentWordIndex < words.size - 1) {
-                                    currentWordIndex++
-                                } else {
-                                    // All items complete - notify watch before navigating away
-                                    watchConnectionManager.notifyActivityComplete()
-                                    onSessionComplete()
+                                pendingCorrectAction = {
+                                    // Mark Fill in the Blank as correct to reveal the letter
+                                    fillInBlankCorrect = true
+                                    
+                                    // Correct answer - notify watch and move to next word
+                                    watchConnectionManager.sendWordComplete()
+                                    
+                                    if (currentWordIndex < words.size - 1) {
+                                        currentWordIndex++
+                                    } else {
+                                        // All items complete - notify watch before navigating away
+                                        watchConnectionManager.notifyActivityComplete()
+                                        onSessionComplete()
+                                    }
+                                }
+                            } else {
+                                pendingCorrectAction = {
+                                    // Wrong letter - send incorrect feedback and resend word data for retry
+                                    watchConnectionManager.sendLetterResult(false, currentWord.selectedLetterIndex, currentWord.word.length)
+                                    // Resend word data so watch can prompt user to retry
+                                    watchConnectionManager.sendLearnModeWordData(
+                                        word = currentWord.word,
+                                        maskedIndex = currentWord.selectedLetterIndex,
+                                        configurationType = currentWord.configurationType
+                                    )
                                 }
                             }
-                            // For Fill in the Blank, wrong answers are already handled on the watch
                         }
                         "Write the Word", "Name the Picture" -> {
                             // Get expected letter
@@ -227,37 +273,76 @@ fun LearnModeSessionScreen(
                             // Check if input letter matches expected letter
                             // Uses case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
                             val isCorrect = isLetterMatch(event.letter, expectedLetter)
+                            android.util.Log.d("LearnModeSession", "📝 Write the Word/Name the Picture: input=${event.letter}, expected=$expectedLetter, isCorrect=$isCorrect")
 
+                            // Set up dialog state
+                            targetLetter = expectedLetter?.toString() ?: ""
+                            targetCase = if (expectedLetter?.isUpperCase() == true) "capital" else "small"
+                            predictedLetter = event.letter.toString()
+                            isCorrectGesture = isCorrect
+                            
+                            // Send feedback to watch so it shows the same screen
+                            watchConnectionManager.sendLearnModeFeedback(isCorrect, event.letter.toString())
+                            
+                            android.util.Log.d("LearnModeSession", "🎭 Setting showProgressCheckDialog = true for Write the Word/Name the Picture")
+                            showProgressCheckDialog = true
+
+                            // Store pending action to execute on dialog dismiss
                             if (isCorrect) {
-                                // Mark letter as completed
-                                completedLetterIndices = completedLetterIndices + currentLetterIndex
-                                currentLetterIndex++
+                                val newLetterIndex = currentLetterIndex + 1
+                                pendingCorrectAction = {
+                                    // Mark letter as completed
+                                    completedLetterIndices = completedLetterIndices + currentLetterIndex
+                                    currentLetterIndex = newLetterIndex
 
-                                if (currentLetterIndex >= currentWord.word.length) {
-                                    // Word complete - notify watch and move to next word
-                                    watchConnectionManager.sendWordComplete()
+                                    if (newLetterIndex >= currentWord.word.length) {
+                                        // Word complete - notify watch and move to next word
+                                        watchConnectionManager.sendWordComplete()
 
-                                    // Small delay before moving to next word
-                                    kotlinx.coroutines.delay(500)
-
-                                    if (currentWordIndex < words.size - 1) {
-                                        currentWordIndex++
+                                        if (currentWordIndex < words.size - 1) {
+                                            currentWordIndex++
+                                        } else {
+                                            // All items complete - notify watch before navigating away
+                                            watchConnectionManager.notifyActivityComplete()
+                                            onSessionComplete()
+                                        }
                                     } else {
-                                        // All items complete - notify watch before navigating away
-                                        watchConnectionManager.notifyActivityComplete()
-                                        onSessionComplete()
+                                        // Send correct result and move to next letter
+                                        watchConnectionManager.sendLetterResult(true, newLetterIndex, currentWord.word.length)
                                     }
-                                } else {
-                                    // Send correct result and move to next letter
-                                    watchConnectionManager.sendLetterResult(true, currentLetterIndex, currentWord.word.length)
                                 }
                             } else {
-                                // Wrong letter - send incorrect feedback but DON'T advance letter index
-                                // User must retry the same letter until correct (case-sensitive)
-                                watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
+                                pendingCorrectAction = {
+                                    // Wrong letter - send incorrect feedback but DON'T advance letter index
+                                    // User must retry the same letter until correct (case-sensitive)
+                                    watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
+                                    // Resend word data so watch can prompt user to retry
+                                    watchConnectionManager.sendLearnModeWordData(
+                                        word = currentWord.word,
+                                        maskedIndex = currentWord.selectedLetterIndex,
+                                        configurationType = currentWord.configurationType
+                                    )
+                                }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // Listen for feedback dismissal from watch
+    LaunchedEffect(Unit) {
+        var lastDismissTime = 0L
+        watchConnectionManager.learnModeFeedbackDismissed.collect { timestamp ->
+            if (timestamp > lastDismissTime && timestamp > 0L) {
+                lastDismissTime = timestamp
+                if (showProgressCheckDialog) {
+                    android.util.Log.d("LearnModeSession", "👆 Watch dismissed feedback - dismissing mobile dialog")
+                    showProgressCheckDialog = false
+                    // Execute pending action
+                    pendingCorrectAction?.invoke()
+                    pendingCorrectAction = null
                 }
             }
         }
@@ -283,6 +368,37 @@ fun LearnModeSessionScreen(
                 }
             }
         }
+    }
+
+    // Progress Check Dialog - show before loading check to ensure it always renders
+    if (showProgressCheckDialog) {
+        ProgressCheckDialog(
+            isCorrect = isCorrectGesture,
+            studentName = studentName,
+            targetLetter = targetLetter,
+            targetCase = targetCase,
+            predictedLetter = predictedLetter,
+            onDismiss = {
+                showProgressCheckDialog = false
+                // Notify watch that mobile dismissed feedback
+                watchConnectionManager.notifyLearnModeFeedbackDismissed()
+                // Execute pending action after dialog is dismissed
+                pendingCorrectAction?.invoke()
+                pendingCorrectAction = null
+            }
+        )
+    }
+
+    // Learner Profile Annotation Dialog
+    if (showAnnotationDialog) {
+        LearnerProfileAnnotationDialog(
+            studentName = studentName,
+            onDismiss = { showAnnotationDialog = false },
+            onAddNote = { levelOfProgress, strengthsObserved, strengthsNote, challenges, challengesNote ->
+                // TODO: Save annotation data to database or send to analytics
+                android.util.Log.d("LearnModeSession", "📝 Annotation saved: level=$levelOfProgress, strengths=$strengthsObserved, challenges=$challenges")
+            }
+        )
     }
 
     // Show loading
@@ -311,6 +427,7 @@ fun LearnModeSessionScreen(
         }
     }
 
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -329,30 +446,35 @@ fun LearnModeSessionScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // Audio Icon and Skip Button Row
+        // Annotate and Skip Button Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onAudioClick) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_volume),
-                    contentDescription = "Audio",
-                    tint = PurpleColor,
-                    modifier = Modifier.size(28.dp)
+            // Annotate button (left) - opens learner profile annotation dialog
+            IconButton(onClick = {
+                showAnnotationDialog = true
+                onAudioClick()
+            }) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_annotate),
+                    contentDescription = "Annotate",
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit
                 )
             }
 
-            TextButton(onClick = {
+            // Skip button (right)
+            IconButton(onClick = {
                 onSkip()
                 handleSkipOrNext()
             }) {
-                Text(
-                    text = "Skip",
-                    color = PurpleColor,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                Image(
+                    painter = painterResource(id = R.drawable.ic_skip),
+                    contentDescription = "Skip",
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit
                 )
             }
         }
@@ -654,3 +776,129 @@ fun LearnModeSessionScreenPreview() {
         sessionKey = 0
     )
 }
+
+
+@Composable
+private fun ProgressCheckDialog(
+    isCorrect: Boolean,
+    studentName: String,
+    targetLetter: String,
+    targetCase: String,
+    predictedLetter: String,
+    onDismiss: () -> Unit
+) {
+    // Extract first name only for more friendly tone
+    val firstName = studentName.split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: ""
+
+    // Define similar shape letters (same as watch side)
+    val similarShapeLetters = setOf('C', 'K', 'O', 'P', 'S', 'V', 'W', 'X', 'Z')
+
+    // Check if there's a case mismatch for similar letters
+    val targetUppercase = targetLetter.uppercase()
+    val isSimilarShape = targetUppercase.firstOrNull() in similarShapeLetters
+    val expectedCase = when (targetCase.lowercase()) {
+        "small", "lowercase" -> targetLetter.lowercase()
+        else -> targetLetter.uppercase()
+    }
+    val hasCaseMismatch = isCorrect && isSimilarShape &&
+                         predictedLetter.isNotEmpty() &&
+                         !predictedLetter.equals(expectedCase, ignoreCase = false)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        // Full-screen dark overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .wrapContentHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Mascot Image
+                Image(
+                    painter = painterResource(
+                        id = if (isCorrect) R.drawable.dis_mobile_correct else R.drawable.dis_mobile_incorrect
+                    ),
+                    contentDescription = if (isCorrect) "Correct" else "Incorrect",
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .aspectRatio(1f),
+                    contentScale = ContentScale.Fit
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                // Title with first name only
+                Text(
+                    text = if (isCorrect) {
+                        "Great Job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                    } else {
+                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                    },
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isCorrect) Color(0xFFCCDB00) else Color(0xFFFF6B6B),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Body text with optional case mismatch disclaimer
+                if (isCorrect && hasCaseMismatch) {
+                    Text(
+                        text = "You're doing super!\nKeep up the amazing work!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        text = "Psst... you wrote ${if (predictedLetter.first().isUpperCase()) "uppercase" else "lowercase"} ${predictedLetter.uppercase()}, " +
+                              "but we're practicing ${if (targetCase.lowercase() in listOf("small", "lowercase")) "lowercase" else "uppercase"} letters! " +
+                              "They look similar, so that's still great! 😊",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                } else if (isCorrect) {
+                    Text(
+                        text = "You're doing super!\nKeep up the amazing work!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                } else {
+                    Text(
+                        text = "Let's give it another go!",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                }
+            }
+        }
+    }
+}
+

@@ -59,7 +59,7 @@ private data class StudentFormData(
 fun AddStudentScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onStudentAdded: (studentName: String) -> Unit,
+    onStudentAdded: (studentName: String, studentCount: Int) -> Unit,
     viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -229,10 +229,10 @@ fun AddStudentScreen(
                             onSuccess = { _: Long ->
                                 addedCount++
                                 lastAddedName = fullName
-                                if (addedCount == validStudents.size) {
-                                    isAdding = false
-                                    onStudentAdded(lastAddedName)
-                                }
+                                            if (addedCount == validStudents.size) {
+                                                    isAdding = false
+                                                    onStudentAdded(lastAddedName, addedCount)
+                                                }
                             },
                             onError = { error: String ->
                                 isAdding = false
@@ -495,6 +495,6 @@ private fun Modifier.dashedBorder(
 fun AddStudentScreenPreview() {
     AddStudentScreen(
         onNavigateBack = {},
-        onStudentAdded = {}
+        onStudentAdded = { _, _ -> }
     )
 }

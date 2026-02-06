@@ -67,6 +67,8 @@ fun LearnModeStatusCard(
 
             Box(
                 modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .border(
                         width = 2.dp,
@@ -77,11 +79,12 @@ fun LearnModeStatusCard(
                         if (isSelected) Color.White else Color.Transparent,
                         RoundedCornerShape(12.dp)
                     )
-                    .padding(horizontal = 45.dp, vertical = 8.dp)
+                    .padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = status,
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (isSelected) Color(0xFFAE8EFB) else Color(0xFFBA9BFF),
                     textAlign = TextAlign.Center

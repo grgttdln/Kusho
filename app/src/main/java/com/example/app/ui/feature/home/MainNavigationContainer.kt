@@ -44,6 +44,7 @@ fun MainNavigationContainer(
     var selectedClassCode by remember { mutableStateOf("") }
     var selectedClassBannerPath by remember { mutableStateOf<String?>(null) }
     var addedStudentName by remember { mutableStateOf("") }
+    var addedStudentCount by remember { mutableIntStateOf(0) }
     var selectedStudentId by remember { mutableStateOf("") }
     var selectedStudentName by remember { mutableStateOf("") }
 
@@ -324,14 +325,16 @@ fun MainNavigationContainer(
         )
         23 -> AddStudentScreen(
             onNavigateBack = { currentScreen = 2 },
-            onStudentAdded = { studentName ->
+            onStudentAdded = { studentName, studentCount ->
                 addedStudentName = studentName
+                addedStudentCount = studentCount
                 currentScreen = 24
             },
             modifier = modifier
         )
         24 -> StudentAddedSuccessScreen(
             studentName = addedStudentName,
+            studentCount = addedStudentCount,
             onContinue = { currentScreen = 2 },
             modifier = modifier
         )
