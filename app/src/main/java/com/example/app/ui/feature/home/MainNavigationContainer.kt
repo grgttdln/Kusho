@@ -72,13 +72,8 @@ fun MainNavigationContainer(
     val sessionManager = remember { SessionManager.getInstance(context) }
     val userId = remember { sessionManager.getUserId() }
     val wordRepository = remember { WordRepository(AppDatabase.getInstance(context).wordDao()) }
-    val setRepository = remember {
-        SetRepository(
-            AppDatabase.getInstance(context).setDao(),
-            AppDatabase.getInstance(context).setWordDao(),
-            AppDatabase.getInstance(context).wordDao()
-        )
-    }
+    val database = remember { AppDatabase.getInstance(context) }
+    val setRepository = remember { SetRepository(database) }
 
     when (currentScreen) {
         0 -> DashboardScreen(

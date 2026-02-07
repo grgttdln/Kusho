@@ -43,11 +43,7 @@ sealed class EditSetEvent {
 class EditSetViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getInstance(application)
-    private val setRepository = SetRepository(
-        database.setDao(),
-        database.setWordDao(),
-        database.wordDao()
-    )
+    private val setRepository = SetRepository(database)
 
     private val _uiState = MutableStateFlow(EditSetUiState())
     val uiState: StateFlow<EditSetUiState> = _uiState.asStateFlow()
@@ -203,6 +199,11 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
 
         if (state.selectedWords.isEmpty()) {
             _uiState.update { it.copy(errorMessage = "Add at least one word") }
+            return false
+        }
+
+        if (state.selectedWords.size < 3) {
+            _uiState.update { it.copy(errorMessage = "Set must contain at least 3 words") }
             return false
         }
 

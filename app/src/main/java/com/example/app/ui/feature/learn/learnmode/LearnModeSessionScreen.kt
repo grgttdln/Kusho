@@ -138,11 +138,7 @@ fun LearnModeSessionScreen(
             isLoading = true
             try {
                 val database = AppDatabase.getInstance(context)
-                val setRepository = SetRepository(
-                    database.setDao(),
-                    database.setWordDao(),
-                    database.wordDao()
-                )
+                val setRepository = SetRepository(database)
 
                 val setDetails = withContext(Dispatchers.IO) {
                     setRepository.getSetDetails(setId)

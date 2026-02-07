@@ -43,7 +43,7 @@ import com.example.app.data.entity.StudentTeacher
         ActivitySet::class,
         StudentTeacher::class
     ],
-    version = 7, // Incrementing version for selectedLetterIndex column in SetWord
+    version = 8, // Incrementing version for imagePath column in SetWord
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

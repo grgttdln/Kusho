@@ -1,5 +1,6 @@
 package com.example.app.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -14,6 +15,7 @@ import androidx.room.PrimaryKey
  * @property wordId Foreign key reference to the Word
  * @property configurationType The type of configuration for this word (e.g., "fill in the blank", "identification", "air writing")
  * @property selectedLetterIndex The index of the selected letter for "Fill in the Blank" configuration (default: 0)
+ * @property imagePath Optional image path for "Name the Picture" question type
  */
 @Entity(
     tableName = "set_words",
@@ -43,5 +45,7 @@ data class SetWord(
     val setId: Long,
     val wordId: Long,
     val configurationType: String, // "fill in the blank", "identification", "air writing"
-    val selectedLetterIndex: Int = 0 // Index of selected letter for "Fill in the Blank"
+    val selectedLetterIndex: Int = 0, // Index of selected letter for "Fill in the Blank"
+    @ColumnInfo(name = "imagePath")
+    val imagePath: String? = null // Optional image path for "Name the Picture" question type
 )
