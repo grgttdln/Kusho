@@ -15,6 +15,7 @@ import com.example.app.data.dao.SetDao
 import com.example.app.data.dao.SetWordDao
 import com.example.app.data.dao.StudentTeacherDao
 import com.example.app.data.dao.LearnerProfileAnnotationDao
+import com.example.app.data.dao.StudentSetProgressDao
 // Import all Entities
 import com.example.app.data.entity.User
 import com.example.app.data.entity.Word
@@ -27,6 +28,7 @@ import com.example.app.data.entity.SetWord
 import com.example.app.data.entity.ActivitySet
 import com.example.app.data.entity.StudentTeacher
 import com.example.app.data.entity.LearnerProfileAnnotation
+import com.example.app.data.entity.StudentSetProgress
 
 /**
  * Room Database for the Kusho application.
@@ -34,19 +36,20 @@ import com.example.app.data.entity.LearnerProfileAnnotation
  */
 @Database(
     entities = [
-        User::class, 
-        Word::class, 
-        Student::class, 
-        Class::class, 
+        User::class,
+        Word::class,
+        Student::class,
+        Class::class,
         Enrollment::class,
-        Activity::class, 
-        Set::class, 
-        SetWord::class, 
+        Activity::class,
+        Set::class,
+        SetWord::class,
         ActivitySet::class,
         StudentTeacher::class,
-        LearnerProfileAnnotation::class
+        LearnerProfileAnnotation::class,
+        StudentSetProgress::class
     ],
-    version = 8, // Incrementing version for LearnerProfileAnnotation table
+    version = 9, // Incrementing version for StudentSetProgress table
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -62,6 +65,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun setWordDao(): SetWordDao
     abstract fun studentTeacherDao(): StudentTeacherDao
     abstract fun learnerProfileAnnotationDao(): LearnerProfileAnnotationDao
+    abstract fun studentSetProgressDao(): StudentSetProgressDao
 
     companion object {
         private const val DATABASE_NAME = "kusho_database"

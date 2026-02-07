@@ -162,7 +162,7 @@ fun LearnModeSessionAnalyticsScreen(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3FA9F8))
             ) {
                 Text(
-                    text = "Practice Again",
+                    text = "Learn Again",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )

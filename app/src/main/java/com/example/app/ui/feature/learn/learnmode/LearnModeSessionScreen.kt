@@ -105,6 +105,7 @@ private data class WordItem(
 @Composable
 fun LearnModeSessionScreen(
     setId: Long = 0L,
+    activityId: Long = 0L,
     activityTitle: String = "",
     sessionKey: Int = 0,
     studentId: String = "",
@@ -158,6 +159,7 @@ fun LearnModeSessionScreen(
     // Get database instance for annotation persistence
     val database = remember { AppDatabase.getInstance(context) }
     val annotationDao = remember { database.learnerProfileAnnotationDao() }
+    val studentSetProgressDao = remember { database.studentSetProgressDao() }
 
     // Get WatchConnectionManager instance
     val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
@@ -189,7 +191,7 @@ fun LearnModeSessionScreen(
     // Handle save-and-complete when session ends
     LaunchedEffect(shouldSaveAndComplete) {
         if (shouldSaveAndComplete) {
-            Log.d("LearnModeSession", "📝 Session ending - saving annotations. studentId=$studentId, setId=$setId, annotationsCount=${annotationsMap.size}")
+            Log.d("LearnModeSession", "📝 Session ending - saving annotations and marking set as completed. studentId=$studentId, setId=$setId, annotationsCount=${annotationsMap.size}")
             withContext(Dispatchers.IO) {
                 if (studentId.isNotBlank() && setId > 0) {
                     // Save all annotations in the map to database
@@ -210,6 +212,36 @@ fun LearnModeSessionScreen(
                         }
                     }
                     Log.d("LearnModeSession", "📝 All annotations saved to DB on session complete: ${annotationsMap.size} items for studentId=$studentId, setId=$setId")
+                    
+                    // Mark the set as completed in StudentSetProgress
+                    val studentIdLong = studentId.toLongOrNull()
+                    if (studentIdLong != null && activityId > 0) {
+                        // Check if progress record exists
+                        val existingProgress = studentSetProgressDao.getProgress(studentIdLong, activityId, setId)
+                        if (existingProgress != null) {
+                            // Update existing record to mark as completed
+                            studentSetProgressDao.markSetAsCompleted(
+                                studentId = studentIdLong,
+                                activityId = activityId,
+                                setId = setId,
+                                completedAt = System.currentTimeMillis()
+                            )
+                        } else {
+                            // Create new progress record marked as completed
+                            val progress = com.example.app.data.entity.StudentSetProgress(
+                                studentId = studentIdLong,
+                                activityId = activityId,
+                                setId = setId,
+                                isCompleted = true,
+                                completionPercentage = 100,
+                                completedAt = System.currentTimeMillis()
+                            )
+                            studentSetProgressDao.upsertProgress(progress)
+                        }
+                        Log.d("LearnModeSession", "✅ Set marked as completed in StudentSetProgress: studentId=$studentId, activityId=$activityId, setId=$setId")
+                    } else {
+                        Log.w("LearnModeSession", "⚠️ Cannot mark set as completed - studentId=$studentId, activityId=$activityId, setId=$setId")
+                    }
                 } else {
                     Log.w("LearnModeSession", "⚠️ Cannot save annotations - studentId='$studentId' (blank=${studentId.isBlank()}), setId=$setId")
                 }

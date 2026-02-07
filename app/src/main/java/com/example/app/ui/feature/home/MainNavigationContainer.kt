@@ -402,13 +402,29 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         32 -> {
+            val context = LocalContext.current
+            val database = remember { AppDatabase.getInstance(context) }
+            val studentSetProgressDao = remember { database.studentSetProgressDao() }
             val setsFlow = remember(selectedActivityId) { setRepository.getSetsForActivity(selectedActivityId) }
             val sets by setsFlow.collectAsState(initial = emptyList())
-            val activitySetStatuses = sets.map {
+            val studentIdLong = selectedStudentId.toLongOrNull() ?: 0L
+            val progressFlow = remember(selectedActivityId, studentIdLong) {
+                if (studentIdLong > 0) {
+                    studentSetProgressDao.getProgressForStudentAndActivity(studentIdLong, selectedActivityId)
+                } else {
+                    kotlinx.coroutines.flow.flowOf(emptyList())
+                }
+            }
+            val progressList by progressFlow.collectAsState(initial = emptyList())
+            val completedSetIds = remember(progressList) {
+                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            }
+            val activitySetStatuses = sets.map { set ->
+                val isCompleted = completedSetIds.contains(set.id)
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
-                    setId = it.id,
-                    title = it.title,
-                    status = "Not Started" // TODO: Replace with real status if available
+                    setId = set.id,
+                    title = set.title,
+                    status = if (isCompleted) "Completed" else "Not Started"
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
@@ -429,6 +445,7 @@ fun MainNavigationContainer(
         33 -> {
             com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
                 setId = selectedSetId,
+                activityId = selectedActivityId,
                 activityTitle = tutorialSessionTitle,
                 sessionKey = learnModeSessionKey,
                 studentId = selectedStudentId,
