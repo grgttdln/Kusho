@@ -67,18 +67,19 @@ fun LearnModeStatusCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             val isCompleted = status == "Completed"
+            
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .border(
-                        width = if (isCompleted) 0.dp else 2.dp,
+                        width = if (isCompleted && !isSelected) 0.dp else if (!isCompleted) 2.dp else 0.dp,
                         color = Color(0xFFBA9BFF),
                         shape = RoundedCornerShape(12.dp)
                     )
                     .background(
-                        if (isCompleted) Color(0xFFAE8EFB) else if (isSelected) Color.White else Color.Transparent,
+                        if (isCompleted && !isSelected) Color(0xFFAE8EFB) else if (isSelected) Color.White else Color.Transparent,
                         RoundedCornerShape(12.dp)
                     )
                     .padding(vertical = 6.dp),
@@ -88,7 +89,7 @@ fun LearnModeStatusCard(
                     text = status,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (isCompleted || isSelected) Color.White else Color(0xFFBA9BFF),
+                    color = if (isCompleted && !isSelected) Color.White else if (isSelected) Color(0xFFAE8EFB) else Color(0xFFBA9BFF),
                     textAlign = TextAlign.Center
                 )
             }
