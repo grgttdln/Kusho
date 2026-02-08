@@ -2,14 +2,22 @@ package com.example.app.ui.components.tutorial
 
 import android.util.Log
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.example.app.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -24,11 +32,14 @@ fun AnimatedLetterView(
     numberColor: Color = Color.White,
     circleColor: Color = Color.Black,
     loopAnimation: Boolean = true,
-    loopDelay: Int = 1500
+    loopDelay: Int = 1500,
+    showGuidingHand: Boolean = true
 ) {
     var currentStroke by remember { mutableIntStateOf(0) }
     var animProgress by remember { mutableFloatStateOf(0f) }
     var animationFailed by remember { mutableStateOf(false) }
+    var handPosition by remember { mutableStateOf<Offset?>(null) }
+    var canvasMinDimension by remember { mutableFloatStateOf(0f) }
     
     val targetLetter = if (isUpperCase) letter.uppercaseChar() else letter.lowercaseChar()
     
@@ -38,12 +49,14 @@ fun AnimatedLetterView(
         currentStroke = 0
         animProgress = 0f
         animationFailed = false
+        handPosition = null
         
         try {
             val strokes = getSimpleLetterStrokes(targetLetter)
             if (strokes.isEmpty()) {
                 Log.w(TAG, "No strokes found for letter: $targetLetter")
                 animationFailed = true
+                handPosition = null
                 return@LaunchedEffect
             }
             
@@ -74,18 +87,21 @@ fun AnimatedLetterView(
                     // Keep stroke complete before moving to next
                     animProgress = 1f
                     if (strokeIndex < strokes.size - 1) {
+                        handPosition = null // Hide hand between strokes
                         delay(delayBetweenStrokesMs)
                     }
                 }
                 
                 // All strokes complete
                 currentStroke = strokes.size
+                handPosition = null // Hide hand when complete
                 
                 // Loop or stop
                 if (loopAnimation && isActive) {
                     delay(loopDelay.toLong())
                     currentStroke = 0
                     animProgress = 0f
+                    handPosition = null
                 } else {
                     break
                 }
@@ -95,6 +111,7 @@ fun AnimatedLetterView(
             animationFailed = true
             currentStroke = 0
             animProgress = 0f
+            handPosition = null
         }
     }
     
@@ -106,23 +123,33 @@ fun AnimatedLetterView(
             if (animationFailed) {
                 // Fallback: just show letter outline
                 Log.w(TAG, "Animation failed, showing static letter")
+                handPosition = null
                 return@Canvas
             }
             
             try {
                 val strokes = getSimpleLetterStrokes(targetLetter)
-                if (strokes.isEmpty()) return@Canvas
+                if (strokes.isEmpty()) {
+                    handPosition = null
+                    return@Canvas
+                }
                 
                 // Use the smaller dimension to maintain aspect ratio and center the letter
                 val canvasWidth = size.width
                 val canvasHeight = size.height
                 val minDimension = minOf(canvasWidth, canvasHeight)
                 
-                if (minDimension <= 0f) return@Canvas
+                if (minDimension <= 0f) {
+                    handPosition = null
+                    return@Canvas
+                }
                 
                 // Center the letter in the available space
                 val offsetX = (canvasWidth - minDimension) / 2f
                 val offsetY = (canvasHeight - minDimension) / 2f
+                
+                // Store minDimension for hand sizing
+                canvasMinDimension = minDimension
                 
                 val strokeWidth = minDimension * 0.08f
             
@@ -166,6 +193,28 @@ fun AnimatedLetterView(
                         val segmentsToShow = (totalSegments * animProgress).toInt()
                         val partialSegment = (totalSegments * animProgress) - segmentsToShow
                         
+                        // Calculate hand position at the current animation point
+                        if (showGuidingHand) {
+                            val currentPointIndex = segmentsToShow.coerceIn(0, points.size - 1)
+                            if (currentPointIndex < points.size - 1) {
+                                val startPoint = points[currentPointIndex]
+                                val endPoint = points[currentPointIndex + 1]
+                                // Position the hand so finger tip is at the stroke point
+                                val strokeX = offsetX + (startPoint.x + (endPoint.x - startPoint.x) * partialSegment) * minDimension
+                                val strokeY = offsetY + (startPoint.y + (endPoint.y - startPoint.y) * partialSegment) * minDimension
+                                handPosition = Offset(strokeX, strokeY)
+                            } else if (currentPointIndex == points.size - 1) {
+                                // At the last point
+                                val lastPoint = points[currentPointIndex]
+                                handPosition = Offset(
+                                    offsetX + lastPoint.x * minDimension, 
+                                    offsetY + lastPoint.y * minDimension
+                                )
+                            }
+                        } else {
+                            handPosition = null
+                        }
+                        
                         // Draw complete segments
                         for (j in 1..segmentsToShow.coerceAtMost(points.size - 1)) {
                             path.lineTo(offsetX + points[j].x * minDimension, offsetY + points[j].y * minDimension)
@@ -190,8 +239,8 @@ fun AnimatedLetterView(
                             )
                         )
                         
-                        // Draw number indicator at start
-                        if (animProgress < 0.25f && points.isNotEmpty()) {
+                        // Draw number indicator at start of current stroke
+                        if (points.isNotEmpty()) {
                             val startX = offsetX + points[0].x * minDimension
                             val startY = offsetY + points[0].y * minDimension
                             val radius = minDimension * 0.06f
@@ -222,10 +271,40 @@ fun AnimatedLetterView(
                 } catch (e: Exception) {
                     Log.e(TAG, "Error drawing animated stroke", e)
                 }
+            } else {
+                // No stroke animating, hide hand
+                handPosition = null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Canvas drawing error", e)
+            handPosition = null
         }
+        }
+        
+        // Guiding hand overlay - scaled relative to letter size
+        handPosition?.let { pos ->
+            if (showGuidingHand && canvasMinDimension > 0f) {
+                val density = LocalDensity.current
+                // Scale hand size to 150% of the letter drawing area for very prominent close-up perspective
+                val handSizePx = canvasMinDimension * 1.5f
+                val handSize = with(density) { handSizePx.toDp() }
+                
+                // Offset to position finger tip (finger tip is at top-left of hand image)
+                val fingerTipOffsetX = handSizePx * 0.15f // Finger tip is 15% from left edge
+                val fingerTipOffsetY = handSizePx * 0.15f // Finger tip is 15% from top edge
+                
+                Image(
+                    painter = painterResource(id = R.drawable.ic_kusho_hand),
+                    contentDescription = "Guiding hand",
+                    modifier = Modifier
+                        .size(handSize)
+                        .offset(
+                            x = with(density) { (pos.x - fingerTipOffsetX).toDp() },
+                            y = with(density) { (pos.y - fingerTipOffsetY).toDp() }
+                        ),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
     }
 }
