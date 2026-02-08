@@ -65,6 +65,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _letterInputEvent = MutableStateFlow(LetterInputEvent())
     val letterInputEvent: StateFlow<LetterInputEvent> = _letterInputEvent.asStateFlow()
 
+    // Learn Mode feedback dismissed from watch trigger
+    private val _learnModeFeedbackDismissed = MutableStateFlow(0L)
+    val learnModeFeedbackDismissed: StateFlow<Long> = _learnModeFeedbackDismissed.asStateFlow()
+
     // Tutorial Mode flows
     private val _tutorialModeSkipTrigger = MutableStateFlow(0L)
     val tutorialModeSkipTrigger: StateFlow<Long> = _tutorialModeSkipTrigger.asStateFlow()
@@ -109,6 +113,8 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_LETTER_RESULT = "/learn_mode_letter_result"
         private const val MESSAGE_PATH_WORD_COMPLETE = "/learn_mode_word_complete"
         private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
+        private const val MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED = "/learn_mode_feedback_dismissed"
+        private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -443,6 +449,55 @@ class WatchConnectionManager private constructor(private val context: Context) {
     }
 
     /**
+     * Send feedback result to watch so it shows the same correct/incorrect screen
+     * @param isCorrect Whether the answer was correct
+     * @param predictedLetter The letter that was predicted
+     */
+    fun sendLearnModeFeedback(isCorrect: Boolean, predictedLetter: String) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = org.json.JSONObject().apply {
+                    put("isCorrect", isCorrect)
+                    put("predictedLetter", predictedLetter)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode feedback sent: correct=$isCorrect, letter=$predictedLetter")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Learn Mode feedback", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that mobile has dismissed the Learn Mode feedback dialog
+     */
+    fun notifyLearnModeFeedbackDismissed() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode feedback dismissal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to notify watch of Learn Mode feedback dismissal", e)
+            }
+        }
+    }
+
+    /**
      * Notify watch that the entire activity (all items in the set) is complete
      */
     fun notifyActivityComplete() {
@@ -582,6 +637,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 } catch (e: Exception) {
                     Log.e(TAG, "❌ Failed to parse letter input", e)
                 }
+            }
+            MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED -> {
+                Log.d(TAG, "👆 Watch dismissed Learn Mode feedback - dismissing mobile dialog")
+                _learnModeFeedbackDismissed.value = System.currentTimeMillis()
             }
             MESSAGE_PATH_TUTORIAL_MODE_SKIP -> {
                 Log.d(TAG, "⏭️ Received Tutorial Mode skip command from watch")

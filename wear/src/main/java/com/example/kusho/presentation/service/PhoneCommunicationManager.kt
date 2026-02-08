@@ -45,6 +45,19 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
     private val _wordCompleteEvent = MutableStateFlow(0L) // Timestamp
     val wordCompleteEvent: StateFlow<Long> = _wordCompleteEvent.asStateFlow()
 
+    // StateFlow for Learn Mode feedback from phone (to show correct/incorrect screen)
+    data class LearnModeFeedbackEvent(
+        val isCorrect: Boolean = false,
+        val predictedLetter: String = "",
+        val timestamp: Long = 0L
+    )
+    private val _learnModeFeedbackEvent = MutableStateFlow(LearnModeFeedbackEvent())
+    val learnModeFeedbackEvent: StateFlow<LearnModeFeedbackEvent> = _learnModeFeedbackEvent.asStateFlow()
+
+    // StateFlow for Learn Mode feedback dismissed from phone
+    private val _learnModeFeedbackDismissed = MutableStateFlow(0L)
+    val learnModeFeedbackDismissed: StateFlow<Long> = _learnModeFeedbackDismissed.asStateFlow()
+
     // StateFlow to track if mobile app is in Tutorial Mode session
     private val _isPhoneInTutorialMode = MutableStateFlow(false)
     val isPhoneInTutorialMode: StateFlow<Boolean> = _isPhoneInTutorialMode.asStateFlow()
@@ -64,6 +77,8 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_LETTER_RESULT = "/learn_mode_letter_result"
         private const val MESSAGE_PATH_WORD_COMPLETE = "/learn_mode_word_complete"
         private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
+        private const val MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED = "/learn_mode_feedback_dismissed"
+        private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -499,6 +514,7 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             android.util.Log.e("PhoneCommunicationMgr", "❌ Failed to send letter input", e)
         }
     }
+
 
     /**
      * Clean up resources

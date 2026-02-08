@@ -44,6 +44,7 @@ fun MainNavigationContainer(
     var selectedClassCode by remember { mutableStateOf("") }
     var selectedClassBannerPath by remember { mutableStateOf<String?>(null) }
     var addedStudentName by remember { mutableStateOf("") }
+    var addedStudentCount by remember { mutableIntStateOf(0) }
     var selectedStudentId by remember { mutableStateOf("") }
     var selectedStudentName by remember { mutableStateOf("") }
 
@@ -126,8 +127,9 @@ fun MainNavigationContainer(
         )
         5 -> LearnModeScreen(
             onBack = { currentScreen = 1 },
-            onStudentSelected = { studentId, classId ->
+            onStudentSelected = { studentId, classId, studentName ->
                 selectedStudentId = studentId.toString()
+                selectedStudentName = studentName
                 selectedClassId = classId.toString()
                 currentScreen = 31 // Navigate to activity selection screen
             },
@@ -320,14 +322,16 @@ fun MainNavigationContainer(
         )
         23 -> AddStudentScreen(
             onNavigateBack = { currentScreen = 2 },
-            onStudentAdded = { studentName ->
+            onStudentAdded = { studentName, studentCount ->
                 addedStudentName = studentName
+                addedStudentCount = studentCount
                 currentScreen = 24
             },
             modifier = modifier
         )
         24 -> StudentAddedSuccessScreen(
             studentName = addedStudentName,
+            studentCount = addedStudentCount,
             onContinue = { currentScreen = 2 },
             modifier = modifier
         )
@@ -394,13 +398,29 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         32 -> {
+            val context = LocalContext.current
+            val database = remember { AppDatabase.getInstance(context) }
+            val studentSetProgressDao = remember { database.studentSetProgressDao() }
             val setsFlow = remember(selectedActivityId) { setRepository.getSetsForActivity(selectedActivityId) }
             val sets by setsFlow.collectAsState(initial = emptyList())
-            val activitySetStatuses = sets.map {
+            val studentIdLong = selectedStudentId.toLongOrNull() ?: 0L
+            val progressFlow = remember(selectedActivityId, studentIdLong) {
+                if (studentIdLong > 0) {
+                    studentSetProgressDao.getProgressForStudentAndActivity(studentIdLong, selectedActivityId)
+                } else {
+                    kotlinx.coroutines.flow.flowOf(emptyList())
+                }
+            }
+            val progressList by progressFlow.collectAsState(initial = emptyList())
+            val completedSetIds = remember(progressList) {
+                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            }
+            val activitySetStatuses = sets.map { set ->
+                val isCompleted = completedSetIds.contains(set.id)
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
-                    setId = it.id,
-                    title = it.title,
-                    status = "Not Started" // TODO: Replace with real status if available
+                    setId = set.id,
+                    title = set.title,
+                    status = if (isCompleted) "Completed" else "Not Started"
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
@@ -421,8 +441,11 @@ fun MainNavigationContainer(
         33 -> {
             com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
                 setId = selectedSetId,
+                activityId = selectedActivityId,
                 activityTitle = tutorialSessionTitle,
                 sessionKey = learnModeSessionKey,
+                studentId = selectedStudentId,
+                studentName = selectedStudentName,
                 modifier = modifier,
                 onSessionComplete = { currentScreen = 34 }
             )

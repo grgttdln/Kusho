@@ -342,14 +342,18 @@ private fun FillInTheBlankMainContent(
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
 
-    // Speak the prediction when result is shown
+    // Speak the prediction and send to phone when prediction is shown
     LaunchedEffect(uiState.state, uiState.prediction) {
-        if (uiState.state == LearnModeViewModel.State.RESULT && uiState.prediction != null) {
+        if (uiState.state == LearnModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
             // Only speak if we haven't already spoken this prediction
             if (lastSpokenPrediction != uiState.prediction) {
                 lastSpokenPrediction = uiState.prediction
                 ttsManager.speakLetter(uiState.prediction!!)
             }
+
+            // Send letter input to phone immediately for validation
+            android.util.Log.d("LearnModeScreen", "📤 Sending letter input to phone: ${uiState.prediction} at index ${wordData.maskedIndex}")
+            phoneCommunicationManager.sendLetterInput(uiState.prediction!!, wordData.maskedIndex)
         }
     }
 
@@ -357,16 +361,6 @@ private fun FillInTheBlankMainContent(
     LaunchedEffect(uiState.state) {
         if (uiState.state == LearnModeViewModel.State.IDLE) {
             lastSpokenPrediction = null
-        }
-    }
-
-    // When answer is correct, send letter input to phone to trigger auto-advance
-    LaunchedEffect(uiState.state, uiState.isCorrect) {
-        if (uiState.state == LearnModeViewModel.State.RESULT && uiState.isCorrect == true && uiState.prediction != null) {
-            // Small delay to show the correct result before advancing
-            kotlinx.coroutines.delay(1000)
-            // Send letter input to phone - phone will advance to next word
-            phoneCommunicationManager.sendLetterInput(uiState.prediction!!, wordData.maskedIndex)
         }
     }
 
