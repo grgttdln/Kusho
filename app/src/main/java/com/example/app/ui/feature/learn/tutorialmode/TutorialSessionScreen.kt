@@ -356,8 +356,6 @@ fun TutorialSessionScreen(
                             strokeColor = Color.Black,
                             numberColor = Color.White,
                             circleColor = Color.Black,
-                            animationDuration = 1000,
-                            delayBetweenStrokes = 300,
                             loopAnimation = true,
                             loopDelay = 2000
                         )

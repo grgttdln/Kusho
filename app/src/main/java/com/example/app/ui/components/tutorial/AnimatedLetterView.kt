@@ -2,7 +2,10 @@ package com.example.app.ui.components.tutorial
 
 import android.util.Log
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
@@ -20,10 +23,8 @@ fun AnimatedLetterView(
     strokeColor: Color = Color.Black,
     numberColor: Color = Color.White,
     circleColor: Color = Color.Black,
-    animationDuration: Int = 800,
-    delayBetweenStrokes: Int = 250,
     loopAnimation: Boolean = true,
-    loopDelay: Int = 2000
+    loopDelay: Int = 1500
 ) {
     var currentStroke by remember { mutableIntStateOf(0) }
     var animProgress by remember { mutableFloatStateOf(0f) }
@@ -46,7 +47,14 @@ fun AnimatedLetterView(
                 return@LaunchedEffect
             }
             
-            Log.d(TAG, "Starting animation for $targetLetter with ${strokes.size} strokes")
+            // Calculate dynamic timing to ensure exactly 3 seconds total per letter
+            val totalTimeMs = 3000L
+            val strokeCount = strokes.size
+            val delayBetweenStrokesMs = 150L // Short pause between strokes
+            val totalDelayTime = (strokeCount - 1) * delayBetweenStrokesMs
+            val strokeDurationMs = (totalTimeMs - totalDelayTime) / strokeCount
+            
+            Log.d(TAG, "Starting animation for $targetLetter with $strokeCount strokes, strokeDuration=${strokeDurationMs}ms")
             
             while (isActive) {
                 // Animate all strokes
@@ -56,16 +64,18 @@ fun AnimatedLetterView(
                     currentStroke = strokeIndex
                     
                     // Animate current stroke from 0 to 1
-                    val steps = 20 // Optimized for smooth performance
+                    val steps = 60 // More steps for smoother animation, especially for straight lines
                     repeat(steps) { step ->
                         if (!isActive) return@LaunchedEffect
                         animProgress = (step + 1f) / steps
-                        delay((animationDuration / steps).toLong())
+                        delay((strokeDurationMs / steps).toLong())
                     }
                     
                     // Keep stroke complete before moving to next
                     animProgress = 1f
-                    delay(delayBetweenStrokes.toLong())
+                    if (strokeIndex < strokes.size - 1) {
+                        delay(delayBetweenStrokesMs)
+                    }
                 }
                 
                 // All strokes complete
@@ -88,23 +98,33 @@ fun AnimatedLetterView(
         }
     }
     
-    Canvas(modifier = modifier) {
-        if (animationFailed) {
-            // Fallback: just show letter outline
-            Log.w(TAG, "Animation failed, showing static letter")
-            return@Canvas
-        }
-        
-        try {
-            val strokes = getSimpleLetterStrokes(targetLetter)
-            if (strokes.isEmpty()) return@Canvas
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            if (animationFailed) {
+                // Fallback: just show letter outline
+                Log.w(TAG, "Animation failed, showing static letter")
+                return@Canvas
+            }
             
-            val width = size.width
-            val height = size.height
-            
-            if (width <= 0f || height <= 0f) return@Canvas
-            
-            val strokeWidth = width * 0.08f
+            try {
+                val strokes = getSimpleLetterStrokes(targetLetter)
+                if (strokes.isEmpty()) return@Canvas
+                
+                // Use the smaller dimension to maintain aspect ratio and center the letter
+                val canvasWidth = size.width
+                val canvasHeight = size.height
+                val minDimension = minOf(canvasWidth, canvasHeight)
+                
+                if (minDimension <= 0f) return@Canvas
+                
+                // Center the letter in the available space
+                val offsetX = (canvasWidth - minDimension) / 2f
+                val offsetY = (canvasHeight - minDimension) / 2f
+                
+                val strokeWidth = minDimension * 0.08f
             
             // Draw completed strokes
             for (i in 0 until currentStroke.coerceIn(0, strokes.size)) {
@@ -113,9 +133,9 @@ fun AnimatedLetterView(
                     val path = Path()
                     
                     if (points.isNotEmpty()) {
-                        path.moveTo(points[0].x * width, points[0].y * height)
+                        path.moveTo(offsetX + points[0].x * minDimension, offsetY + points[0].y * minDimension)
                         for (j in 1 until points.size) {
-                            path.lineTo(points[j].x * width, points[j].y * height)
+                            path.lineTo(offsetX + points[j].x * minDimension, offsetY + points[j].y * minDimension)
                         }
                         
                         drawPath(
@@ -139,7 +159,7 @@ fun AnimatedLetterView(
                     val points = strokes[currentStroke]
                     if (points.isNotEmpty()) {
                         val path = Path()
-                        path.moveTo(points[0].x * width, points[0].y * height)
+                        path.moveTo(offsetX + points[0].x * minDimension, offsetY + points[0].y * minDimension)
                         
                         // Calculate how many points to draw based on progress
                         val totalSegments = points.size - 1
@@ -148,7 +168,7 @@ fun AnimatedLetterView(
                         
                         // Draw complete segments
                         for (j in 1..segmentsToShow.coerceAtMost(points.size - 1)) {
-                            path.lineTo(points[j].x * width, points[j].y * height)
+                            path.lineTo(offsetX + points[j].x * minDimension, offsetY + points[j].y * minDimension)
                         }
                         
                         // Draw partial segment
@@ -157,7 +177,7 @@ fun AnimatedLetterView(
                             val endPoint = points[segmentsToShow + 1]
                             val partialX = startPoint.x + (endPoint.x - startPoint.x) * partialSegment
                             val partialY = startPoint.y + (endPoint.y - startPoint.y) * partialSegment
-                            path.lineTo(partialX * width, partialY * height)
+                            path.lineTo(offsetX + partialX * minDimension, offsetY + partialY * minDimension)
                         }
                         
                         drawPath(
@@ -172,9 +192,9 @@ fun AnimatedLetterView(
                         
                         // Draw number indicator at start
                         if (animProgress < 0.25f && points.isNotEmpty()) {
-                            val startX = points[0].x * width
-                            val startY = points[0].y * height
-                            val radius = width * 0.06f
+                            val startX = offsetX + points[0].x * minDimension
+                            val startY = offsetY + points[0].y * minDimension
+                            val radius = minDimension * 0.06f
                             
                             drawCircle(
                                 color = circleColor,
@@ -205,6 +225,7 @@ fun AnimatedLetterView(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Canvas drawing error", e)
+        }
         }
     }
 }
@@ -240,8 +261,16 @@ private fun calculateCubicBezierPoints(
     return points
 }
 
-private fun calculateLinePoints(start: Point, end: Point): List<Point> {
-    return listOf(start, end)
+private fun calculateLinePoints(start: Point, end: Point, segments: Int = 30): List<Point> {
+    // Interpolate points for smooth animation of straight lines
+    val points = mutableListOf<Point>()
+    for (i in 0..segments) {
+        val t = i.toFloat() / segments
+        val x = start.x + (end.x - start.x) * t
+        val y = start.y + (end.y - start.y) * t
+        points.add(Point(x, y))
+    }
+    return points
 }
 
 // Pre-calculated smooth letter strokes - using pre-calculated bezier points for smooth curves
@@ -309,13 +338,13 @@ private fun getSimpleLetterStrokes(letter: Char): List<List<Point>> {
             calculateLinePoints(Point(0.3f, 0.85f), Point(0.75f, 0.85f))
         )
         'M' -> listOf(
-            calculateLinePoints(Point(0.2f, 0.85f), Point(0.2f, 0.15f)),
+            calculateLinePoints(Point(0.2f, 0.15f), Point(0.2f, 0.85f)),
             calculateLinePoints(Point(0.2f, 0.15f), Point(0.5f, 0.6f)),
             calculateLinePoints(Point(0.5f, 0.6f), Point(0.8f, 0.15f)),
             calculateLinePoints(Point(0.8f, 0.15f), Point(0.8f, 0.85f))
         )
         'N' -> listOf(
-            calculateLinePoints(Point(0.25f, 0.85f), Point(0.25f, 0.15f)),
+            calculateLinePoints(Point(0.25f, 0.15f), Point(0.25f, 0.85f)),
             calculateLinePoints(Point(0.25f, 0.15f), Point(0.75f, 0.85f)),
             calculateLinePoints(Point(0.75f, 0.85f), Point(0.75f, 0.15f))
         )
@@ -324,7 +353,7 @@ private fun getSimpleLetterStrokes(letter: Char): List<List<Point>> {
             calculateCubicBezierPoints(Point(0.5f, 0.88f), Point(0.88f, 0.88f), Point(0.88f, 0.12f), Point(0.5f, 0.12f))
         )
         'P' -> listOf(
-            calculateLinePoints(Point(0.25f, 0.85f), Point(0.25f, 0.15f)),
+            calculateLinePoints(Point(0.25f, 0.15f), Point(0.25f, 0.85f)),
             calculateCubicBezierPoints(Point(0.25f, 0.15f), Point(0.72f, 0.15f), Point(0.72f, 0.45f), Point(0.25f, 0.5f))
         )
         'Q' -> listOf(
@@ -333,7 +362,7 @@ private fun getSimpleLetterStrokes(letter: Char): List<List<Point>> {
             calculateLinePoints(Point(0.62f, 0.65f), Point(0.7435f, 0.821f))
         )
         'R' -> listOf(
-            calculateLinePoints(Point(0.25f, 0.85f), Point(0.25f, 0.15f)),
+            calculateLinePoints(Point(0.25f, 0.15f), Point(0.25f, 0.85f)),
             calculateCubicBezierPoints(Point(0.25f, 0.15f), Point(0.65f, 0.15f), Point(0.65f, 0.45f), Point(0.25f, 0.5f)),
             calculateLinePoints(Point(0.45f, 0.5f), Point(0.6875f, 0.8325f))
         )
