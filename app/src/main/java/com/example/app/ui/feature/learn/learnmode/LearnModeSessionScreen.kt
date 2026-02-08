@@ -647,7 +647,8 @@ fun LearnModeSessionScreen(
         ) {
             Spacer(Modifier.weight(0.3f))
             // Large Content Card with Image (Square) - only show if there's an image
-            if (currentWord?.imagePath != null) {
+            val imageExists = currentWord?.imagePath?.let { File(it).exists() } ?: false
+            if (imageExists) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
@@ -701,7 +702,7 @@ fun LearnModeSessionScreen(
                             word = currentWord.word,
                             completedIndices = completedLetterIndices,
                             currentIndex = currentLetterIndex,
-                            hasImage = currentWord.imagePath != null
+                            hasImage = imageExists
                         )
                     }
                     isFillInTheBlank -> {
@@ -710,7 +711,7 @@ fun LearnModeSessionScreen(
                             word = currentWord.word,
                             maskedIndex = currentWord.selectedLetterIndex,
                             isCorrect = fillInBlankCorrect,
-                            hasImage = currentWord.imagePath != null
+                            hasImage = imageExists
                         )
                     }
                     isNameThePicture -> {
@@ -719,16 +720,16 @@ fun LearnModeSessionScreen(
                             word = currentWord.word,
                             completedIndices = completedLetterIndices,
                             currentIndex = currentLetterIndex,
-                            hasImage = currentWord.imagePath != null
+                            hasImage = imageExists
                         )
                     }
                     else -> {
                         Text(
                             text = currentWord.getMaskedWord(),
-                            fontSize = if (currentWord.imagePath != null) 48.sp else 96.sp,
+                            fontSize = if (imageExists) 48.sp else 96.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black,
-                            letterSpacing = if (currentWord.imagePath != null) 4.sp else 8.sp
+                            letterSpacing = if (imageExists) 4.sp else 8.sp
                         )
                     }
                 }

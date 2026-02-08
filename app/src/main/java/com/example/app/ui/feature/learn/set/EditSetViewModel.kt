@@ -60,9 +60,10 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
      * or if the set hasn't been loaded yet.
      *
      * @param setId The ID of the set to load
+     * @param userId The user's ID (needed to check current word data from Word Bank)
      * @param forceReload Force reload even if the same setId
      */
-    fun loadSet(setId: Long, forceReload: Boolean = false) {
+    fun loadSet(setId: Long, userId: Long, forceReload: Boolean = false) {
         // Only reload if it's a different set or force reload is requested
         if (currentLoadedSetId == setId && !forceReload && _uiState.value.setId == setId) {
             return
@@ -83,19 +84,28 @@ class EditSetViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val setDetails = setRepository.getSetDetails(setId)
                 if (setDetails != null) {
+                    // Fetch current word data from Word Bank to check for updated images
+                    val wordDao = database.wordDao()
+                    val updatedWords = setDetails.words.map { word ->
+                        // Look up the current word in the Word Bank
+                        val currentWord = wordDao.getWordByTextForUser(userId, word.word)
+                        // Use the current imagePath from Word Bank if available, otherwise fall back to persisted value
+                        val currentImagePath = currentWord?.imagePath ?: word.imagePath
+                        
+                        SetRepository.SelectedWordConfig(
+                            wordName = word.word,
+                            configurationType = word.configurationType,
+                            selectedLetterIndex = word.selectedLetterIndex,
+                            imagePath = currentImagePath
+                        )
+                    }
+                    
                     _uiState.update {
                         it.copy(
                             setId = setId,
                             setTitle = setDetails.set.title,
                             setDescription = setDetails.set.description ?: "",
-                            selectedWords = setDetails.words.map { word ->
-                                SetRepository.SelectedWordConfig(
-                                    wordName = word.word,
-                                    configurationType = word.configurationType,
-                                    selectedLetterIndex = word.selectedLetterIndex,
-                                    imagePath = word.imagePath
-                                )
-                            },
+                            selectedWords = updatedWords,
                             isLoading = false
                         )
                     }

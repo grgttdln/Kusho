@@ -252,6 +252,14 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                 // Update state holder to show completion screen
                 com.example.kusho.presentation.learn.LearnModeStateHolder.onActivityComplete()
             }
+            MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK -> {
+                android.util.Log.d("PhoneCommunicationMgr", "🎯 Learn Mode feedback received")
+                handleLearnModeFeedback(messageEvent.data)
+            }
+            MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED -> {
+                android.util.Log.d("PhoneCommunicationMgr", "👆 Mobile dismissed Learn Mode feedback")
+                _learnModeFeedbackDismissed.value = System.currentTimeMillis()
+            }
             MESSAGE_PATH_TUTORIAL_MODE_STARTED -> {
                 android.util.Log.d("PhoneCommunicationMgr", "📝 Phone Tutorial Mode started")
                 _isPhoneInTutorialMode.value = true
@@ -310,6 +318,29 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             com.example.kusho.presentation.learn.LearnModeStateHolder.onLetterResult(isCorrect, currentIndex, totalLetters)
         } catch (e: Exception) {
             android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing letter result", e)
+        }
+    }
+
+    /**
+     * Handle Learn Mode feedback from phone
+     */
+    private fun handleLearnModeFeedback(data: ByteArray) {
+        try {
+            val jsonString = String(data)
+            val json = org.json.JSONObject(jsonString)
+
+            val isCorrect = json.optBoolean("isCorrect", false)
+            val predictedLetter = json.optString("predictedLetter", "")
+
+            android.util.Log.d("PhoneCommunicationMgr", "🎯 Learn Mode feedback: correct=$isCorrect, letter=$predictedLetter")
+
+            _learnModeFeedbackEvent.value = LearnModeFeedbackEvent(
+                isCorrect = isCorrect,
+                predictedLetter = predictedLetter,
+                timestamp = System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing Learn Mode feedback", e)
         }
     }
 
@@ -515,6 +546,29 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         }
     }
 
+
+    /**
+     * Notify phone that watch has dismissed the Learn Mode feedback display
+     */
+    suspend fun sendLearnModeFeedbackDismissed() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED,
+                        ByteArray(0)
+                    ).await()
+                    android.util.Log.d("PhoneCommunicationMgr", "📤 Learn Mode feedback dismissed sent to phone")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PhoneCommunicationMgr", "❌ Failed to send Learn Mode feedback dismissed", e)
+        }
+    }
 
     /**
      * Clean up resources

@@ -54,9 +54,9 @@ fun EditSetScreen(
 
     // Load the set when the screen is first displayed or when setId changes
     // The ViewModel will only reload if it's a different set
-    LaunchedEffect(setId) {
-        if (setId > 0L) {
-            viewModel.loadSet(setId)
+    LaunchedEffect(setId, userId) {
+        if (setId > 0L && userId > 0L) {
+            viewModel.loadSet(setId, userId)
         }
     }
 

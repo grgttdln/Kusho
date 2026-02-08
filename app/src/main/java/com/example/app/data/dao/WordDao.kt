@@ -58,6 +58,17 @@ interface WordDao {
     suspend fun getWordById(wordId: Long): Word?
 
     /**
+     * Get a word by its text for a specific user.
+     * Useful for looking up the current state of a word in the Word Bank.
+     *
+     * @param userId The user's ID
+     * @param word The word text to search for
+     * @return The word entity or null if not found
+     */
+    @Query("SELECT * FROM words WHERE userId = :userId AND word = :word LIMIT 1")
+    suspend fun getWordByTextForUser(userId: Long, word: String): Word?
+
+    /**
      * Check if a word already exists for a specific user.
      *
      * @param userId The user's ID

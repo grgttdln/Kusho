@@ -81,6 +81,42 @@ fun LearnModeScreen() {
     // Observe word data from LearnModeStateHolder
     val wordData by LearnModeStateHolder.wordData.collectAsState()
     val sessionData by LearnModeStateHolder.sessionData.collectAsState()
+    val writeTheWordState by LearnModeStateHolder.writeTheWordState.collectAsState()
+
+    // Global feedback state - persists across word changes
+    var showingFeedback by remember { mutableStateOf(false) }
+    var feedbackIsCorrect by remember { mutableStateOf(false) }
+
+    // Listen for feedback from phone at the top level (persists across recompositions)
+    LaunchedEffect(Unit) {
+        phoneCommunicationManager.learnModeFeedbackEvent.collect { event ->
+            if (event.timestamp > 0L) {
+                android.util.Log.d("LearnModeScreen", "📥 Global feedback received: correct=${event.isCorrect}")
+                feedbackIsCorrect = event.isCorrect
+                showingFeedback = true
+            }
+        }
+    }
+
+    // Listen for feedback dismissal from phone at the top level
+    LaunchedEffect(Unit) {
+        var lastDismissTime = 0L
+        phoneCommunicationManager.learnModeFeedbackDismissed.collect { timestamp ->
+            if (timestamp > lastDismissTime && timestamp > 0L && showingFeedback) {
+                lastDismissTime = timestamp
+                android.util.Log.d("LearnModeScreen", "👆 Global: Phone dismissed feedback")
+                showingFeedback = false
+            }
+        }
+    }
+
+    // Reset feedback when word changes
+    LaunchedEffect(wordData.timestamp) {
+        if (wordData.timestamp > 0L) {
+            android.util.Log.d("LearnModeScreen", "🔄 Word changed - resetting feedback state")
+            showingFeedback = false
+        }
+    }
 
     // Debouncing state for skip gesture
     var lastSkipTime by remember { mutableLongStateOf(0L) }
@@ -109,6 +145,14 @@ fun LearnModeScreen() {
                         FillInTheBlankContent(
                             wordData = wordData,
                             phoneCommunicationManager = phoneCommunicationManager,
+                            showingFeedback = showingFeedback,
+                            feedbackIsCorrect = feedbackIsCorrect,
+                            onFeedbackDismissed = {
+                                showingFeedback = false
+                                scope.launch {
+                                    phoneCommunicationManager.sendLearnModeFeedbackDismissed()
+                                }
+                            },
                             onSkip = {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastSkipTime >= 500) {
@@ -124,7 +168,16 @@ fun LearnModeScreen() {
                         // Write the Word mode - show letter-by-letter gesture input
                         WriteTheWordContent(
                             wordData = wordData,
+                            writeTheWordState = writeTheWordState,
                             phoneCommunicationManager = phoneCommunicationManager,
+                            showingFeedback = showingFeedback,
+                            feedbackIsCorrect = feedbackIsCorrect,
+                            onFeedbackDismissed = {
+                                showingFeedback = false
+                                scope.launch {
+                                    phoneCommunicationManager.sendLearnModeFeedbackDismissed()
+                                }
+                            },
                             onSkip = {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastSkipTime >= 500) {
@@ -140,7 +193,16 @@ fun LearnModeScreen() {
                         // Name the Picture mode - letter-by-letter gesture input without showing next letter
                         NameThePictureContent(
                             wordData = wordData,
+                            writeTheWordState = writeTheWordState,
                             phoneCommunicationManager = phoneCommunicationManager,
+                            showingFeedback = showingFeedback,
+                            feedbackIsCorrect = feedbackIsCorrect,
+                            onFeedbackDismissed = {
+                                showingFeedback = false
+                                scope.launch {
+                                    phoneCommunicationManager.sendLearnModeFeedbackDismissed()
+                                }
+                            },
                             onSkip = {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastSkipTime >= 500) {
@@ -264,6 +326,9 @@ private fun DefaultLearnModeContent(onSkip: () -> Unit) {
 private fun FillInTheBlankContent(
     wordData: LearnModeStateHolder.WordData,
     phoneCommunicationManager: PhoneCommunicationManager,
+    showingFeedback: Boolean,
+    feedbackIsCorrect: Boolean,
+    onFeedbackDismissed: () -> Unit,
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
@@ -319,6 +384,9 @@ private fun FillInTheBlankContent(
             classifierResult = classifierResult!!,
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
+            showingFeedback = showingFeedback,
+            feedbackIsCorrect = feedbackIsCorrect,
+            onFeedbackDismissed = onFeedbackDismissed,
             onSkip = onSkip
         )
     }
@@ -331,6 +399,9 @@ private fun FillInTheBlankMainContent(
     classifierResult: ClassifierLoadResult,
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
+    showingFeedback: Boolean,
+    feedbackIsCorrect: Boolean,
+    onFeedbackDismissed: () -> Unit,
     onSkip: () -> Unit
 ) {
     val viewModel: LearnModeViewModel = viewModel(
@@ -364,6 +435,13 @@ private fun FillInTheBlankMainContent(
         }
     }
 
+    // Reset viewModel when feedback is dismissed
+    LaunchedEffect(showingFeedback) {
+        if (!showingFeedback) {
+            viewModel.resetToIdle()
+        }
+    }
+
     // Build masked word display
     val maskedWord = buildMaskedWordDisplay(wordData.word, wordData.maskedIndex)
 
@@ -386,20 +464,31 @@ private fun FillInTheBlankMainContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            when (uiState.state) {
-                LearnModeViewModel.State.IDLE -> IdleContent(
-                    maskedWord = maskedWord,
-                    viewModel = viewModel
+            // Show feedback image if we're in feedback state (synced with phone)
+            if (showingFeedback) {
+                LearnModeFeedbackContent(
+                    isCorrect = feedbackIsCorrect,
+                    onDismiss = onFeedbackDismissed
                 )
-                LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
-                LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
-                LearnModeViewModel.State.PROCESSING -> ProcessingContent()
-                LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
-                LearnModeViewModel.State.RESULT -> ResultContent(
-                    uiState = uiState,
-                    maskedWord = maskedWord,
-                    viewModel = viewModel
-                )
+            } else {
+                when (uiState.state) {
+                    LearnModeViewModel.State.IDLE -> IdleContent(
+                        maskedWord = maskedWord,
+                        viewModel = viewModel
+                    )
+                    LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
+                    LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
+                    LearnModeViewModel.State.PROCESSING -> ProcessingContent()
+                    LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
+                    LearnModeViewModel.State.RESULT -> {
+                        // This state should not be reached as feedback is now controlled by phone
+                        // But just in case, reset to idle
+                        LaunchedEffect(Unit) {
+                            viewModel.resetToIdle()
+                        }
+                        IdleContent(maskedWord = maskedWord, viewModel = viewModel)
+                    }
+                }
             }
         }
     }
@@ -501,35 +590,6 @@ private fun ShowingPredictionContent(uiState: LearnModeViewModel.UiState) {
     }
 }
 
-@Composable
-private fun ResultContent(
-    uiState: LearnModeViewModel.UiState,
-    maskedWord: String,
-    viewModel: LearnModeViewModel
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { viewModel.resetToIdle() },
-        contentAlignment = Alignment.Center
-    ) {
-        // Show correct or wrong mascot image based on result
-        Image(
-            painter = painterResource(
-                id = if (uiState.isCorrect == true) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
-            ),
-            contentDescription = if (uiState.isCorrect == true) "Correct" else "Wrong",
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentScale = ContentScale.Fit
-        )
-    }
-}
-
 /**
  * Build a display string with the masked letter shown as underscore
  */
@@ -546,14 +606,14 @@ private fun buildMaskedWordDisplay(word: String, maskedIndex: Int): String {
 @Composable
 private fun WriteTheWordContent(
     wordData: LearnModeStateHolder.WordData,
+    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
     phoneCommunicationManager: PhoneCommunicationManager,
+    showingFeedback: Boolean,
+    feedbackIsCorrect: Boolean,
+    onFeedbackDismissed: () -> Unit,
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // Observe Write the Word state
-    val writeTheWordState by LearnModeStateHolder.writeTheWordState.collectAsState()
 
     // Initialize dependencies
     var isInitialized by remember { mutableStateOf(false) }
@@ -607,6 +667,9 @@ private fun WriteTheWordContent(
             classifierResult = classifierResult!!,
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
+            showingFeedback = showingFeedback,
+            feedbackIsCorrect = feedbackIsCorrect,
+            onFeedbackDismissed = onFeedbackDismissed,
             onSkip = onSkip
         )
     }
@@ -620,6 +683,9 @@ private fun WriteTheWordMainContent(
     classifierResult: ClassifierLoadResult,
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
+    showingFeedback: Boolean,
+    feedbackIsCorrect: Boolean,
+    onFeedbackDismissed: () -> Unit,
     onSkip: () -> Unit
 ) {
     val viewModel: LearnModeViewModel = viewModel(
@@ -631,13 +697,6 @@ private fun WriteTheWordMainContent(
     // Current letter to input - keep exact case (uppercase or lowercase)
     val currentLetterIndex = writeTheWordState.currentLetterIndex
     val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
-
-    // Track if we're showing feedback (correct/wrong image)
-    var showingFeedback by remember { mutableStateOf(false) }
-    var feedbackIsCorrect by remember { mutableStateOf(false) }
-
-    // Track when this content was composed to filter stale events
-    val contentStartTime = remember { System.currentTimeMillis() }
 
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
@@ -663,20 +722,10 @@ private fun WriteTheWordMainContent(
         }
     }
 
-    // Listen for letter result from phone
-    LaunchedEffect(Unit) {
-        phoneCommunicationManager.letterResultEvent.collect { result ->
-            // Only process events that occurred after this content was composed
-            if (result.timestamp > contentStartTime) {
-                // Show feedback image
-                feedbackIsCorrect = result.isCorrect
-                showingFeedback = true
-
-                // Auto-reset after showing feedback
-                kotlinx.coroutines.delay(1500) // Show feedback for 1.5 seconds
-                showingFeedback = false
-                viewModel.resetToIdle()
-            }
+    // Reset viewModel when feedback is dismissed
+    LaunchedEffect(showingFeedback) {
+        if (!showingFeedback) {
+            viewModel.resetToIdle()
         }
     }
 
@@ -704,7 +753,10 @@ private fun WriteTheWordMainContent(
         ) {
             // Show feedback image if we're in feedback state
             if (showingFeedback) {
-                WriteTheWordFeedbackContent(isCorrect = feedbackIsCorrect)
+                LearnModeFeedbackContent(
+                    isCorrect = feedbackIsCorrect,
+                    onDismiss = onFeedbackDismissed
+                )
             } else {
                 when (uiState.state) {
                     LearnModeViewModel.State.IDLE -> WriteTheWordIdleContent(
@@ -818,12 +870,18 @@ private fun WriteTheWordResultContent(
 }
 
 /**
- * Feedback content for Write the Word mode - shows correct/wrong image
+ * Feedback content for Learn Mode - shows correct/wrong image
+ * User can tap to dismiss (syncs with phone dialog)
  */
 @Composable
-private fun WriteTheWordFeedbackContent(isCorrect: Boolean) {
+private fun LearnModeFeedbackContent(isCorrect: Boolean, onDismiss: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
         // Show correct or wrong mascot image
@@ -847,14 +905,14 @@ private fun WriteTheWordFeedbackContent(isCorrect: Boolean) {
 @Composable
 private fun NameThePictureContent(
     wordData: LearnModeStateHolder.WordData,
+    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
     phoneCommunicationManager: PhoneCommunicationManager,
+    showingFeedback: Boolean,
+    feedbackIsCorrect: Boolean,
+    onFeedbackDismissed: () -> Unit,
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // Observe Write the Word state (reuse the same state for letter tracking)
-    val writeTheWordState by LearnModeStateHolder.writeTheWordState.collectAsState()
 
     // Initialize dependencies
     var isInitialized by remember { mutableStateOf(false) }
@@ -908,6 +966,9 @@ private fun NameThePictureContent(
             classifierResult = classifierResult!!,
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
+            showingFeedback = showingFeedback,
+            feedbackIsCorrect = feedbackIsCorrect,
+            onFeedbackDismissed = onFeedbackDismissed,
             onSkip = onSkip
         )
     }
@@ -921,6 +982,9 @@ private fun NameThePictureMainContent(
     classifierResult: ClassifierLoadResult,
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
+    showingFeedback: Boolean,
+    feedbackIsCorrect: Boolean,
+    onFeedbackDismissed: () -> Unit,
     onSkip: () -> Unit
 ) {
     val viewModel: LearnModeViewModel = viewModel(
@@ -932,13 +996,6 @@ private fun NameThePictureMainContent(
     // Current letter to input - keep exact case (uppercase or lowercase)
     val currentLetterIndex = writeTheWordState.currentLetterIndex
     val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
-
-    // Track if we're showing feedback (correct/wrong image)
-    var showingFeedback by remember { mutableStateOf(false) }
-    var feedbackIsCorrect by remember { mutableStateOf(false) }
-
-    // Track when this content was composed to filter stale events
-    val contentStartTime = remember { System.currentTimeMillis() }
 
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
@@ -964,20 +1021,10 @@ private fun NameThePictureMainContent(
         }
     }
 
-    // Listen for letter result from phone
-    LaunchedEffect(Unit) {
-        phoneCommunicationManager.letterResultEvent.collect { result ->
-            // Only process events that occurred after this content was composed
-            if (result.timestamp > contentStartTime) {
-                // Show feedback image
-                feedbackIsCorrect = result.isCorrect
-                showingFeedback = true
-
-                // Auto-reset after showing feedback
-                kotlinx.coroutines.delay(1500) // Show feedback for 1.5 seconds
-                showingFeedback = false
-                viewModel.resetToIdle()
-            }
+    // Reset viewModel when feedback is dismissed
+    LaunchedEffect(showingFeedback) {
+        if (!showingFeedback) {
+            viewModel.resetToIdle()
         }
     }
 
@@ -1002,7 +1049,10 @@ private fun NameThePictureMainContent(
         ) {
             // Show feedback image if we're in feedback state
             if (showingFeedback) {
-                WriteTheWordFeedbackContent(isCorrect = feedbackIsCorrect)
+                LearnModeFeedbackContent(
+                    isCorrect = feedbackIsCorrect,
+                    onDismiss = onFeedbackDismissed
+                )
             } else {
                 when (uiState.state) {
                     LearnModeViewModel.State.IDLE -> NameThePictureIdleContent(

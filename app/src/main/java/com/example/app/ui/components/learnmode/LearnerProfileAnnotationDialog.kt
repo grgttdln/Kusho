@@ -334,7 +334,9 @@ fun LearnerProfileAnnotationDialog(
                                 placeholder = { Text("Add a note...", color = Color.Gray) },
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = PurpleColor,
-                                    unfocusedBorderColor = Color.LightGray
+                                    unfocusedBorderColor = Color.LightGray,
+                                    focusedTextColor = Color.Black,
+                                    unfocusedTextColor = Color.Black
                                 ),
                                 minLines = 2,
                                 maxLines = 4
@@ -396,7 +398,9 @@ fun LearnerProfileAnnotationDialog(
                                 placeholder = { Text("Add a note...", color = Color.Gray) },
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = PurpleColor,
-                                    unfocusedBorderColor = Color.LightGray
+                                    unfocusedBorderColor = Color.LightGray,
+                                    focusedTextColor = Color.Black,
+                                    unfocusedTextColor = Color.Black
                                 ),
                                 minLines = 2,
                                 maxLines = 4

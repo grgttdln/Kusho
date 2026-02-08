@@ -280,10 +280,12 @@ fun SelectWordsScreen(
         Button(
             onClick = {
                 val configuredWords = selectedWords.map { word ->
+                    val wordObj = availableWords.find { it.word == word }
                     SetRepository.SelectedWordConfig(
                         wordName = word,
                         configurationType = wordConfigurations[word] ?: "Fill in the Blank",
-                        selectedLetterIndex = selectedLetterIndices[word] ?: 0
+                        selectedLetterIndex = selectedLetterIndices[word] ?: 0,
+                        imagePath = wordObj?.imagePath
                     )
                 }
                 onWordsSelected(configuredWords)
