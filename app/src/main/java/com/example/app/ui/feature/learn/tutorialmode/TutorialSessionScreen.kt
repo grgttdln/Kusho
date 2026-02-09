@@ -13,6 +13,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import com.example.app.R
 import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.components.common.ProgressCheckDialog
 import com.example.app.ui.components.common.ProgressIndicator
+import com.example.app.ui.components.tutorial.AnimatedLetterView
 
 private val YellowColor = Color(0xFFEDBB00)
 private val LightYellowColor = Color(0xFFFFF3C4)
@@ -65,7 +68,8 @@ fun TutorialSessionScreen(
     var showProgressCheck by remember { mutableStateOf(false) }
     var isCorrectGesture by remember { mutableStateOf(false) }
     var predictedLetter by remember { mutableStateOf("") }
-    
+    var showAnimation by remember { mutableStateOf(false) } // Toggle for animation vs static image
+
     // Define all letters based on the section
     val allLetters = remember(title) {
         when (title.lowercase()) {
@@ -330,16 +334,48 @@ fun TutorialSessionScreen(
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Display single letter for current step
-                currentLetterRes?.let { letterRes ->
-                    Image(
-                        painter = painterResource(id = letterRes),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .aspectRatio(1f),
-                        contentScale = ContentScale.Fit
+                // Toggle switch in top-right corner
+                Switch(
+                    checked = showAnimation,
+                    onCheckedChange = { showAnimation = it },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = BlueButtonColor,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f)
                     )
+                )
+
+                if (showAnimation) {
+                    // Display animated letter for current step
+                    if (currentLetter.isNotEmpty()) {
+                        AnimatedLetterView(
+                            letter = currentLetter.first(),
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .aspectRatio(1f),
+                            isUpperCase = letterType.lowercase() == "capital",
+                            strokeColor = Color.Black,
+                            numberColor = Color.White,
+                            circleColor = Color.Black,
+                            loopAnimation = true,
+                            loopDelay = 2000
+                        )
+                    }
+                } else {
+                    // Display static drawable image
+                    currentLetterRes?.let { resId ->
+                        Image(
+                            painter = painterResource(id = resId),
+                            contentDescription = "Letter $currentLetter",
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .aspectRatio(1f),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
                 }
             }
         }
