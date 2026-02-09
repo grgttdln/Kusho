@@ -486,9 +486,9 @@ private fun getSimpleLetterStrokes(letter: Char): List<List<Point>> {
         
         // Lowercase letters
         'a' -> listOf(
-            calculateCubicBezierPoints(Point(0.58f, 0.38f), Point(0.22f, 0.42f), Point(0.22f, 0.82f), Point(0.58f, 0.82f)) +
-            calculateCubicBezierPoints(Point(0.58f, 0.82f), Point(0.68f, 0.78f), Point(0.68f, 0.42f), Point(0.58f, 0.38f)),
-            calculateLinePoints(Point(0.65f, 0.35f), Point(0.65f, 0.85f))
+            calculateCubicBezierPoints(Point(0.7f, 0.5f), Point(0.7f, 0.3f), Point(0.3f, 0.3f), Point(0.3f, 0.6f)) +
+                    calculateCubicBezierPoints(Point(0.3f, 0.6f), Point(0.3f, 0.88f), Point(0.7f, 0.88f), Point(0.7f, 0.7f)),
+            calculateLinePoints(Point(0.7f, 0.35f), Point(0.7f, 0.85f))
         )
         'b' -> listOf(
             calculateLinePoints(Point(0.3f, 0.1f), Point(0.3f, 0.85f)),
@@ -580,10 +580,9 @@ private fun getSimpleLetterStrokes(letter: Char): List<List<Point>> {
             calculateLinePoints(Point(0.25f, 0.35f), Point(0.65f, 0.35f))
         )
         'u' -> listOf(
-            calculateLinePoints(Point(0.3f, 0.35f), Point(0.3f, 0.72f)) +
-            calculateCubicBezierPoints(Point(0.3f, 0.72f), Point(0.3f, 0.88f), Point(0.48f, 0.92f), Point(0.67f, 0.78f)),
-            calculateLinePoints(Point(0.67f, 0.78f), Point(0.67f, 0.35f)) +
-            calculateCubicBezierPoints(Point(0.67f, 0.85f), Point(0.72f, 0.88f), Point(0.78f, 0.88f), Point(0.8f, 0.85f))
+            calculateLinePoints(Point(0.3f, 0.35f), Point(0.3f, 0.65f)) +
+            calculateCubicBezierPoints(Point(0.3f, 0.65f), Point(0.3f, 0.9f), Point(0.7f, 0.9f), Point(0.7f, 0.65f)),
+            calculateLinePoints(Point(0.7f, 0.35f), Point(0.7f, 0.85f))
         )
         'v' -> listOf(
             calculateLinePoints(Point(0.25f, 0.35f), Point(0.5f, 0.85f)),
