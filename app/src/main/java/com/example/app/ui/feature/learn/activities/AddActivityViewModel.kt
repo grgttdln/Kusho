@@ -38,11 +38,7 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
 
     private val database = AppDatabase.getInstance(application)
     private val activityRepository = ActivityRepository(database.activityDao())
-    private val setRepository = SetRepository(
-        database.setDao(),
-        database.setWordDao(),
-        database.wordDao()
-    )
+    private val setRepository = SetRepository(database)
 
     private val _uiState = MutableStateFlow(AddActivityUiState())
     val uiState: StateFlow<AddActivityUiState> = _uiState.asStateFlow()

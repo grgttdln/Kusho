@@ -58,11 +58,7 @@ data class LearnModeSessionUiState(
 class LearnModeSessionViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getInstance(application)
-    private val setRepository = SetRepository(
-        database.setDao(),
-        database.setWordDao(),
-        database.wordDao()
-    )
+    private val setRepository = SetRepository(database)
 
     private val _uiState = MutableStateFlow(LearnModeSessionUiState())
     val uiState: StateFlow<LearnModeSessionUiState> = _uiState.asStateFlow()

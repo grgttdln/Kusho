@@ -31,7 +31,7 @@ import com.example.app.ui.feature.classroom.ClassroomViewModel
 fun LearnModeScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onStudentSelected: (studentId: Long, classId: Long) -> Unit = { _, _ -> },
+    onStudentSelected: (studentId: Long, classId: Long, studentName: String) -> Unit = { _, _, _ -> },
     classroomViewModel: ClassroomViewModel = viewModel()
 ) {
     val students by classroomViewModel.allStudents.collectAsState()
@@ -48,17 +48,32 @@ fun LearnModeScreen(
         ) {
             Spacer(Modifier.height(24.dp))
 
-            Image(
-                painter = painterResource(id = R.drawable.ic_kusho),
-                contentDescription = "Kusho Logo",
-                modifier = Modifier
-                    .height(54.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 30.dp)
-                    .offset(x = 10.dp),
-                contentScale = ContentScale.Fit,
-                alignment = Alignment.Center
-            )
+            // Header with back button and Kusho logo
+            Box(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF3FA9F8)
+                    )
+                }
+
+                Image(
+                    painter = painterResource(id = R.drawable.ic_kusho),
+                    contentDescription = "Kusho Logo",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .offset(x = 10.dp)
+                        .align(Alignment.Center),
+                    alignment = Alignment.Center
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
 
@@ -125,7 +140,7 @@ fun LearnModeScreen(
                                     studentName = student.fullName,
                                     profileImagePath = student.pfpPath,
                                     onClick = {
-                                        onStudentSelected(student.studentId, 0L)
+                                        onStudentSelected(student.studentId, 0L, student.fullName)
                                     },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -140,20 +155,6 @@ fun LearnModeScreen(
 
                 Spacer(Modifier.height(24.dp))
             }
-        }
-
-        // Back button on top of content
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 8.dp, top = 25.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color(0xFF2196F3)
-            )
         }
     }
 }

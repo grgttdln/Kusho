@@ -3,7 +3,6 @@ package com.example.app.ui.feature.learn.activities
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +30,7 @@ import com.example.app.data.entity.Set
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.DeleteConfirmationDialog
 import com.example.app.ui.components.DeleteType
+import com.example.app.ui.components.SetItemCard
 
 /**
  * Screen to display and manage sets within a specific activity.
@@ -73,13 +73,13 @@ fun ActivitySetsScreen(
             Spacer(Modifier.height(24.dp))
 
             // Back Button, Kusho Logo, and Edit Button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                // Back Button (left)
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.offset(x = (-12).dp)
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -88,20 +88,22 @@ fun ActivitySetsScreen(
                     )
                 }
 
+                // Kusho Logo (centered)
                 Image(
                     painter = painterResource(id = R.drawable.ic_kusho),
                     contentDescription = "Kusho Logo",
                     modifier = Modifier
+                        .fillMaxWidth()
                         .height(54.dp)
                         .offset(x = 10.dp)
-                        .weight(1f),
+                        .align(Alignment.Center),
                     alignment = Alignment.Center
                 )
 
-                // Edit/Delete mode toggle button
+                // Edit/Delete mode toggle button (right)
                 IconButton(
                     onClick = { isEditMode = !isEditMode },
-                    modifier = Modifier.offset(x = 12.dp)
+                    modifier = Modifier.align(Alignment.CenterEnd)
                 ) {
                     Icon(
                         imageVector = if (isEditMode) Icons.Default.Delete else Icons.Default.Edit,
@@ -190,18 +192,19 @@ fun ActivitySetsScreen(
                                         }
                                     )
                             ) {
-                                ActivitySetCard(
-                                    title = set.title,
-                                    itemCount = set.itemCount,
-                                    onClick = {
-                                        if (isEditMode) {
-                                            setToUnlink = set
-                                            showDeleteDialog = true
-                                        } else {
-                                            onViewSetClick(set.id)
-                                        }
+                            SetItemCard(
+                                title = set.title,
+                                iconRes = R.drawable.ic_pencil,
+                                itemCount = set.itemCount,
+                                onClick = {
+                                    if (isEditMode) {
+                                        setToUnlink = set
+                                        showDeleteDialog = true
+                                    } else {
+                                        onViewSetClick(set.id)
                                     }
-                                )
+                                }
+                            )
                             }
                         }
                     }
@@ -267,77 +270,5 @@ fun ActivitySetsScreen(
     }
 }
 
-/**
- * Beautiful card component for displaying a set within an activity.
- * Matches the SetItemCard design with title on the left, large pencil icon on the right.
- */
-@Composable
-private fun ActivitySetCard(
-    title: String,
-    itemCount: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(150.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFFF8FBFF))
-            .border(
-                width = 1.5.dp,
-                color = Color(0xFFB8DDF8),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Title and word count on the left
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 24.dp, end = 8.dp, top = 16.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = title,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0B0B0B),
-                    lineHeight = 28.sp,
-                    maxLines = 2
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "$itemCount words",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color(0xFF808080)
-                )
-            }
 
-            // Pencil icon on the right
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(180.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_pencil),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .requiredSize(400.dp)
-                        .offset(x = 60.dp, y = (-80).dp),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.Center
-                )
-            }
-        }
-    }
-}
 

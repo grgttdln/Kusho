@@ -1,6 +1,8 @@
 package com.example.app.data.repository
 
 import android.util.Log
+import androidx.room.withTransaction
+import com.example.app.data.AppDatabase
 import com.example.app.data.dao.SetDao
 import com.example.app.data.dao.SetWordDao
 import com.example.app.data.dao.WordDao
@@ -20,10 +22,11 @@ const val TAG_REPO = "SetRepository"
  * All database operations are performed on the IO dispatcher.
  */
 class SetRepository(
-    private val setDao: SetDao,
-    private val setWordDao: SetWordDao,
-    private val wordDao: WordDao
+    private val database: AppDatabase
 ) {
+    private val setDao: SetDao = database.setDao()
+    private val setWordDao: SetWordDao = database.setWordDao()
+    private val wordDao: WordDao = database.wordDao()
 
     /**
      * Result class for add set operation.
@@ -34,12 +37,25 @@ class SetRepository(
     }
 
     /**
+     * Validates that all selected words exist in the user's word list.
+     * Returns a Pair of (isValid, missingWords).
+     */
+    private fun validateWordsExist(
+        selectedWords: List<SelectedWordConfig>,
+        wordMap: Map<String, com.example.app.data.entity.Word>
+    ): Pair<Boolean, List<String>> {
+        val missingWords = selectedWords.map { it.wordName }.filter { it !in wordMap }
+        return Pair(missingWords.isEmpty(), missingWords)
+    }
+
+    /**
      * Data class representing a selected word with its configuration type.
      */
     data class SelectedWordConfig(
         val wordName: String,
         val configurationType: String,
-        val selectedLetterIndex: Int = 0 // Index of the selected letter for "Fill in the Blank"
+        val selectedLetterIndex: Int = 0, // Index of the selected letter for "Fill in the Blank"
+        val imagePath: String? = null // Optional image path for "Name the Picture" question type
     )
 
     /**
@@ -79,6 +95,7 @@ class SetRepository(
     /**
      * Add a new set with associated words and their configuration types.
      * Sets are created independently - they are not tied to any activity during creation.
+     * This operation is atomic - if any part fails, the entire operation is rolled back.
      *
      * @param title The set title
      * @param description The set description
@@ -98,23 +115,50 @@ class SetRepository(
         Log.d(TAG_REPO, "  - userId: $userId")
         Log.d(TAG_REPO, "  - selectedWords count: ${selectedWords.size}")
         
+        // Pre-validation before any database operations
+        if (title.isBlank()) {
+            Log.e(TAG_REPO, "❌ Validation error: Title is blank")
+            return@withContext AddSetResult.Error("Set title cannot be empty")
+        }
+        
+        if (selectedWords.isEmpty()) {
+            Log.e(TAG_REPO, "❌ Validation error: No words selected")
+            return@withContext AddSetResult.Error("At least one word must be selected")
+        }
+        
+        if (selectedWords.size < 3) {
+            Log.e(TAG_REPO, "❌ Validation error: Less than 3 words")
+            return@withContext AddSetResult.Error("Set must contain at least 3 words")
+        }
+        
+        if (setDao.setTitleExistsForUser(userId, title.trim())) {
+            Log.e(TAG_REPO, "❌ Validation error: Duplicate set title")
+            return@withContext AddSetResult.Error("A set with this title already exists")
+        }
+        
+        // Load words and validate ALL exist BEFORE any DB operations
+        Log.d(TAG_REPO, "📝 Loading words for userId: $userId")
+        val userWords = wordDao.getWordsByUserIdOnce(userId)
+        Log.d(TAG_REPO, "✅ Loaded ${userWords.size} words for user")
+        
+        val wordMap = userWords.associateBy { it.word }
+        val (allWordsExist, missingWords) = validateWordsExist(selectedWords, wordMap)
+        
+        if (!allWordsExist) {
+            Log.e(TAG_REPO, "❌ Validation error: Words not found in database: $missingWords")
+            return@withContext AddSetResult.Error(
+                "Some words were not found: ${missingWords.joinToString(", ")}. Please refresh and try again."
+            )
+        }
+        
+        Log.d(TAG_REPO, "✅ All ${selectedWords.size} words validated successfully")
+        
+        // ATOMIC TRANSACTION: All operations succeed or all fail
         return@withContext try {
-            if (title.isBlank()) {
-                Log.e(TAG_REPO, "❌ Validation error: Title is blank")
-                AddSetResult.Error("Set title cannot be empty")
-            } else if (selectedWords.isEmpty()) {
-                Log.e(TAG_REPO, "❌ Validation error: No words selected")
-                AddSetResult.Error("At least one word must be selected")
-            } else if (selectedWords.size < 3) {
-                Log.e(TAG_REPO, "❌ Validation error: Less than 3 words")
-                AddSetResult.Error("Set must contain at least 3 words")
-            } else if (setDao.setTitleExistsForUser(userId, title.trim())) {
-                Log.e(TAG_REPO, "❌ Validation error: Duplicate set title")
-                AddSetResult.Error("A set with this title already exists")
-            } else {
-                Log.d(TAG_REPO, "✅ Validation passed")
+            database.withTransaction {
+                Log.d(TAG_REPO, "📝 Starting atomic transaction...")
                 
-                // Create and insert the set (NO activityId - sets are independent)
+                // Create and insert the set
                 val set = Set(
                     userId = userId,
                     title = title.trim(),
@@ -125,48 +169,33 @@ class SetRepository(
                 val setId = setDao.insertSet(set)
                 Log.d(TAG_REPO, "✅ Set inserted with ID: $setId")
 
-                // Get all words for the user
-                Log.d(TAG_REPO, "📝 Loading words for userId: $userId")
-                val userWords = wordDao.getWordsByUserIdOnce(userId)
-                Log.d(TAG_REPO, "✅ Loaded ${userWords.size} words for user")
-                
-                val wordMap = userWords.associateBy { it.word }
-
-                // Create SetWord entries for each selected word
+                // Create SetWord entries for each selected word (all words are guaranteed to exist)
                 Log.d(TAG_REPO, "📝 Creating SetWord entries for ${selectedWords.size} selected words...")
-                val setWords = selectedWords.mapNotNull { selected ->
-                    val word = wordMap[selected.wordName]
-                    if (word != null) {
-                        Log.d(TAG_REPO, "  ✅ Found word '${selected.wordName}' with ID: ${word.id}")
-                        SetWord(
-                            setId = setId,
-                            wordId = word.id,
-                            configurationType = selected.configurationType,
-                            selectedLetterIndex = selected.selectedLetterIndex
-                        )
-                    } else {
-                        Log.w(TAG_REPO, "  ⚠️ Word '${selected.wordName}' not found in user's words")
-                        null
-                    }
+                val setWords = selectedWords.map { selected ->
+                    val word = wordMap[selected.wordName]!!
+                    Log.d(TAG_REPO, "  ✅ Creating SetWord for '${selected.wordName}' with ID: ${word.id}")
+                    SetWord(
+                        setId = setId,
+                        wordId = word.id,
+                        configurationType = selected.configurationType,
+                        selectedLetterIndex = selected.selectedLetterIndex,
+                        imagePath = selected.imagePath // Persist the image path
+                    )
                 }
                 
-                Log.d(TAG_REPO, "✅ Created ${setWords.size} SetWord entities")
-
-                // Insert all set-word relationships
-                if (setWords.isNotEmpty()) {
-                    Log.d(TAG_REPO, "📝 Inserting ${setWords.size} SetWord entries...")
-                    setWordDao.insertSetWords(setWords)
-                    Log.d(TAG_REPO, "✅ SetWords inserted successfully")
-                } else {
-                    Log.w(TAG_REPO, "⚠️ No SetWords to insert")
-                }
-
+                Log.d(TAG_REPO, "📝 Inserting ${setWords.size} SetWord entries...")
+                setWordDao.insertSetWords(setWords)
+                Log.d(TAG_REPO, "✅ SetWords inserted successfully")
+                
+                Log.d(TAG_REPO, "✅ Transaction committed successfully")
+                setId
+            }.let { setId ->
                 Log.d(TAG_REPO, "✅ addSetWithWords() SUCCESS - returning setId: $setId")
                 AddSetResult.Success(setId)
             }
         } catch (e: Exception) {
-            Log.e(TAG_REPO, "❌ Exception in addSetWithWords: ${e.message}", e)
-            AddSetResult.Error(e.message ?: "Failed to add set with words")
+            Log.e(TAG_REPO, "❌ Transaction failed in addSetWithWords: ${e.message}", e)
+            AddSetResult.Error("Failed to create set: ${e.message ?: "Unknown error"}")
         }
     }
 
@@ -261,6 +290,7 @@ class SetRepository(
 
     /**
      * Get detailed information about a set including its words and configuration types.
+     * Uses imagePath from SetWord (persisted during set creation) rather than Word entity.
      *
      * @param setId The ID of the set
      * @return SetDetails containing the set info and associated words
@@ -276,7 +306,7 @@ class SetRepository(
                     word = word?.word ?: "Unknown",
                     configurationType = setWord.configurationType,
                     selectedLetterIndex = setWord.selectedLetterIndex,
-                    imagePath = word?.imagePath
+                    imagePath = setWord.imagePath // Use persisted imagePath from SetWord
                 )
             }
 
@@ -303,6 +333,8 @@ class SetRepository(
 
     /**
      * Update an existing set with new title, description, and words.
+     * This operation is atomic - if any part fails, the entire operation is rolled back,
+     * preventing data loss (the set will retain its original words).
      *
      * @param setId The ID of the set to update
      * @param title The new title
@@ -324,24 +356,53 @@ class SetRepository(
         Log.d(TAG_REPO, "  - description: '$description'")
         Log.d(TAG_REPO, "  - selectedWords count: ${selectedWords.size}")
 
+        // Pre-validation before any database operations
+        if (title.isBlank()) {
+            Log.e(TAG_REPO, "❌ Validation error: Title is blank")
+            return@withContext AddSetResult.Error("Set title cannot be empty")
+        }
+
+        if (title.trim().length > 30) {
+            Log.e(TAG_REPO, "❌ Validation error: Title too long")
+            return@withContext AddSetResult.Error("Set title must be 30 characters or less")
+        }
+
+        if (selectedWords.isEmpty()) {
+            Log.e(TAG_REPO, "❌ Validation error: No words selected")
+            return@withContext AddSetResult.Error("At least one word must be selected")
+        }
+
+        if (selectedWords.size < 3) {
+            Log.e(TAG_REPO, "❌ Validation error: Less than 3 words")
+            return@withContext AddSetResult.Error("Set must contain at least 3 words")
+        }
+
+        if (setDao.setTitleExistsForUserExcluding(userId, title.trim(), setId)) {
+            Log.e(TAG_REPO, "❌ Validation error: Duplicate set title")
+            return@withContext AddSetResult.Error("A set with this title already exists")
+        }
+
+        // Load words and validate ALL exist BEFORE any DB operations
+        Log.d(TAG_REPO, "📝 Loading words for userId: $userId")
+        val userWords = wordDao.getWordsByUserIdOnce(userId)
+        Log.d(TAG_REPO, "✅ Loaded ${userWords.size} words for user")
+
+        val wordMap = userWords.associateBy { it.word }
+        val (allWordsExist, missingWords) = validateWordsExist(selectedWords, wordMap)
+
+        if (!allWordsExist) {
+            Log.e(TAG_REPO, "❌ Validation error: Words not found in database: $missingWords")
+            return@withContext AddSetResult.Error(
+                "Some words were not found: ${missingWords.joinToString(", ")}. Please refresh and try again."
+            )
+        }
+
+        Log.d(TAG_REPO, "✅ All ${selectedWords.size} words validated successfully")
+
+        // ATOMIC TRANSACTION: All operations succeed or all fail (prevents data loss)
         return@withContext try {
-            if (title.isBlank()) {
-                Log.e(TAG_REPO, "❌ Validation error: Title is blank")
-                AddSetResult.Error("Set title cannot be empty")
-            } else if (title.trim().length > 30) {
-                Log.e(TAG_REPO, "❌ Validation error: Title too long")
-                AddSetResult.Error("Set title must be 30 characters or less")
-            } else if (selectedWords.isEmpty()) {
-                Log.e(TAG_REPO, "❌ Validation error: No words selected")
-                AddSetResult.Error("At least one word must be selected")
-            } else if (selectedWords.size < 3) {
-                Log.e(TAG_REPO, "❌ Validation error: Less than 3 words")
-                AddSetResult.Error("Set must contain at least 3 words")
-            } else if (setDao.setTitleExistsForUserExcluding(userId, title.trim(), setId)) {
-                Log.e(TAG_REPO, "❌ Validation error: Duplicate set title")
-                AddSetResult.Error("A set with this title already exists")
-            } else {
-                Log.d(TAG_REPO, "✅ Validation passed")
+            database.withTransaction {
+                Log.d(TAG_REPO, "📝 Starting atomic transaction...")
 
                 // Update the set
                 val updatedRows = setDao.updateSet(
@@ -357,48 +418,33 @@ class SetRepository(
                 val deletedCount = setWordDao.deleteSetWords(setId)
                 Log.d(TAG_REPO, "✅ Deleted $deletedCount existing SetWord entries")
 
-                // Get all words for the user
-                Log.d(TAG_REPO, "📝 Loading words for userId: $userId")
-                val userWords = wordDao.getWordsByUserIdOnce(userId)
-                Log.d(TAG_REPO, "✅ Loaded ${userWords.size} words for user")
-
-                val wordMap = userWords.associateBy { it.word }
-
-                // Create new SetWord entries for each selected word
+                // Create new SetWord entries for each selected word (all guaranteed to exist)
                 Log.d(TAG_REPO, "📝 Creating SetWord entries for ${selectedWords.size} selected words...")
-                val setWords = selectedWords.mapNotNull { selected ->
-                    val word = wordMap[selected.wordName]
-                    if (word != null) {
-                        Log.d(TAG_REPO, "  ✅ Found word '${selected.wordName}' with ID: ${word.id}")
-                        SetWord(
-                            setId = setId,
-                            wordId = word.id,
-                            configurationType = selected.configurationType,
-                            selectedLetterIndex = selected.selectedLetterIndex
-                        )
-                    } else {
-                        Log.w(TAG_REPO, "  ⚠️ Word '${selected.wordName}' not found in user's words")
-                        null
-                    }
+                val setWords = selectedWords.map { selected ->
+                    val word = wordMap[selected.wordName]!!
+                    Log.d(TAG_REPO, "  ✅ Creating SetWord for '${selected.wordName}' with ID: ${word.id}")
+                    SetWord(
+                        setId = setId,
+                        wordId = word.id,
+                        configurationType = selected.configurationType,
+                        selectedLetterIndex = selected.selectedLetterIndex,
+                        imagePath = selected.imagePath // Persist the image path
+                    )
                 }
 
-                Log.d(TAG_REPO, "✅ Created ${setWords.size} SetWord entities")
+                Log.d(TAG_REPO, "📝 Inserting ${setWords.size} SetWord entries...")
+                setWordDao.insertSetWords(setWords)
+                Log.d(TAG_REPO, "✅ SetWords inserted successfully")
 
-                // Insert all new set-word relationships
-                if (setWords.isNotEmpty()) {
-                    Log.d(TAG_REPO, "📝 Inserting ${setWords.size} SetWord entries...")
-                    setWordDao.insertSetWords(setWords)
-                    Log.d(TAG_REPO, "✅ SetWords inserted successfully")
-                } else {
-                    Log.w(TAG_REPO, "⚠️ No SetWords to insert")
-                }
-
+                Log.d(TAG_REPO, "✅ Transaction committed successfully")
+                setId
+            }.let { setId ->
                 Log.d(TAG_REPO, "✅ updateSetWithWords() SUCCESS")
                 AddSetResult.Success(setId)
             }
         } catch (e: Exception) {
-            Log.e(TAG_REPO, "❌ Exception in updateSetWithWords: ${e.message}", e)
-            AddSetResult.Error(e.message ?: "Failed to update set with words")
+            Log.e(TAG_REPO, "❌ Transaction failed in updateSetWithWords: ${e.message}", e)
+            AddSetResult.Error("Failed to update set: ${e.message ?: "Unknown error"}")
         }
     }
 }

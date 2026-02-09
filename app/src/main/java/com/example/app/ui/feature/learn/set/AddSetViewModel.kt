@@ -25,11 +25,7 @@ data class AddSetUiState(
 class AddSetViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getInstance(application)
-    private val setRepository = SetRepository(
-        database.setDao(),
-        database.setWordDao(),
-        database.wordDao()
-    )
+    private val setRepository = SetRepository(database)
 
     private val _uiState = MutableStateFlow(AddSetUiState())
     val uiState: StateFlow<AddSetUiState> = _uiState.asStateFlow()

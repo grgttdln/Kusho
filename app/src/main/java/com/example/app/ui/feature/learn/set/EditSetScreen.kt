@@ -54,9 +54,9 @@ fun EditSetScreen(
 
     // Load the set when the screen is first displayed or when setId changes
     // The ViewModel will only reload if it's a different set
-    LaunchedEffect(setId) {
-        if (setId > 0L) {
-            viewModel.loadSet(setId)
+    LaunchedEffect(setId, userId) {
+        if (setId > 0L && userId > 0L) {
+            viewModel.loadSet(setId, userId)
         }
     }
 
@@ -110,13 +110,13 @@ fun EditSetScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Header with back button and logo
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
+                    // Back Button (left)
                     IconButton(
                         onClick = { currentOnBackClick() },
-                        modifier = Modifier.offset(x = (-12).dp)
+                        modifier = Modifier.align(Alignment.CenterStart)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -125,17 +125,17 @@ fun EditSetScreen(
                         )
                     }
 
+                    // Kusho Logo (centered)
                     Image(
                         painter = painterResource(id = R.drawable.ic_kusho),
                         contentDescription = "Kusho Logo",
                         modifier = Modifier
+                            .fillMaxWidth()
                             .height(54.dp)
-                            .weight(1f),
+                            .offset(x = 10.dp)
+                            .align(Alignment.Center),
                         alignment = Alignment.Center
                     )
-
-                    // Spacer to balance the back button and center the logo
-                    Spacer(modifier = Modifier.width(29.dp))
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -267,6 +267,7 @@ fun EditSetScreen(
                                     EditWordWithConfigItem(
                                         index = index + 1,
                                         word = wordConfig.wordName,
+                                        hasImage = wordConfig.imagePath != null,
                                         configurationType = wordConfig.configurationType,
                                         selectedLetterIndex = wordConfig.selectedLetterIndex,
                                         onConfigurationChange = { newConfig ->
@@ -407,6 +408,7 @@ fun EditSetScreen(
 private fun EditWordWithConfigItem(
     index: Int,
     word: String,
+    hasImage: Boolean,
     configurationType: String,
     selectedLetterIndex: Int,
     onConfigurationChange: (String) -> Unit,
@@ -416,8 +418,14 @@ private fun EditWordWithConfigItem(
 ) {
     var expandedDropdown by remember { mutableStateOf(false) }
 
-    // Dropdown options
-    val dropdownOptions = listOf("Fill in the Blank", "Name the Picture", "Write the Word")
+    // Filter dropdown options based on whether word has an image
+    val dropdownOptions = remember(hasImage) {
+        if (hasImage) {
+            listOf("Fill in the Blank", "Name the Picture", "Write the Word")
+        } else {
+            listOf("Fill in the Blank", "Write the Word")
+        }
+    }
 
     // Show letter selection only for "Fill in the Blank" mode
     val showLetterSelection = configurationType == "Fill in the Blank"

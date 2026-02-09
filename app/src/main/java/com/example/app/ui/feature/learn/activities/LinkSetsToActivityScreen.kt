@@ -1,5 +1,6 @@
 package com.example.app.ui.feature.learn.activities
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -67,16 +70,14 @@ fun LinkSetsToActivityScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Back Button
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Header with back button and logo
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                // Back Button (left)
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.offset(x = (-12).dp)
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -85,7 +86,17 @@ fun LinkSetsToActivityScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                // Kusho Logo (centered)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_kusho),
+                    contentDescription = "Kusho Logo",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .offset(x = 10.dp)
+                        .align(Alignment.Center),
+                    alignment = Alignment.Center
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))

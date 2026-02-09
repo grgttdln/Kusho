@@ -59,7 +59,7 @@ private data class StudentFormData(
 fun AddStudentScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onStudentAdded: (studentName: String) -> Unit,
+    onStudentAdded: (studentName: String, studentCount: Int) -> Unit,
     viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -229,10 +229,10 @@ fun AddStudentScreen(
                             onSuccess = { _: Long ->
                                 addedCount++
                                 lastAddedName = fullName
-                                if (addedCount == validStudents.size) {
-                                    isAdding = false
-                                    onStudentAdded(lastAddedName)
-                                }
+                                            if (addedCount == validStudents.size) {
+                                                    isAdding = false
+                                                    onStudentAdded(lastAddedName, addedCount)
+                                                }
                             },
                             onError = { error: String ->
                                 isAdding = false
@@ -302,37 +302,43 @@ private fun StudentCard(
             ) {
                 // Profile Picture with dashed border
                 Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .dashedBorder(
-                            color = Color(0xFF90CAF9),
-                            shape = RoundedCornerShape(12.dp),
-                            strokeWidth = 2.dp,
-                            dashLength = 8.dp,
-                            gapLength = 4.dp
-                        )
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFE3F2FD))
-                        .clickable { onImageClick() },
+                    modifier = Modifier.size(100.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (profileImageUri != null) {
-                        AsyncImage(
-                            model = profileImageUri,
-                            contentDescription = "Student Profile",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(id = R.drawable.dis_pfp),
-                            contentDescription = null,
-                            modifier = Modifier.size(50.dp),
-                            contentScale = ContentScale.Fit
-                        )
+                    // Main dashed border box with clipped content
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .dashedBorder(
+                                color = Color(0xFF90CAF9),
+                                shape = RoundedCornerShape(12.dp),
+                                strokeWidth = 2.dp,
+                                dashLength = 8.dp,
+                                gapLength = 4.dp
+                            )
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFE3F2FD))
+                            .clickable { onImageClick() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (profileImageUri != null) {
+                            AsyncImage(
+                                model = profileImageUri,
+                                contentDescription = "Student Profile",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.dis_pfp),
+                                contentDescription = null,
+                                modifier = Modifier.size(50.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     }
-                    
-                    // Plus/Close button
+
+                    // Plus/Close button - positioned outside the clipped box
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -495,6 +501,6 @@ private fun Modifier.dashedBorder(
 fun AddStudentScreenPreview() {
     AddStudentScreen(
         onNavigateBack = {},
-        onStudentAdded = {}
+        onStudentAdded = { _, _ -> }
     )
 }

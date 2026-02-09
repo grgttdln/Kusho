@@ -1,5 +1,7 @@
 package com.example.app.ui.feature.learn
 
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -8,9 +10,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -20,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.example.app.R
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.material3.MaterialTheme
+import kotlin.random.Random
 
 /**
  * Reusable confirmation screen for various features and flows.
@@ -43,6 +48,9 @@ fun ConfirmationScreen(
             .fillMaxSize()
             .background(Color.White)
     ) {
+        // Confetti Animation
+        ConfettiAnimationConfirmation()
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -138,5 +146,90 @@ fun ConfirmationScreenPreview() {
             subtitle = "Meet the Vowels",
             onContinueClick = {}
         )
+    }
+}
+
+@Composable
+fun ConfettiAnimationConfirmation() {
+    val confettiColors = listOf(
+        Color(0xFFFFC107), // Yellow
+        Color(0xFFE91E63), // Pink
+        Color(0xFF2196F3), // Blue
+        Color(0xFF4CAF50), // Green
+        Color(0xFFFF5722), // Red-Orange
+        Color(0xFF9C27B0)  // Purple
+    )
+
+    // Create 20 confetti pieces
+    for (i in 0..19) {
+        ConfettiPieceConfirmation(
+            color = confettiColors.random(),
+            startX = Random.nextFloat(),
+            delay = Random.nextInt(0, 500)
+        )
+    }
+}
+
+@Composable
+fun ConfettiPieceConfirmation(
+    color: Color,
+    startX: Float,
+    delay: Int
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "confetti")
+
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = -100f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 3000 + Random.nextInt(-500, 500),
+                easing = LinearEasing,
+                delayMillis = delay
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "confettiY"
+    )
+
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1000 + Random.nextInt(-200, 200),
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "confettiRotation"
+    )
+
+    val offsetX by infiniteTransition.animateFloat(
+        initialValue = startX * 400f,
+        targetValue = startX * 400f + Random.nextFloat() * 100f - 50f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 2000,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "confettiX"
+    )
+
+    Box(
+        modifier = Modifier
+            .offset(x = offsetX.dp, y = offsetY.dp)
+            .size(12.dp)
+            .graphicsLayer {
+                rotationZ = rotation
+            }
+    ) {
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            drawRect(color = color)
+        }
     }
 }

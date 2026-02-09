@@ -30,11 +30,7 @@ data class LinkSetsToActivityUiState(
 class LinkSetsToActivityViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getInstance(application)
-    private val setRepository = SetRepository(
-        database.setDao(),
-        database.setWordDao(),
-        database.wordDao()
-    )
+    private val setRepository = SetRepository(database)
 
     private val _uiState = MutableStateFlow(LinkSetsToActivityUiState())
     val uiState: StateFlow<LinkSetsToActivityUiState> = _uiState.asStateFlow()

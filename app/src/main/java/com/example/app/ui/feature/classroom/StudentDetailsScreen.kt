@@ -118,16 +118,20 @@ fun StudentDetailsScreen(
     ) {
         Spacer(Modifier.height(24.dp))
 
-        // Back Button
-        IconButton(
-            onClick = { onNavigateBack() },
-            modifier = Modifier.offset(x = (-12).dp)
+        // Header with back button
+        Box(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color(0xFF3FA9F8)
-            )
+            IconButton(
+                onClick = { onNavigateBack() },
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color(0xFF3FA9F8)
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))

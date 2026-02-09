@@ -222,6 +222,7 @@ fun YourSetsScreen(
                             SetItemCard(
                                 title = set.title,
                                 iconRes = R.drawable.ic_pencil,
+                                itemCount = set.itemCount,
                                 onClick = {
                                     if (isEditMode) {
                                         setToDelete = set

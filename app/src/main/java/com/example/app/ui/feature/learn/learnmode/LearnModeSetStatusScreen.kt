@@ -53,38 +53,39 @@ fun LearnModeSetStatusScreen(
     var selectedSet by remember { mutableStateOf<ActivitySetStatus?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
-
-        // ✅ Back button stays fixed at the top
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 8.dp, top = 25.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color(0xFF2196F3)
-            )
-        }
-
-        // ✅ Scrollable content using LazyVerticalGrid (good for MANY cards)
+        // Scrollable content using LazyVerticalGrid (good for MANY cards)
         // We include the header as a "full span" item, then the cards as 2 columns.
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             state = gridState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp)
-                // Push content down below the back button area
-                .padding(top = 90.dp),
+                .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(
-                top = 0.dp,
+                top = 24.dp,
                 bottom = 110.dp // ✅ so last row isn't covered by Start button
             )
         ) {
+            // Back button as first item
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color(0xFF3FA9F8)
+                        )
+                    }
+                }
+            }
+
             // Header takes full width (spans both columns)
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
                 Column(

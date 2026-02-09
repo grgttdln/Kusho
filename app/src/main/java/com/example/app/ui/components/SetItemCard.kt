@@ -26,8 +26,9 @@ import com.example.app.R
  * Reusable Set Item Card component for displaying sets with an icon.
  * Used in Your Sets screen to show different phonics sets.
  *
- * @param title The title text to display (e.g., "Meet the Vowels")
- * @param iconRes The drawable resource ID for the icon (e.g., R.drawable.ic_pencil)
+ * @param title The title text to display (e.g. "Meet the Vowels")
+ * @param iconRes The drawable resource ID for the icon (e.g. R.drawable.ic_pencil)
+ * @param itemCount Optional number of items in the set (displays "X words" if provided)
  * @param onClick Callback when the card is clicked
  * @param isSelected Whether the card is selected (shows blue highlight and checkmark)
  * @param modifier Optional modifier for customization
@@ -36,6 +37,7 @@ import com.example.app.R
 fun SetItemCard(
     title: String,
     iconRes: Int,
+    itemCount: Int? = null,
     onClick: () -> Unit,
     isSelected: Boolean = false,
     modifier: Modifier = Modifier
@@ -60,31 +62,45 @@ fun SetItemCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Title text on the left
-            Text(
-                text = title,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0B0B0B),
-                lineHeight = 28.sp,
+            // Title and optional item count on the left
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 24.dp, end = 8.dp)
-            )
+                    .padding(start = 24.dp, end = 8.dp, top = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0B0B0B),
+                    lineHeight = 26.sp,
+                    maxLines = 2
+                )
+                if (itemCount != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "$itemCount words",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF808080)
+                    )
+                }
+            }
 
             // Icon on the right - fills the height and extends to fill container
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(220.dp),
+                    .width(180.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(id = iconRes),
                     contentDescription = title,
                     modifier = Modifier
-                        .requiredSize(500.dp)
-                        .offset(x = 80.dp, y = -110.dp),
+                        .requiredSize(400.dp)
+                        .offset(x = 100.dp, y = -80.dp),
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.Center
                 )

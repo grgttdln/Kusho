@@ -110,18 +110,22 @@ fun EditClassScreen(
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
             ) {
-                Spacer(Modifier.height(45.dp))
+                Spacer(Modifier.height(24.dp))
 
-                // Back Button - matching YourActivitiesScreen style
-                IconButton(
-                    onClick = onNavigateBack,
-                    modifier = Modifier.offset(x = (-12).dp)
+                // Header with back button
+                Box(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color(0xFF3FA9F8)
-                    )
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color(0xFF3FA9F8)
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(28.dp))

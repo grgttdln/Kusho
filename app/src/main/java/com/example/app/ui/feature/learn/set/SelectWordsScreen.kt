@@ -1,5 +1,6 @@
 package com.example.app.ui.feature.learn.set
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,12 +26,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.app.R
 import com.example.app.data.entity.Word
 import com.example.app.data.repository.SetRepository
 import com.example.app.ui.components.BottomNavBar
@@ -76,14 +80,14 @@ fun SelectWordsScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Header with back button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Header with back button and logo
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                // Back Button (left)
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.offset(x = (-12).dp)
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -92,8 +96,17 @@ fun SelectWordsScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.width(48.dp))
+                // Kusho Logo (centered)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_kusho),
+                    contentDescription = "Kusho Logo",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .offset(x = 10.dp)
+                        .align(Alignment.Center),
+                    alignment = Alignment.Center
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -267,10 +280,12 @@ fun SelectWordsScreen(
         Button(
             onClick = {
                 val configuredWords = selectedWords.map { word ->
+                    val wordObj = availableWords.find { it.word == word }
                     SetRepository.SelectedWordConfig(
                         wordName = word,
                         configurationType = wordConfigurations[word] ?: "Fill in the Blank",
-                        selectedLetterIndex = selectedLetterIndices[word] ?: 0
+                        selectedLetterIndex = selectedLetterIndices[word] ?: 0,
+                        imagePath = wordObj?.imagePath
                     )
                 }
                 onWordsSelected(configuredWords)

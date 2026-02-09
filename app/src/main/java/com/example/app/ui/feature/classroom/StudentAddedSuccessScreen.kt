@@ -24,6 +24,7 @@ import kotlin.random.Random
 @Composable
 fun StudentAddedSuccessScreen(
     studentName: String,
+    studentCount: Int,
     onContinue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -69,8 +70,10 @@ fun StudentAddedSuccessScreen(
                 Spacer(Modifier.height(16.dp))
 
                 // Success Message
+                val studentWord = if (studentCount == 1) "student" else "students"
+                val verb = if (studentCount == 1) "is" else "are"
                 Text(
-                    text = "$studentName is now in your class.",
+                    text = "$studentCount $studentWord $verb added in your class.",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color(0xFF4A4A4A),
@@ -181,6 +184,7 @@ fun ConfettiPieceStudent(
 fun StudentAddedSuccessScreenPreview() {
     StudentAddedSuccessScreen(
         studentName = "John Doe",
+        studentCount = 5,
         onContinue = {}
     )
 }
