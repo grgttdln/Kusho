@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.Flow
 interface LearnerProfileAnnotationDao {
 
     /**
-     * Insert a new annotation. If an annotation with the same (studentId, setId, itemId)
+     * Insert a new annotation. If an annotation with the same (studentId, setId, itemId, sessionMode)
      * already exists, it will be replaced.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -30,34 +30,34 @@ interface LearnerProfileAnnotationDao {
     suspend fun update(annotation: LearnerProfileAnnotation)
 
     /**
-     * Get a specific annotation by studentId, setId, and itemId
+     * Get a specific annotation by studentId, setId, itemId, and sessionMode
      */
     @Query("""
         SELECT * FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId AND itemId = :itemId 
+        WHERE studentId = :studentId AND setId = :setId AND itemId = :itemId AND sessionMode = :sessionMode
         LIMIT 1
     """)
-    suspend fun getAnnotation(studentId: String, setId: Long, itemId: Int): LearnerProfileAnnotation?
+    suspend fun getAnnotation(studentId: String, setId: Long, itemId: Int, sessionMode: String = "LEARN"): LearnerProfileAnnotation?
 
     /**
-     * Get all annotations for a specific student in a specific set
+     * Get all annotations for a specific student in a specific set and mode
      */
     @Query("""
         SELECT * FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId 
+        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode
         ORDER BY itemId ASC
     """)
-    suspend fun getAnnotationsForStudentInSet(studentId: String, setId: Long): List<LearnerProfileAnnotation>
+    suspend fun getAnnotationsForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN"): List<LearnerProfileAnnotation>
 
     /**
-     * Get all annotations for a specific student in a specific set as Flow
+     * Get all annotations for a specific student in a specific set as Flow with mode filter
      */
     @Query("""
         SELECT * FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId 
+        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode
         ORDER BY itemId ASC
     """)
-    fun observeAnnotationsForStudentInSet(studentId: String, setId: Long): Flow<List<LearnerProfileAnnotation>>
+    fun observeAnnotationsForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN"): Flow<List<LearnerProfileAnnotation>>
 
     /**
      * Get all annotations for a specific student
@@ -80,22 +80,22 @@ interface LearnerProfileAnnotationDao {
     suspend fun getAnnotationsForSet(setId: Long): List<LearnerProfileAnnotation>
 
     /**
-     * Delete a specific annotation
+     * Delete a specific annotation by studentId, setId, itemId, and sessionMode
      */
     @Query("""
         DELETE FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId AND itemId = :itemId
+        WHERE studentId = :studentId AND setId = :setId AND itemId = :itemId AND sessionMode = :sessionMode
     """)
-    suspend fun deleteAnnotation(studentId: String, setId: Long, itemId: Int)
+    suspend fun deleteAnnotation(studentId: String, setId: Long, itemId: Int, sessionMode: String = "LEARN")
 
     /**
-     * Delete all annotations for a student in a set
+     * Delete all annotations for a student in a set with specific mode
      */
     @Query("""
         DELETE FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId
+        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode
     """)
-    suspend fun deleteAnnotationsForStudentInSet(studentId: String, setId: Long)
+    suspend fun deleteAnnotationsForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN")
 
     /**
      * Delete all annotations for a student
@@ -104,12 +104,12 @@ interface LearnerProfileAnnotationDao {
     suspend fun deleteAllAnnotationsForStudent(studentId: String)
 
     /**
-     * Get count of annotations for a student in a set
+     * Get count of annotations for a student in a set with specific mode
      */
     @Query("""
         SELECT COUNT(*) FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId
+        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode
     """)
-    suspend fun getAnnotationCountForStudentInSet(studentId: String, setId: Long): Int
+    suspend fun getAnnotationCountForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN"): Int
 }
 

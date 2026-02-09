@@ -54,6 +54,7 @@ fun MainNavigationContainer(
     var tutorialModeStudentName by remember { mutableStateOf("") }
     var tutorialSessionTitle by remember { mutableStateOf("") }
     var tutorialLetterType by remember { mutableStateOf("capital") }
+    var tutorialSessionStudentId by remember { mutableStateOf(0L) }
 
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
@@ -365,6 +366,7 @@ fun MainNavigationContainer(
                 tutorialSessionTitle = title
                 tutorialLetterType = letterType
                 tutorialModeStudentName = studentName
+                tutorialSessionStudentId = tutorialModeStudentId
                 currentScreen = 28
             },
             modifier = modifier
@@ -373,6 +375,7 @@ fun MainNavigationContainer(
             title = tutorialSessionTitle,
             letterType = tutorialLetterType,
             studentName = tutorialModeStudentName,
+            studentId = tutorialSessionStudentId,
             onEndSession = { currentScreen = 29 },
             modifier = modifier
         )

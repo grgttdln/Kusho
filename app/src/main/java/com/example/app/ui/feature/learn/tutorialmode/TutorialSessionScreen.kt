@@ -24,11 +24,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -40,20 +42,29 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
+import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.components.common.ProgressCheckDialog
 import com.example.app.ui.components.common.ProgressIndicator
+import com.example.app.ui.components.learnmode.AnnotationData
+import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
 import com.example.app.ui.components.tutorial.AnimatedLetterView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val YellowColor = Color(0xFFEDBB00)
 private val LightYellowColor = Color(0xFFFFF3C4)
 private val BlueButtonColor = Color(0xFF3FA9F8)
+private val YellowIconColor = Color(0xFFFFC700) // #FFC700 for tutorial mode icons
+private val OrangeButtonColor = Color(0xFFFF8C42) // Orange for tutorial mode button
 
 @Composable
 fun TutorialSessionScreen(
     title: String,
     letterType: String = "capital",
     studentName: String = "",
+    studentId: Long = 0L,
     onEndSession: () -> Unit,
     modifier: Modifier = Modifier,
     initialStep: Int = 1,
@@ -69,7 +80,55 @@ fun TutorialSessionScreen(
     var isCorrectGesture by remember { mutableStateOf(false) }
     var predictedLetter by remember { mutableStateOf("") }
     var showAnimation by remember { mutableStateOf(false) } // Toggle for animation vs static image
+    
+    // Annotation dialog state
+    var showAnnotationDialog by remember { mutableStateOf(false) }
+    var annotationsMap by remember { mutableStateOf<Map<Int, AnnotationData>>(emptyMap()) }
+    
+    // Coroutine scope for async operations
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Get database instance for annotation persistence
+    val database = remember { AppDatabase.getInstance(context) }
+    val annotationDao = remember { database.learnerProfileAnnotationDao() }
+    
+    // Generate a unique setId based on tutorial session (title + letterType)
+    // This ensures annotations are saved per tutorial section
+    // Using negative IDs to avoid collision with actual database setIds
+    val tutorialSetId = remember(title, letterType) {
+        when {
+            title.equals("Vowels", ignoreCase = true) && letterType.equals("capital", ignoreCase = true) -> -1L
+            title.equals("Vowels", ignoreCase = true) && letterType.equals("small", ignoreCase = true) -> -2L
+            title.equals("Consonants", ignoreCase = true) && letterType.equals("capital", ignoreCase = true) -> -3L
+            title.equals("Consonants", ignoreCase = true) && letterType.equals("small", ignoreCase = true) -> -4L
+            else -> -(kotlin.math.abs("$title-$letterType".hashCode().toLong()) % 1000 + 5)
+        }
+    }
 
+    // Load existing annotations for this student and tutorial session when the screen loads
+    LaunchedEffect(studentId, tutorialSetId) {
+        if (studentId > 0L) {
+            withContext(Dispatchers.IO) {
+                val studentIdString = studentId.toString()
+                val existingAnnotations = annotationDao.getAnnotationsForStudentInSet(
+                    studentIdString, 
+                    tutorialSetId,
+                    com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL
+                )
+                val loadedMap = existingAnnotations.associate { annotation ->
+                    annotation.itemId to AnnotationData(
+                        levelOfProgress = annotation.levelOfProgress,
+                        strengthsObserved = annotation.getStrengthsList().toSet(),
+                        strengthsNote = annotation.strengthsNote,
+                        challenges = annotation.getChallengesList().toSet(),
+                        challengesNote = annotation.challengesNote
+                    )
+                }
+                annotationsMap = loadedMap
+            }
+        }
+    }
+    
     // Define all letters based on the section
     val allLetters = remember(title) {
         when (title.lowercase()) {
@@ -255,6 +314,56 @@ fun TutorialSessionScreen(
             }
         )
     }
+    
+    // Learner Profile Annotation Dialog
+    if (showAnnotationDialog) {
+        val existingAnnotation = annotationsMap[currentStep - 1] ?: AnnotationData.empty()
+        
+        LearnerProfileAnnotationDialog(
+            studentName = studentName,
+            existingData = existingAnnotation,
+            onDismiss = { showAnnotationDialog = false },
+            accentColor = YellowIconColor,
+            buttonColor = OrangeButtonColor,
+            onAddNote = { levelOfProgress, strengthsObserved, strengthsNote, challenges, challengesNote ->
+                // Create new annotation data
+                val newAnnotationData = AnnotationData(
+                    levelOfProgress = levelOfProgress,
+                    strengthsObserved = strengthsObserved.toSet(),
+                    strengthsNote = strengthsNote,
+                    challenges = challenges.toSet(),
+                    challengesNote = challengesNote
+                )
+                
+                // Update local state immediately
+                annotationsMap = annotationsMap + ((currentStep - 1) to newAnnotationData)
+                
+                // Close dialog
+                showAnnotationDialog = false
+                
+                // Save to database asynchronously
+                coroutineScope.launch {
+                    withContext(Dispatchers.IO) {
+                        if (studentId > 0L) {
+                            val studentIdString = studentId.toString()
+                            val annotation = com.example.app.data.entity.LearnerProfileAnnotation.create(
+                                studentId = studentIdString,
+                                setId = tutorialSetId,
+                                itemId = currentStep - 1,
+                                sessionMode = com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL,
+                                levelOfProgress = levelOfProgress,
+                                strengthsObserved = strengthsObserved,
+                                strengthsNote = strengthsNote,
+                                challenges = challenges,
+                                challengesNote = challengesNote
+                            )
+                            annotationDao.insertOrUpdate(annotation)
+                        }
+                    }
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -274,33 +383,40 @@ fun TutorialSessionScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // Audio Icon and Skip Button Row
+        // Annotate and Skip Button Row (matching Learn Mode layout)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onAudioClick) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_volume),
-                    contentDescription = "Audio",
-                    tint = YellowColor,
-                    modifier = Modifier.size(28.dp)
+            // Annotate button (left) - opens learner profile annotation dialog
+            IconButton(onClick = {
+                showAnnotationDialog = true
+                onAudioClick()
+            }) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_annotate),
+                    contentDescription = "Annotate",
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
                 )
             }
 
-            TextButton(onClick = {
+            // Skip button (right) - icon instead of text
+            IconButton(onClick = {
                 val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
                 if (currentStep < maxSteps) {
                     currentStep++
                 }
                 onSkip()
             }) {
-                Text(
-                    text = "Skip",
-                    color = YellowColor,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                Image(
+                    painter = painterResource(id = R.drawable.ic_skip),
+                    contentDescription = "Skip",
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
                 )
             }
         }

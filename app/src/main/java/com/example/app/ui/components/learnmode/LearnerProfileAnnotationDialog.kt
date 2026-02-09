@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,8 +38,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
-
-private val PurpleColor = Color(0xFFAE8EFB)
 
 /**
  * Data class representing a selectable chip option
@@ -57,10 +56,11 @@ fun SelectableChip(
     label: String,
     dotColor: Color,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    accentColor: Color = Color(0xFFAE8EFB)
 ) {
-    val borderColor = if (isSelected) PurpleColor else Color(0xFFE0E0E0)
-    val backgroundColor = if (isSelected) PurpleColor.copy(alpha = 0.1f) else Color.White
+    val borderColor = if (isSelected) accentColor else Color(0xFFE0E0E0)
+    val backgroundColor = if (isSelected) accentColor.copy(alpha = 0.1f) else Color.White
 
     Card(
         modifier = Modifier
@@ -111,7 +111,9 @@ fun LearnerProfileAnnotationDialog(
         strengthsNote: String,
         challenges: List<String>,
         challengesNote: String
-    ) -> Unit
+    ) -> Unit,
+    accentColor: Color = Color(0xFFAE8EFB), // Primary color for borders, text, chips
+    buttonColor: Color = Color(0xFFAE8EFB) // Button background color
 ) {
     // Animation state for slide-up/down effect
     var isVisible by remember { mutableStateOf(false) }
@@ -231,7 +233,8 @@ fun LearnerProfileAnnotationDialog(
                             Image(
                                 painter = painterResource(id = R.drawable.ic_annotate),
                                 contentDescription = "Profile",
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(24.dp),
+                                colorFilter = ColorFilter.tint(accentColor)
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
@@ -271,7 +274,8 @@ fun LearnerProfileAnnotationDialog(
                                     isSelected = selectedLevel == option.label,
                                     onClick = {
                                         selectedLevel = if (selectedLevel == option.label) null else option.label
-                                    }
+                                    },
+                                    accentColor = accentColor
                                 )
                             }
                         }
@@ -287,7 +291,8 @@ fun LearnerProfileAnnotationDialog(
                                     isSelected = selectedLevel == option.label,
                                     onClick = {
                                         selectedLevel = if (selectedLevel == option.label) null else option.label
-                                    }
+                                    },
+                                    accentColor = accentColor
                                 )
                             }
                         }
@@ -318,7 +323,8 @@ fun LearnerProfileAnnotationDialog(
                                         } else {
                                             selectedStrengths + option
                                         }
-                                    }
+                                    },
+                                    accentColor = accentColor
                                 )
                             }
                         }
@@ -333,7 +339,7 @@ fun LearnerProfileAnnotationDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 placeholder = { Text("Add a note...", color = Color.Gray) },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = PurpleColor,
+                                    focusedBorderColor = accentColor,
                                     unfocusedBorderColor = Color.LightGray,
                                     focusedTextColor = Color.Black,
                                     unfocusedTextColor = Color.Black
@@ -351,7 +357,7 @@ fun LearnerProfileAnnotationDialog(
                                 Text(
                                     text = "+ Add Note",
                                     fontSize = 14.sp,
-                                    color = PurpleColor
+                                    color = accentColor
                                 )
                             }
                         }
@@ -382,7 +388,8 @@ fun LearnerProfileAnnotationDialog(
                                         } else {
                                             selectedChallenges + option
                                         }
-                                    }
+                                    },
+                                    accentColor = accentColor
                                 )
                             }
                         }
@@ -397,7 +404,7 @@ fun LearnerProfileAnnotationDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 placeholder = { Text("Add a note...", color = Color.Gray) },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = PurpleColor,
+                                    focusedBorderColor = accentColor,
                                     unfocusedBorderColor = Color.LightGray,
                                     focusedTextColor = Color.Black,
                                     unfocusedTextColor = Color.Black
@@ -415,7 +422,7 @@ fun LearnerProfileAnnotationDialog(
                                 Text(
                                     text = "+ Add Note",
                                     fontSize = 14.sp,
-                                    color = PurpleColor
+                                    color = accentColor
                                 )
                             }
                         }
@@ -447,7 +454,7 @@ fun LearnerProfileAnnotationDialog(
                                 .height(56.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF4A90D9)
+                                containerColor = buttonColor
                             )
                         ) {
                             Text(
