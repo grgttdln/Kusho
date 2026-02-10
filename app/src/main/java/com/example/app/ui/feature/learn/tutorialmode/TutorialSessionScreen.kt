@@ -18,7 +18,6 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -207,12 +206,11 @@ fun TutorialSessionScreen(
         watchConnectionManager.notifyTutorialModeStarted(studentName, title)
     }
     
-    // Notify watch when session ends (cleanup)
-    DisposableEffect(Unit) {
-        onDispose {
-            watchConnectionManager.notifyTutorialModeEnded()
-        }
-    }
+    // Note: We don't call notifyTutorialModeEnded() here on dispose anymore
+    // because we want the watch to keep showing the completion screen
+    // while the phone shows the analytics screen.
+    // notifyTutorialModeEnded() is now called from SessionAnalyticsScreen
+    // when the user leaves (Practice Again or Continue).
     
     // Send current letter data to watch whenever it changes
     LaunchedEffect(currentStep, currentLetter) {
