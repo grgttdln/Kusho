@@ -33,12 +33,13 @@ import com.example.app.ui.feature.classroom.ClassroomViewModel
 fun TutorialStudentSelectionScreen(
     onBack: () -> Unit,
     onSelectStudent: (studentId: Long, studentName: String, classId: Long, letterType: String) -> Unit,
+    showLetterTypeDialog: Boolean = true,
     modifier: Modifier = Modifier,
     classroomViewModel: ClassroomViewModel = viewModel()
 ) {
     val students by classroomViewModel.allStudents.collectAsState()
     var selectedStudent by remember { mutableStateOf<Triple<Long, String, Long>?>(null) }
-    var showLetterTypeDialog by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         // Scrollable screen
@@ -144,9 +145,15 @@ fun TutorialStudentSelectionScreen(
                                     studentName = student.fullName,
                                     profileImagePath = student.pfpPath,
                                     onClick = {
-                                        // Store selected student and show letter type dialog
+                                        // Store selected student
                                         selectedStudent = Triple(student.studentId, student.fullName, 0L)
-                                        showLetterTypeDialog = true
+                                        if (showLetterTypeDialog) {
+                                            // Show letter type dialog for tutorial mode
+                                            showDialog = true
+                                        } else {
+                                            // Skip dialog for learn mode, pass empty letterType
+                                            onSelectStudent(student.studentId, student.fullName, 0L, "")
+                                        }
                                     },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -165,14 +172,14 @@ fun TutorialStudentSelectionScreen(
     }
 
     // Letter Type Selection Dialog
-    if (showLetterTypeDialog) {
+    if (showDialog) {
         LetterTypeSelectionDialog(
             onDismiss = { 
-                showLetterTypeDialog = false
+                showDialog = false
                 selectedStudent = null
             },
             onSelectType = { letterType ->
-                showLetterTypeDialog = false
+                showDialog = false
                 selectedStudent?.let { (studentId, studentName, classId) ->
                     onSelectStudent(studentId, studentName, classId, letterType)
                 }

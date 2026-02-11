@@ -64,6 +64,7 @@ fun DashboardScreen(
     onNavigateToWatchPairing: () -> Unit = {},
     onNavigateToClassDetails: (String, String, String) -> Unit = { _, _, _ -> },
     onNavigateToTutorialStudentSelection: (String) -> Unit = {},
+    onNavigateToLearnStudentSelection: (Long, String) -> Unit = { _, _ -> },
     viewModel: DashboardViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -490,23 +491,21 @@ fun DashboardScreen(
                     .padding(start = 30.dp, top = 4.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Display activities from viewModel
+                activities.forEach { activity ->
+                    val iconRes = activityProgressList.find { it.activityId == activity.id.toString() }?.iconRes
+                        ?: R.drawable.ic_activity_1
 
-
-                LearnGuideCard(
-                    title = "Vowels",
-                    iconRes = R.drawable.ic_apple,
-                    backgroundRes = R.drawable.dis_bg_learn_dashboard,
-                    onClick = { /* TODO: Navigate to vowels learn mode */ },
-                    modifier = Modifier.width(135.dp)
-                )
-
-                LearnGuideCard(
-                    title = "Consonants",
-                    iconRes = R.drawable.ic_ball,
-                    backgroundRes = R.drawable.dis_bg_learn_dashboard,
-                    onClick = { /* TODO: Navigate to consonants learn mode */ },
-                    modifier = Modifier.width(135.dp)
-                )
+                    LearnGuideCard(
+                        title = activity.title,
+                        iconRes = iconRes,
+                        backgroundRes = R.drawable.dis_bg_learn_dashboard,
+                        onClick = {
+                            onNavigateToLearnStudentSelection(activity.id, activity.title)
+                        },
+                        modifier = Modifier.width(135.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(30.dp))
             }

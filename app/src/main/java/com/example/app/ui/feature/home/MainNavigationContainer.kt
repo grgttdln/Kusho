@@ -59,6 +59,10 @@ fun MainNavigationContainer(
     
     // --- DASHBOARD TUTORIAL FLOW STATE ---
     var dashboardTutorialSection by remember { mutableStateOf("") } // "Vowels" or "Consonants"
+    
+    // --- DASHBOARD LEARN FLOW STATE ---
+    var dashboardLearnActivityId by remember { mutableStateOf(0L) }
+    var dashboardLearnActivityTitle by remember { mutableStateOf("") }
 
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
@@ -96,6 +100,11 @@ fun MainNavigationContainer(
             onNavigateToTutorialStudentSelection = { section ->
                 dashboardTutorialSection = section
                 currentScreen = 36 // Navigate to TutorialStudentSelectionScreen from Dashboard
+            },
+            onNavigateToLearnStudentSelection = { activityId, activityTitle ->
+                dashboardLearnActivityId = activityId
+                dashboardLearnActivityTitle = activityTitle
+                currentScreen = 41 // Navigate to student selection for Learn mode
             }
         )
         1 -> LearnScreen(onNavigate = { currentScreen = it }, modifier = modifier)
@@ -481,6 +490,7 @@ fun MainNavigationContainer(
                 tutorialSessionStudentId = studentId
                 currentScreen = 38 // Go directly to TutorialSessionScreen (skip vowels/consonants selection)
             },
+            showLetterTypeDialog = true,
             modifier = modifier
         )
         37 -> TutorialModeStudentScreen(
@@ -512,6 +522,81 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         40 -> TutorialFinishedScreen(
+            onEndSession = { currentScreen = 0 },
+            modifier = modifier
+        )
+        // --- DASHBOARD LEARN FLOW ---
+        41 -> TutorialStudentSelectionScreen(
+            onBack = { currentScreen = 0 },
+            onSelectStudent = { studentId, studentName, classId, _ ->
+                selectedStudentId = studentId.toString()
+                selectedStudentName = studentName
+                selectedClassId = classId.toString()
+                selectedActivityId = dashboardLearnActivityId
+                selectedActivityTitle = dashboardLearnActivityTitle
+                currentScreen = 42 // Go to LearnModeSetStatusScreen
+            },
+            showLetterTypeDialog = false,
+            modifier = modifier
+        )
+        42 -> {
+            val context = LocalContext.current
+            val database = remember { AppDatabase.getInstance(context) }
+            val studentSetProgressDao = remember { database.studentSetProgressDao() }
+            val setsFlow = remember(selectedActivityId) { setRepository.getSetsForActivity(selectedActivityId) }
+            val sets by setsFlow.collectAsState(initial = emptyList())
+            val studentIdLong = selectedStudentId.toLongOrNull() ?: 0L
+            val progressFlow = remember(selectedActivityId, studentIdLong) {
+                if (studentIdLong > 0) {
+                    studentSetProgressDao.getProgressForStudentAndActivity(studentIdLong, selectedActivityId)
+                } else {
+                    kotlinx.coroutines.flow.flowOf(emptyList())
+                }
+            }
+            val progressList by progressFlow.collectAsState(initial = emptyList())
+            val completedSetIds = remember(progressList) {
+                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            }
+            val activitySetStatuses = sets.map { set ->
+                val isCompleted = completedSetIds.contains(set.id)
+                com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
+                    setId = set.id,
+                    title = set.title,
+                    status = if (isCompleted) "Completed" else "Not Started"
+                )
+            }
+            com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
+                activityIconRes = selectedActivityIconRes,
+                activityTitle = selectedActivityTitle,
+                sets = activitySetStatuses,
+                onBack = { currentScreen = 41 },
+                onStartSet = { set ->
+                    selectedSetId = set.setId
+                    tutorialSessionTitle = set.title
+                    learnModeSessionKey++
+                    currentScreen = 43
+                },
+                modifier = modifier
+            )
+        }
+        43 -> {
+            com.example.app.ui.feature.learn.learnmode.LearnModeSessionScreen(
+                setId = selectedSetId,
+                activityId = selectedActivityId,
+                activityTitle = tutorialSessionTitle,
+                sessionKey = learnModeSessionKey,
+                studentId = selectedStudentId,
+                studentName = selectedStudentName,
+                modifier = modifier,
+                onSessionComplete = { currentScreen = 44 }
+            )
+        }
+        44 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
+            onPracticeAgain = { currentScreen = 42 },
+            onContinue = { currentScreen = 45 },
+            modifier = modifier
+        )
+        45 -> com.example.app.ui.feature.learn.learnmode.LearnModeFinishedScreen(
             onEndSession = { currentScreen = 0 },
             modifier = modifier
         )
