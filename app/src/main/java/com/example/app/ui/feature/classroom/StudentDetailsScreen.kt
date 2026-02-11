@@ -49,9 +49,11 @@ import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.util.ImageUtil
 import com.example.app.ui.components.classroom.AnalyticsCard
+import com.example.app.ui.components.classroom.LearnAnnotationCard
 import com.example.app.ui.components.classroom.ProgressItemCard
 import com.example.app.ui.components.classroom.ProgressStatus
 import com.example.app.ui.components.classroom.TipCard
+import com.example.app.ui.components.classroom.TutorialAnnotationCard
 
 @Composable
 fun StudentDetailsScreen(
@@ -175,20 +177,6 @@ fun StudentDetailsScreen(
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            // Class Name - Centered
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = uiState.className,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color(0xFF0B0B0B)
-                )
-            }
 
             Spacer(Modifier.height(24.dp))
 
@@ -240,141 +228,109 @@ fun StudentDetailsScreen(
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(42.dp))
 
-        // Analytics Section
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_analytics),
-                contentDescription = "Analytics",
-                tint = Color(0xFF3FA9F8),
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(8.dp))
+            // Kuu Card with Overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.dis_kuu_card),
+                    contentDescription = "Kuu Card",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentScale = ContentScale.Fit
+                )
+
+                // Overlay Content
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Main Content
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 80.dp),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Spacer(Modifier.height(22.dp))
+                        Text(
+                            text = "Try Consonants Tutorial!",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "You're amazing at vowel tracing! Let's try consonants next.",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.White.copy(alpha = 0.9f),
+                            lineHeight = 20.sp
+                        )
+                    }
+
+                    // Start Tutorial Button
+                    Button(
+                        onClick = { /* TODO: Navigate to tutorial */ },
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .height(32.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "Start Tutorial",
+                            color = Color(0xFF3FA9F8),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+
+            // Annotations Section
             Text(
-                text = "Analytics",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF3FA9F8)
+                text = "Annotations",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF3FA9F8),
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
-        }
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-        // Analytics Cards
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            AnalyticsCard(
-                iconRes = R.drawable.ic_time,
-                value = "${uiState.totalPracticeMinutes} mins",
-                label = "Total Practice Time",
-                modifier = Modifier.weight(1f)
+            // Tutorial Annotation Card
+            TutorialAnnotationCard(
+                tags = listOf("Fluency", "Recognition"),
+                annotation = "Kim is showing improvements in vowel tracing but still pauses to recognize the letters.",
+                tutorialName = "Meet the Vowels | Animals",
+                date = "Jan 01, 2026",
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
-            AnalyticsCard(
-                iconRes = R.drawable.ic_sessions,
-                value = uiState.sessionsCompleted.toString(),
-                label = "Sessions Completed",
-                modifier = Modifier.weight(1f)
+
+            Spacer(Modifier.height(16.dp))
+
+            // Learn Annotation Card
+            LearnAnnotationCard(
+                tags = listOf("Fluency", "Recognition"),
+                annotation = "Kim is showing improvements in vowel tracing but still pauses to recognize the letters.",
+                lessonName = "Meet the Vowels | Animals",
+                date = "Jan 01, 2026",
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        // Progress Section
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_progress),
-                contentDescription = "Progress",
-                tint = Color(0xFF3FA9F8),
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Progress",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF3FA9F8)
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Progress Items
-        ProgressItemCard(
-            iconRes = R.drawable.ic_apple,
-            title = "Vowels",
-            status = ProgressStatus.COMPLETED,
-            progress = 1f
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        ProgressItemCard(
-            iconRes = R.drawable.ic_ball,
-            title = "Consonants",
-            status = ProgressStatus.IN_PROGRESS,
-            progress = 0.6f
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        ProgressItemCard(
-            iconRes = R.drawable.ic_flower,
-            title = "Stops",
-            status = ProgressStatus.NOT_STARTED,
-            progress = 0f
-        )
-
-        Spacer(Modifier.height(32.dp))
-
-        // Kuu's Tips Section
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_bulb),
-                contentDescription = "Tips",
-                tint = Color(0xFF3FA9F8),
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Kuu's Tips",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF3FA9F8)
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Tip Cards - Always show with default messages if empty
-        TipCard(
-            title = uiState.firstTipTitle ?: "Keep Up the Great Work!",
-            description = uiState.firstTipDescription ?: "You're doing an amazing job! Keep practicing regularly to build strong foundations. Every session brings you closer to mastery.",
-            subtitle = uiState.firstTipSubtitle ?: "AI-Generated Suggestion",
-            backgroundColor = Color(0xFFEDBB00)
-        )
-        
-        Spacer(Modifier.height(12.dp))
-
-        TipCard(
-            title = uiState.secondTipTitle ?: "Practice Makes Progress!",
-            description = uiState.secondTipDescription ?: "Remember, learning is a journey! Stay consistent with your practice sessions and celebrate every small achievement along the way.",
-            subtitle = uiState.secondTipSubtitle ?: "Based on your recent session",
-            backgroundColor = Color(0xFF9067F7)
-        )
-
-        Spacer(Modifier.height(100.dp))
         }
     }
     
