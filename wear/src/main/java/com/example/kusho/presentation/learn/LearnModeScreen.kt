@@ -507,15 +507,27 @@ private fun IdleContent(
                 interactionSource = remember { MutableInteractionSource() }
             ) { viewModel.startRecording() }
     ) {
-        // Mascot image fills the entire background
-        Image(
-            painter = painterResource(id = R.drawable.dis_watch_wait),
-            contentDescription = "Learn mascot",
+        Column(
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-
-
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Text(
+                text = "Tap to begin!",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            
+            Image(
+                painter = painterResource(id = R.drawable.dis_watch_wait),
+                contentDescription = "Tap to start",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
     }
 }
 
@@ -547,7 +559,12 @@ private fun RecordingContent(uiState: LearnModeViewModel.UiState) {
             strokeWidth = 8.dp,
             indicatorColor = AppColors.LearnModeColor
         )
-        Text(text = "✍️", fontSize = 52.sp)
+        Image(
+            painter = painterResource(id = R.drawable.ic_kusho_hand),
+            contentDescription = "Air write now",
+            modifier = Modifier.size(85.dp),
+            contentScale = ContentScale.Fit
+        )
     }
 }
 
@@ -797,15 +814,30 @@ private fun WriteTheWordIdleContent(
             ) { viewModel.startRecording() },
         contentAlignment = Alignment.Center
     ) {
-        // Display only the current letter to write - large and purple like in the UI image
-        Text(
-            text = expectedLetter,
-            color = AppColors.LearnModeColor,
-            fontSize = 80.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.display1
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Tap to begin!",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Display only the current letter to write - large and purple like in the UI image
+            Text(
+                text = expectedLetter,
+                color = AppColors.LearnModeColor,
+                fontSize = 80.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.display1
+            )
+        }
     }
 }
 
@@ -1091,16 +1123,29 @@ private fun NameThePictureIdleContent(
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
-            ) { viewModel.startRecording() },
-        contentAlignment = Alignment.Center
+            ) { viewModel.startRecording() }
     ) {
-        // Show mascot avatar image - user taps to start gesture recognition
-        Image(
-            painter = painterResource(id = R.drawable.dis_watch_wait),
-            contentDescription = "Name the Picture mascot",
+        Column(
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Text(
+                text = "Tap to begin!",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            
+            Image(
+                painter = painterResource(id = R.drawable.dis_watch_wait),
+                contentDescription = "Tap to start",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
     }
 }
 

@@ -168,7 +168,11 @@ fun LearnModeSessionScreen(
     LaunchedEffect(setId, studentId, sessionKey) {
         if (setId > 0 && studentId.isNotBlank()) {
             withContext(Dispatchers.IO) {
-                val existingAnnotations = annotationDao.getAnnotationsForStudentInSet(studentId, setId)
+                val existingAnnotations = annotationDao.getAnnotationsForStudentInSet(
+                    studentId, 
+                    setId,
+                    com.example.app.data.entity.LearnerProfileAnnotation.MODE_LEARN
+                )
                 val loadedMap = existingAnnotations.associate { annotation ->
                     annotation.itemId to AnnotationData(
                         levelOfProgress = annotation.levelOfProgress,
@@ -201,6 +205,7 @@ fun LearnModeSessionScreen(
                                 studentId = studentId,
                                 setId = setId,
                                 itemId = itemId,
+                                sessionMode = LearnerProfileAnnotation.MODE_LEARN,
                                 levelOfProgress = annotationData.levelOfProgress,
                                 strengthsObserved = annotationData.strengthsObserved.toList(),
                                 strengthsNote = annotationData.strengthsNote,
@@ -501,6 +506,8 @@ fun LearnModeSessionScreen(
             studentName = studentName,
             existingData = existingAnnotation,
             onDismiss = { showAnnotationDialog = false },
+            accentColor = PurpleColor,
+            buttonColor = PurpleColor,
             onAddNote = { levelOfProgress, strengthsObserved, strengthsNote, challenges, challengesNote ->
                 // Create new annotation data
                 val newAnnotationData = AnnotationData(
@@ -522,6 +529,7 @@ fun LearnModeSessionScreen(
                                 studentId = studentId,
                                 setId = setId,
                                 itemId = currentWordIndex,
+                                sessionMode = LearnerProfileAnnotation.MODE_LEARN,
                                 levelOfProgress = levelOfProgress,
                                 strengthsObserved = strengthsObserved,
                                 strengthsNote = strengthsNote,

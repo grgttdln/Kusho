@@ -320,26 +320,28 @@ private fun ErrorContent(errorMessage: String) {
 @Composable
 private fun WaitingContent() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(36.dp))
+
+        // Text at the top
         Text(
             text = "Waiting...",
-            color = AppColors.TutorialModeColor,
+            color = Color.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
 
-        Text(
-            text = "Start Tutorial Mode\non your phone",
-            color = AppColors.TutorialModeColor.copy(alpha = 0.7f),
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp)
+        // Mascot below the text
+        Image(
+            painter = painterResource(id = R.drawable.dis_watch_learn_start),
+            contentDescription = "Tutorial Mode waiting mascot",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 14.dp),
+            contentScale = ContentScale.Crop
         )
     }
 }
@@ -369,12 +371,27 @@ private fun WaitScreenContent(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.dis_watch_wait),
-            contentDescription = "Tap to start",
+        Column(
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Text(
+                text = "Tap to begin!",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            
+            Image(
+                painter = painterResource(id = R.drawable.dis_watch_wait),
+                contentDescription = "Tap to start",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
     }
 }
 
@@ -396,26 +413,12 @@ private fun PracticingContent(
             },
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Draw letter:",
-                color = AppColors.TutorialModeColor,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = letter,
-                color = AppColors.TutorialModeColor,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
+        Image(
+            painter = painterResource(id = R.drawable.ic_kusho_hand),
+            contentDescription = "Air write now",
+            modifier = Modifier.size(70.dp),
+            contentScale = ContentScale.Fit
+        )
     }
 }
 
@@ -546,32 +549,23 @@ private fun GestureRecognitionContent(
                 )
             }
             TutorialModeViewModel.State.RECORDING -> {
-                // Show recording progress with letter
+                // Show recording progress with hand icon
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
                         progress = uiState.recordingProgress,
-                        modifier = Modifier.fillMaxSize(0.8f),
+                        modifier = Modifier.fillMaxSize(0.95f),
                         strokeWidth = 8.dp,
-                        indicatorColor = Color.Green
+                        indicatorColor = AppColors.TutorialModeColor
                     )
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = displayLetter,
-                            fontSize = 52.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AppColors.TutorialModeColor
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "✍️",
-                            fontSize = 32.sp
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_kusho_hand),
+                        contentDescription = "Air write now",
+                        modifier = Modifier.size(85.dp),
+                        contentScale = ContentScale.Fit
+                    )
                 }
             }
             TutorialModeViewModel.State.PROCESSING -> {

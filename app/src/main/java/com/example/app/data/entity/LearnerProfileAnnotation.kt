@@ -8,15 +8,16 @@ import androidx.room.PrimaryKey
  * Entity representing a learner profile annotation note.
  * Stores notes per student and per item within a set.
  *
- * The composite unique key is (studentId, setId, itemId) which ensures
- * each student has independent notes, and each item has its own saved note.
+ * The composite unique key is (studentId, setId, itemId, sessionMode) which ensures
+ * each student has independent notes per mode (LEARN vs TUTORIAL).
  */
 @Entity(
     tableName = "learner_profile_annotations",
     indices = [
-        Index(value = ["studentId", "setId", "itemId"], unique = true),
+        Index(value = ["studentId", "setId", "itemId", "sessionMode"], unique = true),
         Index(value = ["studentId"]),
-        Index(value = ["setId"])
+        Index(value = ["setId"]),
+        Index(value = ["sessionMode"])
     ]
 )
 data class LearnerProfileAnnotation(
@@ -31,6 +32,9 @@ data class LearnerProfileAnnotation(
 
     /** The item/word ID within the set (index in the set's word list) */
     val itemId: Int,
+
+    /** Session mode: "LEARN" for Learn Mode, "TUTORIAL" for Tutorial Mode */
+    val sessionMode: String = "LEARN",
 
     /** Selected level of progress: "Beginning", "Developing", "Proficient", "Advanced", or null */
     val levelOfProgress: String? = null,
@@ -70,6 +74,9 @@ data class LearnerProfileAnnotation(
     }
 
     companion object {
+        const val MODE_LEARN = "LEARN"
+        const val MODE_TUTORIAL = "TUTORIAL"
+        
         /**
          * Creates a LearnerProfileAnnotation from lists
          */
@@ -77,6 +84,7 @@ data class LearnerProfileAnnotation(
             studentId: String,
             setId: Long,
             itemId: Int,
+            sessionMode: String = MODE_LEARN,
             levelOfProgress: String?,
             strengthsObserved: List<String>,
             strengthsNote: String,
@@ -87,6 +95,7 @@ data class LearnerProfileAnnotation(
                 studentId = studentId,
                 setId = setId,
                 itemId = itemId,
+                sessionMode = sessionMode,
                 levelOfProgress = levelOfProgress,
                 strengthsObserved = strengthsObserved.joinToString(","),
                 strengthsNote = strengthsNote,

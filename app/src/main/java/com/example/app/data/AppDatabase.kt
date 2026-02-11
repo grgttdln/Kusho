@@ -49,7 +49,7 @@ import com.example.app.data.entity.StudentSetProgress
         LearnerProfileAnnotation::class,
         StudentSetProgress::class
     ],
-    version = 9, // Incrementing version for StudentSetProgress table
+    version = 10, // Added sessionMode column to LearnerProfileAnnotation table
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
