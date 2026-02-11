@@ -16,6 +16,7 @@ import com.example.app.ui.feature.learn.tutorialmode.TutorialModeStudentScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialSessionScreen
 import com.example.app.ui.feature.learn.tutorialmode.SessionAnalyticsScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialFinishedScreen
+import com.example.app.ui.feature.learn.tutorialmode.TutorialStudentSelectionScreen
 import com.example.app.ui.feature.learn.learnmode.LearnModeScreen
 import com.example.app.ui.feature.learn.activities.YourActivitiesScreen
 import com.example.app.ui.feature.learn.activities.AddNewActivityScreen
@@ -55,6 +56,9 @@ fun MainNavigationContainer(
     var tutorialSessionTitle by remember { mutableStateOf("") }
     var tutorialLetterType by remember { mutableStateOf("capital") }
     var tutorialSessionStudentId by remember { mutableStateOf(0L) }
+    
+    // --- DASHBOARD TUTORIAL FLOW STATE ---
+    var dashboardTutorialSection by remember { mutableStateOf("") } // "Vowels" or "Consonants"
 
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
@@ -87,7 +91,11 @@ fun MainNavigationContainer(
                 selectedClassId = classId
                 selectedClassName = className
                 selectedClassBannerPath = bannerPath
-                currentScreen = 22 
+                currentScreen = 22
+            },
+            onNavigateToTutorialStudentSelection = { section ->
+                dashboardTutorialSection = section
+                currentScreen = 36 // Navigate to TutorialStudentSelectionScreen from Dashboard
             }
         )
         1 -> LearnScreen(onNavigate = { currentScreen = it }, modifier = modifier)
@@ -460,6 +468,51 @@ fun MainNavigationContainer(
         )
         35 -> com.example.app.ui.feature.learn.learnmode.LearnModeFinishedScreen(
             onEndSession = { currentScreen = 1 },
+            modifier = modifier
+        )
+        // --- DASHBOARD TUTORIAL FLOW ---
+        36 -> TutorialStudentSelectionScreen(
+            onBack = { currentScreen = 0 },
+            onSelectStudent = { studentId, studentName, classId, letterType ->
+                tutorialModeStudentId = studentId
+                tutorialModeStudentName = studentName
+                tutorialModeClassId = classId
+                tutorialLetterType = letterType
+                tutorialSessionStudentId = studentId
+                currentScreen = 38 // Go directly to TutorialSessionScreen (skip vowels/consonants selection)
+            },
+            modifier = modifier
+        )
+        37 -> TutorialModeStudentScreen(
+            studentId = tutorialModeStudentId,
+            classId = tutorialModeClassId,
+            studentName = tutorialModeStudentName,
+            preselectedSection = dashboardTutorialSection,
+            onBack = { currentScreen = 36 },
+            onStartSession = { title, letterType, studentName ->
+                tutorialSessionTitle = title
+                tutorialLetterType = letterType
+                tutorialModeStudentName = studentName
+                tutorialSessionStudentId = tutorialModeStudentId
+                currentScreen = 38
+            },
+            modifier = modifier
+        )
+        38 -> TutorialSessionScreen(
+            title = dashboardTutorialSection,
+            letterType = tutorialLetterType,
+            studentName = tutorialModeStudentName,
+            studentId = tutorialSessionStudentId,
+            onEndSession = { currentScreen = 39 },
+            modifier = modifier
+        )
+        39 -> SessionAnalyticsScreen(
+            onPracticeAgain = { currentScreen = 37 },
+            onContinue = { currentScreen = 40 },
+            modifier = modifier
+        )
+        40 -> TutorialFinishedScreen(
+            onEndSession = { currentScreen = 0 },
             modifier = modifier
         )
     }
