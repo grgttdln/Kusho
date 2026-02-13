@@ -121,12 +121,12 @@ fun LearnAnnotationDetailsScreen(
                 // Learn Mode subtitle
                 Text(
                     text = "Learn Mode",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
                     color = Color(0xFFAE8EFB)
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
 
                 // Main title
                 Text(

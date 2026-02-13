@@ -433,85 +433,10 @@ fun DashboardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            // TODO: Dashboard sections go here
 
-            // Step-by-Step Guides Section
-            Text(
-                text = "Step-by-Step Guides",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                lineHeight = 30.sp,
-                modifier = Modifier.padding(horizontal = 30.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 30.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                TutorialGuideCard(
-                    title = "Vowels",
-                    iconRes = R.drawable.ic_apple,
-                    backgroundRes = R.drawable.dis_bg_tutorial_dashboard,
-                    onClick = { onNavigateToTutorialStudentSelection("Vowels") },
-                    modifier = Modifier.weight(1f)
-                )
-
-                TutorialGuideCard(
-                    title = "Consonants",
-                    iconRes = R.drawable.ic_ball,
-                    backgroundRes = R.drawable.dis_bg_tutorial_dashboard,
-                    onClick = { onNavigateToTutorialStudentSelection("Consonants") },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Learn Section
-            Text(
-                text = "Ready, Set, Write!",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                lineHeight = 30.sp,
-                modifier = Modifier.padding(horizontal = 30.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(start = 30.dp, top = 4.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Display activities from viewModel
-                activities.forEach { activity ->
-                    val iconRes = activityProgressList.find { it.activityId == activity.id.toString() }?.iconRes
-                        ?: R.drawable.ic_activity_1
-
-                    LearnGuideCard(
-                        title = activity.title,
-                        iconRes = iconRes,
-                        backgroundRes = R.drawable.dis_bg_learn_dashboard,
-                        onClick = {
-                            onNavigateToLearnStudentSelection(activity.id, activity.title)
-                        },
-                        modifier = Modifier.width(135.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(30.dp))
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
+
 
         BottomNavBar(
             selectedTab = 0,

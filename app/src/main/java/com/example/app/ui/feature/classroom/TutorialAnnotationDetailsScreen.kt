@@ -124,12 +124,12 @@ fun TutorialAnnotationDetailsScreen(
                 // Tutorial Mode subtitle
                 Text(
                     text = "Tutorial Mode",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
                     color = Color(0xFFEDBB00)
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
 
                 // Main title
                 Text(
