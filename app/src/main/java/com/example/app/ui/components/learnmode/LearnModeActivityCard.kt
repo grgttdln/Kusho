@@ -43,133 +43,130 @@ fun LearnModeActivityCard(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
+            .width(325.dp)
             .height(175.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(if (isSelected) fillColor else Color.Transparent)
+            .clip(RoundedCornerShape(22.dp))
             .clickable { onClick() }
-            .then(
-                if (!isSelected) {
-                    Modifier.drawBehind {
-                        val pathEffect = PathEffect.dashPathEffect(floatArrayOf(30f, 20f), 0f)
-                        drawRoundRect(
-                            color = borderColor,
-                            style = Stroke(width = 12f, pathEffect = pathEffect),
-                            cornerRadius = CornerRadius(28.dp.toPx())
-                        )
-                    }
-                } else {
-                    Modifier
-                }
-            )
-            .padding(12.dp)
     ) {
-        // Selection circle at top right
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(if (isSelected) Color.White else Color.Transparent)
-                .drawBehind {
-                    if (!isSelected) {
-                        drawCircle(
-                            color = borderColor,
-                            style = Stroke(width = 4f)
-                        )
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = "Selected",
-                    tint = greenColor,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Icon Circle with Border
+        // Background image for unselected state, solid color for selected
+        if (!isSelected) {
+            Image(
+                painter = painterResource(id = R.drawable.bg_lesson),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .fillMaxSize()
+                    .background(fillColor)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
+        ) {
+            // Selection circle at top right
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color.Transparent)
+                    .background(if (isSelected) Color.White else Color.Transparent)
                     .drawBehind {
-                        drawCircle(
-                            color = if (isSelected) Color(0x40FFFFFF) else borderColor,
-                            style = Stroke(width = 16f)
-                        )
+                        if (!isSelected) {
+                            drawCircle(
+                                color = borderColor,
+                                style = Stroke(width = 4f)
+                            )
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(if (isSelected) Color.White else fillColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = iconRes),
-                        contentDescription = title,
-                        modifier = Modifier.size(60.dp),
-                        contentScale = ContentScale.Fit
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = "Selected",
+                        tint = greenColor,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Icon Circle with Border
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .drawBehind {
+                            drawCircle(
+                                color = borderColor,
+                                style = Stroke(width = 24f)
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(if (isSelected) Color.White else fillColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = iconRes),
+                            contentDescription = title,
+                            modifier = Modifier.size(60.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
 
-            // Title
-            Text(
-                text = title,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Normal,
-                color = if (isSelected) Color.White else fillColor,
-                textAlign = TextAlign.Center
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Title
+                Text(
+                    text = title,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = if (isSelected) Color.White else fillColor,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun LearnModeActivityCardPreview() {
+        MaterialTheme {
+            LearnModeActivityCard(
+                title = "Vowels",
+                iconRes = R.drawable.ic_apple,
+                isSelected = false,
+                onClick = {}
             )
         }
     }
-}
 
-@Preview(
-    name = "LearnModeActivityCard Unselected",
-    showBackground = true,
-    backgroundColor = 0xFFFFFFFF
-)
-@Composable
-fun LearnModeActivityCardPreview() {
-    MaterialTheme {
-        LearnModeActivityCard(
-            title = "Vowels",
-            iconRes = R.drawable.ic_apple,
-            isSelected = false,
-            onClick = {}
-        )
-    }
-}
 
-@Preview(
-    name = "LearnModeActivityCard Selected",
-    showBackground = true,
-    backgroundColor = 0xFFFFFFFF
-)
-@Composable
-fun LearnModeActivityCardSelectedPreview() {
-    MaterialTheme {
-        LearnModeActivityCard(
-            title = "Vowels",
-            iconRes = R.drawable.ic_apple,
-            isSelected = true,
-            onClick = {}
-        )
+    @Composable
+    fun LearnModeActivityCardSelectedPreview() {
+        MaterialTheme {
+            LearnModeActivityCard(
+                title = "Vowels",
+                iconRes = R.drawable.ic_apple,
+                isSelected = true,
+                onClick = {}
+            )
+        }
     }
 }

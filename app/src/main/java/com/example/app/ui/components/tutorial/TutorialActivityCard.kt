@@ -12,9 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,27 +51,32 @@ fun TutorialActivityCard(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
+            .width(325.dp)
             .height(175.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(if (isSelected) yellowColor else Color.Transparent)
+            .clip(RoundedCornerShape(22.dp))
             .clickable { onClick() }
-            .then(
-                if (!isSelected) {
-                    Modifier.drawBehind {
-                        val pathEffect = PathEffect.dashPathEffect(floatArrayOf(30f, 20f), 0f)
-                        drawRoundRect(
-                            color = yellowColor,
-                            style = Stroke(width = 12f, pathEffect = pathEffect),
-                            cornerRadius = CornerRadius(28.dp.toPx())
-                        )
-                    }
-                } else {
-                    Modifier
-                }
-            )
-            .padding(12.dp)
     ) {
+        // Background image for unselected state, solid color for selected
+        if (!isSelected) {
+            Image(
+                painter = painterResource(id = R.drawable.bg_tutorial),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(yellowColor)
+            )
+        }
+        
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
+        ) {
         // Selection circle at top right
         Box(
             modifier = Modifier
@@ -111,11 +114,11 @@ fun TutorialActivityCard(
                 modifier = Modifier
                     .size(100.dp)
                     .clip(CircleShape)
-                    .background(Color.Transparent)
+                    .background(Color.White)
                     .drawBehind {
                         drawCircle(
-                            color = if (isSelected) Color(0x40FFFFFF) else lightYellowColor,
-                            style = Stroke(width = 16f)
+                            color = lightYellowColor,
+                            style = Stroke(width = 24f)
                         )
                     },
                 contentAlignment = Alignment.Center
@@ -136,13 +139,13 @@ fun TutorialActivityCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(5.dp))
 
             // Title
             Text(
                 text = title,
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Bold,
                 color = if (isSelected) Color.White else yellowColor,
                 textAlign = TextAlign.Center
             )
@@ -180,7 +183,8 @@ fun TutorialActivityCardSelectedPreview() {
             iconRes = R.drawable.ic_apple,
             isSelected = true,
             onClick = {}
-        )
+            )
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-﻿package com.example.app.ui.feature.dashboard
+package com.example.app.ui.feature.dashboard
 
 import android.Manifest
 import android.app.Activity
@@ -9,7 +9,6 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,12 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingDown
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.TypeSpecimen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,11 +49,12 @@ import com.example.app.data.entity.Activity as ActivityEntity
 import com.example.app.service.ConnectionState
 import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.components.BottomNavBar
-import com.example.app.ui.components.dashboard.AnalyticsCard
 import com.example.app.ui.components.dashboard.BatteryIcon
 import com.example.app.ui.components.dashboard.getWatchImageResource
 import com.example.app.ui.components.dashboard.ActivityProgressSection
 import com.example.app.ui.components.dashboard.ActivityProgress
+import com.example.app.ui.components.tutorial.TutorialGuideCard
+import com.example.app.ui.components.tutorial.LearnGuideCard
 
 @Composable
 fun DashboardScreen(
@@ -68,6 +63,8 @@ fun DashboardScreen(
     onLogout: () -> Unit,
     onNavigateToWatchPairing: () -> Unit = {},
     onNavigateToClassDetails: (String, String, String) -> Unit = { _, _, _ -> },
+    onNavigateToTutorialStudentSelection: (String) -> Unit = {},
+    onNavigateToLearnStudentSelection: (Long, String) -> Unit = { _, _ -> },
     viewModel: DashboardViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -436,75 +433,10 @@ fun DashboardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            // TODO: Dashboard sections go here
 
-            // Quick Analytics
-            Text(
-                text = "Quick Analytics",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                lineHeight = 30.sp,
-                modifier = Modifier.padding(horizontal = 30.dp)
-            )
-
-            Spacer(modifier = Modifier.height(7.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 30.dp, top = 4.dp, bottom = 4.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(15.dp)
-            ) {
-                AnalyticsCard(
-                    icon = Icons.Filled.Group,
-                    number = uiState.totalStudents.toString(),
-                    label = if (uiState.totalStudents == 1) "Total Student" else "Total Students",
-                    badgeText = null
-                )
-
-                AnalyticsCard(
-                    icon = Icons.Filled.BarChart,
-                    number = uiState.totalActivities.toString(),
-                    label = if (uiState.totalActivities == 1) "Activity" else "Activities",
-                    badgeText = null
-                )
-
-                AnalyticsCard(
-                    icon = Icons.Filled.TypeSpecimen,
-                    number = uiState.totalWords.toString(),
-                    label = if (uiState.totalWords == 1) "Total Word" else "Total Words",
-                    badgeText = null
-                )
-
-                AnalyticsCard(
-                    icon = Icons.Filled.CheckCircle,
-                    number = "6",
-                    label = if (6 == 1) "Student at Mastery" else "Students at Mastery",
-                    badgeText = "≥ 90% accuracy"
-                )
-
-                AnalyticsCard(
-                    icon = Icons.AutoMirrored.Filled.TrendingDown,
-                    number = "5",
-                    label = if (5 == 1) "Student Below Target" else "Students Below Target",
-                    badgeText = "< 70% accuracy"
-                )
-
-                Spacer(modifier = Modifier.width(30.dp))
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Activity Progress Section (previous accordion design)
-            ActivityProgressSection(
-                activities = activityProgressList,
-                onActivityClick = { /* TODO */ }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
+
 
         BottomNavBar(
             selectedTab = 0,

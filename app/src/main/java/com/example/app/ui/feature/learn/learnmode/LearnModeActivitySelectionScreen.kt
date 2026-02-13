@@ -185,12 +185,17 @@ fun LearnModeActivitySelectionScreen(
                             items = uiState.activities,
                             key = { it.id }
                         ) { activity ->
-                            LearnModeActivityCard(
-                                title = activity.title,
-                                iconRes = getIconForActivity(activity.id),
-                                isSelected = uiState.selectedActivity?.id == activity.id,
-                                onClick = { viewModel.toggleActivitySelection(activity) }
-                            )
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LearnModeActivityCard(
+                                    title = activity.title,
+                                    iconRes = getIconForActivity(activity.id),
+                                    isSelected = uiState.selectedActivity?.id == activity.id,
+                                    onClick = { viewModel.toggleActivitySelection(activity) }
+                                )
+                            }
                         }
                     }
                 }

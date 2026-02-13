@@ -49,9 +49,11 @@ import coil.compose.AsyncImage
 import com.example.app.R
 import com.example.app.util.ImageUtil
 import com.example.app.ui.components.classroom.AnalyticsCard
+import com.example.app.ui.components.classroom.LearnAnnotationCard
 import com.example.app.ui.components.classroom.ProgressItemCard
 import com.example.app.ui.components.classroom.ProgressStatus
 import com.example.app.ui.components.classroom.TipCard
+import com.example.app.ui.components.classroom.TutorialAnnotationCard
 
 @Composable
 fun StudentDetailsScreen(
@@ -62,10 +64,28 @@ fun StudentDetailsScreen(
     modifier: Modifier = Modifier,
     classId: String = "",
     onEditStudent: () -> Unit = {},
+    onNavigateToTutorialAnnotation: (String) -> Unit = {},
+    onNavigateToLearnAnnotation: (String) -> Unit = {},
     viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.studentDetailsUiState.collectAsState()
+
+    // Activity icons (same as LearnModeActivitySelectionScreen)
+    val allIcons = remember {
+        listOf(
+            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
+            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
+            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
+            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
+            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
+            R.drawable.ic_activity_21, R.drawable.ic_activity_22
+        )
+    }
+    fun getIconForActivity(activityId: Long): Int {
+        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
+        return allIcons[iconIndex]
+    }
     
     // State for edit dialogs
     var showEditNameDialog by remember { mutableStateOf(false) }
@@ -175,20 +195,6 @@ fun StudentDetailsScreen(
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            // Class Name - Centered
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = uiState.className,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color(0xFF0B0B0B)
-                )
-            }
 
             Spacer(Modifier.height(24.dp))
 
@@ -240,141 +246,200 @@ fun StudentDetailsScreen(
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(42.dp))
 
-        // Analytics Section
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_analytics),
-                contentDescription = "Analytics",
-                tint = Color(0xFF3FA9F8),
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(8.dp))
+            // Kuu Card with Overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.dis_kuu_card),
+                    contentDescription = "Kuu Card",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentScale = ContentScale.Fit
+                )
+
+                // Overlay Content
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Main Content
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 80.dp),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Spacer(Modifier.height(22.dp))
+                        Text(
+                            text = "Try Consonants Tutorial!",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "You're amazing at vowel tracing! Let's try consonants next.",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.White.copy(alpha = 0.9f),
+                            lineHeight = 20.sp
+                        )
+                    }
+
+                    // Start Tutorial Button
+                    Button(
+                        onClick = { /* TODO: Navigate to tutorial */ },
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .height(32.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "Start Tutorial",
+                            color = Color(0xFF3FA9F8),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+
+            // Annotations Section
             Text(
-                text = "Analytics",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF3FA9F8)
+                text = "Annotations",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF3FA9F8),
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
-        }
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-        // Analytics Cards
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            AnalyticsCard(
-                iconRes = R.drawable.ic_time,
-                value = "${uiState.totalPracticeMinutes} mins",
-                label = "Total Practice Time",
-                modifier = Modifier.weight(1f)
-            )
-            AnalyticsCard(
-                iconRes = R.drawable.ic_sessions,
-                value = uiState.sessionsCompleted.toString(),
-                label = "Sessions Completed",
-                modifier = Modifier.weight(1f)
-            )
-        }
+            // Tutorial Annotation Cards - Show completed tutorial sessions
+            uiState.completedTutorialSessions.forEach { session ->
+                val formattedDate = session.completedAt?.let { timestamp ->
+                    val date = java.util.Date(timestamp)
+                    val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    formatter.format(date)
+                } ?: "Jan 01, 2026"
+                
+                // Extract tags from strengths and challenges, removing duplicates
+                val tags = session.annotation?.let { annotation ->
+                    val strengthsList = annotation.getStrengthsList()
+                    val challengesList = annotation.getChallengesList()
+                    (strengthsList + challengesList).distinct().take(2)
+                } ?: listOf("Fluency", "Recognition")
+                
+                val annotationText = session.annotation?.let { annotation ->
+                    buildString {
+                        if (annotation.strengthsNote.isNotBlank()) {
+                            append(annotation.strengthsNote)
+                        }
+                        if (annotation.challengesNote.isNotBlank()) {
+                            if (isNotEmpty()) append(" ")
+                            append(annotation.challengesNote)
+                        }
+                    }.takeIf { it.isNotBlank() }
+                } ?: "${uiState.studentName} has completed the ${session.tutorialType} ${session.letterType.lowercase()} letters tutorial."
+                
+                TutorialAnnotationCard(
+                    tags = tags,
+                    annotation = annotationText,
+                    tutorialName = "${session.tutorialType} | ${session.letterType}",
+                    date = formattedDate,
+                    iconRes = if (session.tutorialType == "Consonants") R.drawable.ic_ball else R.drawable.ic_apple,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    onClick = { onNavigateToTutorialAnnotation("${session.tutorialType}|${session.letterType}|${session.setId}") }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
 
-        Spacer(Modifier.height(32.dp))
+            // Learn Annotation Cards - Show completed learn sets
+            uiState.completedLearnSets.forEach { completedSet ->
+                val formattedDate = completedSet.completedAt?.let { timestamp ->
+                    val date = java.util.Date(timestamp)
+                    val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    formatter.format(date)
+                } ?: "Jan 01, 2026"
+                
+                // Extract tags from strengths and challenges, removing duplicates
+                // Only show tags if there are actual notes/annotations, not just for completion
+                val tags = completedSet.annotation?.let { annotation ->
+                    val hasNotes = annotation.strengthsNote.isNotBlank() || annotation.challengesNote.isNotBlank()
+                    val hasTags = annotation.getStrengthsList().isNotEmpty() || annotation.getChallengesList().isNotEmpty()
+                    
+                    if (hasNotes || hasTags) {
+                        val strengthsList = annotation.getStrengthsList()
+                        val challengesList = annotation.getChallengesList()
+                        (strengthsList + challengesList).distinct().take(2)
+                    } else {
+                        emptyList()
+                    }
+                } ?: emptyList()
+                
+                val annotationText = completedSet.annotation?.let { annotation ->
+                    buildString {
+                        if (annotation.strengthsNote.isNotBlank()) {
+                            append(annotation.strengthsNote)
+                        }
+                        if (annotation.challengesNote.isNotBlank()) {
+                            if (isNotEmpty()) append(" ")
+                            append(annotation.challengesNote)
+                        }
+                    }.takeIf { it.isNotBlank() }
+                } ?: "${uiState.studentName} has completed this activity set."
 
-        // Progress Section
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_progress),
-                contentDescription = "Progress",
-                tint = Color(0xFF3FA9F8),
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Progress",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF3FA9F8)
-            )
-        }
+                LearnAnnotationCard(
+                    tags = tags,
+                    annotation = annotationText,
+                    lessonName = "${completedSet.activityName} | ${completedSet.setName}",
+                    date = formattedDate,
+                    iconRes = getIconForActivity(completedSet.activityId),
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    onClick = { onNavigateToLearnAnnotation("${completedSet.activityName}|${completedSet.setId}|${completedSet.activityId}") }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
 
-        Spacer(Modifier.height(16.dp))
-
-        // Progress Items
-        ProgressItemCard(
-            iconRes = R.drawable.ic_apple,
-            title = "Vowels",
-            status = ProgressStatus.COMPLETED,
-            progress = 1f
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        ProgressItemCard(
-            iconRes = R.drawable.ic_ball,
-            title = "Consonants",
-            status = ProgressStatus.IN_PROGRESS,
-            progress = 0.6f
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        ProgressItemCard(
-            iconRes = R.drawable.ic_flower,
-            title = "Stops",
-            status = ProgressStatus.NOT_STARTED,
-            progress = 0f
-        )
-
-        Spacer(Modifier.height(32.dp))
-
-        // Kuu's Tips Section
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_bulb),
-                contentDescription = "Tips",
-                tint = Color(0xFF3FA9F8),
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Kuu's Tips",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF3FA9F8)
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Tip Cards - Always show with default messages if empty
-        TipCard(
-            title = uiState.firstTipTitle ?: "Keep Up the Great Work!",
-            description = uiState.firstTipDescription ?: "You're doing an amazing job! Keep practicing regularly to build strong foundations. Every session brings you closer to mastery.",
-            subtitle = uiState.firstTipSubtitle ?: "AI-Generated Suggestion",
-            backgroundColor = Color(0xFFEDBB00)
-        )
-        
-        Spacer(Modifier.height(12.dp))
-
-        TipCard(
-            title = uiState.secondTipTitle ?: "Practice Makes Progress!",
-            description = uiState.secondTipDescription ?: "Remember, learning is a journey! Stay consistent with your practice sessions and celebrate every small achievement along the way.",
-            subtitle = uiState.secondTipSubtitle ?: "Based on your recent session",
-            backgroundColor = Color(0xFF9067F7)
-        )
-
-        Spacer(Modifier.height(100.dp))
+            // Empty state when no annotations
+            if (uiState.completedTutorialSessions.isEmpty() && uiState.completedLearnSets.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No Annotations Yet",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF6B7280)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Your notes and highlights will appear here.",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF9CA3AF),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
         }
     }
     
