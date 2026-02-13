@@ -1,7 +1,9 @@
 package com.example.app.ui.components.classroom
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -11,9 +13,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.annotation.DrawableRes
+import com.example.app.R
 
 @Composable
 fun TutorialAnnotationCard(
@@ -21,10 +26,14 @@ fun TutorialAnnotationCard(
     annotation: String,
     tutorialName: String,
     date: String,
-    modifier: Modifier = Modifier
+    @DrawableRes iconRes: Int = R.drawable.ic_apple,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFFFEFBF2)
@@ -36,34 +45,30 @@ fun TutorialAnnotationCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Tags Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                tags.forEach { tag ->
-                    val backgroundColor = when (tag.lowercase()) {
-                        "fluency" -> Color(0xFF7CB97A)
-                        "recognition" -> Color(0xFFEDBB00)
-                        else -> Color(0xFFEDBB00)
-                    }
-                    
-                    Box(
-                        modifier = Modifier
-                            .background(backgroundColor, RoundedCornerShape(50.dp))
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = tag,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White
-                        )
+            // Tags Row - only show if tags are not empty
+            if (tags.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    tags.forEach { tag ->
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFEDBB00), RoundedCornerShape(50.dp))
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = tag,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(22.dp))
+            }
 
             // Annotation Text
             Text(
@@ -92,12 +97,24 @@ fun TutorialAnnotationCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = tutorialName,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFFEDBB00)
-                )
+                // Tutorial name with icon
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = iconRes),
+                        contentDescription = "Tutorial",
+                        modifier = Modifier.size(28.dp)
+                    )
+
+                    Text(
+                        text = tutorialName,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFFEDBB00)
+                    )
+                }
 
                 Text(
                     text = date,

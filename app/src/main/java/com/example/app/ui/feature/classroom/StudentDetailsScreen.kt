@@ -64,10 +64,28 @@ fun StudentDetailsScreen(
     modifier: Modifier = Modifier,
     classId: String = "",
     onEditStudent: () -> Unit = {},
+    onNavigateToTutorialAnnotation: (String) -> Unit = {},
+    onNavigateToLearnAnnotation: (String) -> Unit = {},
     viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.studentDetailsUiState.collectAsState()
+
+    // Activity icons (same as LearnModeActivitySelectionScreen)
+    val allIcons = remember {
+        listOf(
+            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
+            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
+            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
+            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
+            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
+            R.drawable.ic_activity_21, R.drawable.ic_activity_22
+        )
+    }
+    fun getIconForActivity(activityId: Long): Int {
+        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
+        return allIcons[iconIndex]
+    }
     
     // State for edit dialogs
     var showEditNameDialog by remember { mutableStateOf(false) }
@@ -312,25 +330,116 @@ fun StudentDetailsScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Tutorial Annotation Card
-            TutorialAnnotationCard(
-                tags = listOf("Fluency", "Recognition"),
-                annotation = "Kim is showing improvements in vowel tracing but still pauses to recognize the letters.",
-                tutorialName = "Meet the Vowels | Animals",
-                date = "Jan 01, 2026",
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
+            // Tutorial Annotation Cards - Show completed tutorial sessions
+            uiState.completedTutorialSessions.forEach { session ->
+                val formattedDate = session.completedAt?.let { timestamp ->
+                    val date = java.util.Date(timestamp)
+                    val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    formatter.format(date)
+                } ?: "Jan 01, 2026"
+                
+                // Extract tags from strengths and challenges, removing duplicates
+                val tags = session.annotation?.let { annotation ->
+                    val strengthsList = annotation.getStrengthsList()
+                    val challengesList = annotation.getChallengesList()
+                    (strengthsList + challengesList).distinct().take(2)
+                } ?: listOf("Fluency", "Recognition")
+                
+                val annotationText = session.annotation?.let { annotation ->
+                    buildString {
+                        if (annotation.strengthsNote.isNotBlank()) {
+                            append(annotation.strengthsNote)
+                        }
+                        if (annotation.challengesNote.isNotBlank()) {
+                            if (isNotEmpty()) append(" ")
+                            append(annotation.challengesNote)
+                        }
+                    }.takeIf { it.isNotBlank() }
+                } ?: "${uiState.studentName} has completed the ${session.tutorialType} ${session.letterType.lowercase()} letters tutorial."
+                
+                TutorialAnnotationCard(
+                    tags = tags,
+                    annotation = annotationText,
+                    tutorialName = "${session.tutorialType} | ${session.letterType}",
+                    date = formattedDate,
+                    iconRes = if (session.tutorialType == "Consonants") R.drawable.ic_ball else R.drawable.ic_apple,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    onClick = { onNavigateToTutorialAnnotation("${session.tutorialType}|${session.letterType}|${session.setId}") }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
 
-            Spacer(Modifier.height(16.dp))
+            // Learn Annotation Cards - Show completed learn sets
+            uiState.completedLearnSets.forEach { completedSet ->
+                val formattedDate = completedSet.completedAt?.let { timestamp ->
+                    val date = java.util.Date(timestamp)
+                    val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    formatter.format(date)
+                } ?: "Jan 01, 2026"
+                
+                // Extract tags from strengths and challenges, removing duplicates
+                // Only show tags if there are actual notes/annotations, not just for completion
+                val tags = completedSet.annotation?.let { annotation ->
+                    val hasNotes = annotation.strengthsNote.isNotBlank() || annotation.challengesNote.isNotBlank()
+                    val hasTags = annotation.getStrengthsList().isNotEmpty() || annotation.getChallengesList().isNotEmpty()
+                    
+                    if (hasNotes || hasTags) {
+                        val strengthsList = annotation.getStrengthsList()
+                        val challengesList = annotation.getChallengesList()
+                        (strengthsList + challengesList).distinct().take(2)
+                    } else {
+                        emptyList()
+                    }
+                } ?: emptyList()
+                
+                val annotationText = completedSet.annotation?.let { annotation ->
+                    buildString {
+                        if (annotation.strengthsNote.isNotBlank()) {
+                            append(annotation.strengthsNote)
+                        }
+                        if (annotation.challengesNote.isNotBlank()) {
+                            if (isNotEmpty()) append(" ")
+                            append(annotation.challengesNote)
+                        }
+                    }.takeIf { it.isNotBlank() }
+                } ?: "${uiState.studentName} has completed this activity set."
 
-            // Learn Annotation Card
-            LearnAnnotationCard(
-                tags = listOf("Fluency", "Recognition"),
-                annotation = "Kim is showing improvements in vowel tracing but still pauses to recognize the letters.",
-                lessonName = "Meet the Vowels | Animals",
-                date = "Jan 01, 2026",
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
+                LearnAnnotationCard(
+                    tags = tags,
+                    annotation = annotationText,
+                    lessonName = "${completedSet.activityName} | ${completedSet.setName}",
+                    date = formattedDate,
+                    iconRes = getIconForActivity(completedSet.activityId),
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    onClick = { onNavigateToLearnAnnotation("${completedSet.activityName}|${completedSet.setId}|${completedSet.activityId}") }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+
+            // Empty state when no annotations
+            if (uiState.completedTutorialSessions.isEmpty() && uiState.completedLearnSets.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No Annotations Yet",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF6B7280)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Your notes and highlights will appear here.",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF9CA3AF),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
         }
     }
     

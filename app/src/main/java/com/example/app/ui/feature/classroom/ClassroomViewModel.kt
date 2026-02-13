@@ -13,6 +13,7 @@ import com.example.app.data.repository.StudentTeacherRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -32,6 +33,44 @@ data class RosterStudent(
     val pfpPath: String?,
     val enrollmentId: Long
 )
+
+/**
+ * Data class representing a completed activity/set for a student.
+ */
+data class CompletedActivitySet(
+    val activityId: Long,
+    val activityName: String,
+    val setId: Long,
+    val setName: String,
+    val completedAt: Long?,
+    val isTutorial: Boolean = false,
+    val annotation: com.example.app.data.entity.LearnerProfileAnnotation? = null
+)
+
+/**
+ * Data class representing a completed tutorial session for a student.
+ */
+data class CompletedTutorialSession(
+    val tutorialType: String, // "Vowels", "Consonants", "Stops"
+    val letterType: String,   // "Capital", "Small"
+    val completedAt: Long?,
+    val setId: Long = generateTutorialSetId(tutorialType, letterType),
+    val annotation: com.example.app.data.entity.LearnerProfileAnnotation? = null
+)
+
+/**
+ * Generate a unique setId based on tutorial session (title + letterType)
+ * Using negative IDs to avoid collision with actual database setIds
+ */
+fun generateTutorialSetId(title: String, letterType: String): Long {
+    return when {
+        title.equals("Vowels", ignoreCase = true) && letterType.equals("capital", ignoreCase = true) -> -1L
+        title.equals("Vowels", ignoreCase = true) && letterType.equals("small", ignoreCase = true) -> -2L
+        title.equals("Consonants", ignoreCase = true) && letterType.equals("capital", ignoreCase = true) -> -3L
+        title.equals("Consonants", ignoreCase = true) && letterType.equals("small", ignoreCase = true) -> -4L
+        else -> -(kotlin.math.abs("$title-$letterType".hashCode().toLong()) % 1000 + 5)
+    }
+}
 
 /**
  * UI state for ClassScreen.
@@ -72,6 +111,8 @@ data class StudentDetailsUiState(
     val secondTipTitle: String? = null,
     val secondTipDescription: String? = null,
     val secondTipSubtitle: String? = null,
+    val completedLearnSets: List<CompletedActivitySet> = emptyList(),
+    val completedTutorialSessions: List<CompletedTutorialSession> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -285,6 +326,80 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     }
                 }
+
+                // Load completed sets for the student
+                val studentSetProgressDao = database.studentSetProgressDao()
+                val activityDao = database.activityDao()
+                val setDao = database.setDao()
+                
+                val completedProgress = studentSetProgressDao.getProgressForStudent(studentId)
+                    .first()
+                    .filter { it.isCompleted }
+                
+                // Load annotations for learn mode
+                val annotationDao = database.learnerProfileAnnotationDao()
+                
+                val completedSets = completedProgress.mapNotNull { progress ->
+                    val activity = activityDao.getActivityById(progress.activityId)
+                    val set = setDao.getSetById(progress.setId)
+                    
+                    if (activity != null && set != null) {
+                        // Load annotation for this completed set
+                        val annotation = annotationDao.getAnnotationsForStudentInSet(
+                            studentId = studentId.toString(),
+                            setId = set.id,
+                            sessionMode = com.example.app.data.entity.LearnerProfileAnnotation.MODE_LEARN
+                        ).firstOrNull()
+                        
+                        CompletedActivitySet(
+                            activityId = activity.id,
+                            activityName = activity.title,
+                            setId = set.id,
+                            setName = set.title,
+                            completedAt = progress.completedAt,
+                            isTutorial = false, // Learn mode sets
+                            annotation = annotation
+                        )
+                    } else null
+                }
+                
+                // Load tutorial annotations from learner_profile_annotations table
+                val tutorialSessions = mutableListOf<CompletedTutorialSession>()
+                
+                // Define all possible tutorial combinations
+                val tutorialCombinations = listOf(
+                    Triple("Vowels", "Capital", -1L),
+                    Triple("Vowels", "Small", -2L),
+                    Triple("Consonants", "Capital", -3L),
+                    Triple("Consonants", "Small", -4L)
+                )
+                
+                // Fetch annotations for each tutorial type
+                tutorialCombinations.forEach { (tutorialType, letterType, setId) ->
+                    val annotations = annotationDao.getAnnotationsForStudentInSet(
+                        studentId = studentId.toString(),
+                        setId = setId,
+                        sessionMode = com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL
+                    )
+                    
+                    // Add a session for each annotation found
+                    annotations.forEach { annotation ->
+                        tutorialSessions.add(
+                            CompletedTutorialSession(
+                                tutorialType = tutorialType,
+                                letterType = letterType,
+                                completedAt = annotation.createdAt,
+                                setId = setId,
+                                annotation = annotation
+                            )
+                        )
+                    }
+                }
+                
+                uiState = uiState.copy(
+                    completedLearnSets = completedSets,
+                    completedTutorialSessions = tutorialSessions
+                )
 
                 _studentDetailsUiState.value = uiState
             } catch (e: Exception) {

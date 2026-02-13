@@ -48,6 +48,11 @@ fun MainNavigationContainer(
     var addedStudentCount by remember { mutableIntStateOf(0) }
     var selectedStudentId by remember { mutableStateOf("") }
     var selectedStudentName by remember { mutableStateOf("") }
+    var selectedTutorialAnnotationName by remember { mutableStateOf("") }
+    var selectedTutorialAnnotationSetId by remember { mutableStateOf(0L) }
+    var selectedLearnAnnotationName by remember { mutableStateOf("") }
+    var selectedLearnAnnotationSetId by remember { mutableStateOf(0L) }
+    var selectedLearnAnnotationActivityId by remember { mutableStateOf(0L) }
 
     // --- TUTORIAL MODE STATE ---
     var tutorialModeStudentId by remember { mutableStateOf(0L) }
@@ -372,6 +377,36 @@ fun MainNavigationContainer(
             className = selectedClassName,
             classId = selectedClassId,
             onNavigateBack = { currentScreen = 2 },
+            onNavigateToTutorialAnnotation = { tutorialData ->
+                // Parse format: "TutorialType|LetterType|SetId"
+                val parts = tutorialData.split("|")
+                selectedTutorialAnnotationName = if (parts.size >= 2) "${parts[0]} | ${parts[1]}" else tutorialData
+                selectedTutorialAnnotationSetId = if (parts.size >= 3) parts[2].toLongOrNull() ?: 0L else 0L
+                currentScreen = 46
+            },
+            onNavigateToLearnAnnotation = { lessonData ->
+                // Parse format: "ActivityName|SetId|ActivityId"
+                val parts = lessonData.split("|")
+                selectedLearnAnnotationName = if (parts.size >= 1) parts[0] else lessonData
+                selectedLearnAnnotationSetId = if (parts.size >= 2) parts[1].toLongOrNull() ?: 0L else 0L
+                selectedLearnAnnotationActivityId = if (parts.size >= 3) parts[2].toLongOrNull() ?: 0L else 0L
+                currentScreen = 47
+            },
+            modifier = modifier
+        )
+        46 -> TutorialAnnotationDetailsScreen(
+            tutorialName = selectedTutorialAnnotationName,
+            setId = selectedTutorialAnnotationSetId,
+            studentId = selectedStudentId,
+            onNavigateBack = { currentScreen = 26 },
+            modifier = modifier
+        )
+        47 -> LearnAnnotationDetailsScreen(
+            lessonName = selectedLearnAnnotationName,
+            setId = selectedLearnAnnotationSetId,
+            activityId = selectedLearnAnnotationActivityId,
+            studentId = selectedStudentId,
+            onNavigateBack = { currentScreen = 26 },
             modifier = modifier
         )
         27 -> TutorialModeStudentScreen(
