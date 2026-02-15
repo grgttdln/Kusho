@@ -1,5 +1,6 @@
 package com.example.kusho.presentation.practice
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -126,6 +127,7 @@ private fun PracticeModeContent(
     ttsManager: TextToSpeechManager,
     shakeDetector: ShakeDetector
 ) {
+    val context = LocalContext.current
     val viewModel: PracticeModeViewModel = viewModel(
         factory = PracticeModeViewModelFactory(sensorManager, classifierResult)
     )
@@ -193,9 +195,63 @@ private fun PracticeModeContent(
         if (uiState.state == PracticeModeViewModel.State.RESULT) {
             val isCorrect = uiState.isAnswerCorrect == true
             if (isCorrect) {
-                ttsManager.speak(correctAffirmations.random())
+                // Play random correct audio file
+                val correctAudioFiles = listOf(
+                    R.raw.correct_keep_it_up,
+                    R.raw.correct_you_nailed_it,
+                    R.raw.correct_impressive,
+                    R.raw.correct_way_to_go,
+                    R.raw.correct_smart_thinking,
+                    R.raw.correct_thats_correct,
+                    R.raw.correct_youre_improving,
+                    R.raw.correct_outstanding,
+                    R.raw.correct_perfect,
+                    R.raw.correct_nice_work,
+                    R.raw.correct_brilliant,
+                    R.raw.correct_you_did_it,
+                    R.raw.correct_fantastic,
+                    R.raw.correct_awesome,
+                    R.raw.correct_excellent,
+                    R.raw.correct_well_done,
+                    R.raw.correct_great_work,
+                    R.raw.correct_good_job
+                )
+                val randomAudio = correctAudioFiles.random()
+                try {
+                    val mediaPlayer = MediaPlayer.create(context, randomAudio)
+                    mediaPlayer?.start()
+                    mediaPlayer?.setOnCompletionListener {
+                        it.release()
+                    }
+                } catch (e: Exception) {
+                    // Fallback to TTS if audio playback fails
+                    ttsManager.speak(correctAffirmations.random())
+                }
             } else {
-                ttsManager.speak(wrongAffirmations.random())
+                // Play random wrong audio file
+                val wrongAudioFiles = listOf(
+                    R.raw.wrong_keep_pushing_forward,
+                    R.raw.wrong_lets_try_again,
+                    R.raw.wrong_think_it_through,
+                    R.raw.wrong_keep_practicing,
+                    R.raw.wrong_mistakes_help_us_learn,
+                    R.raw.wrong_try_one_more_time,
+                    R.raw.wrong_take_your_time,
+                    R.raw.wrong_practice_makes_perfect,
+                    R.raw.wrong_give_it_another_shot,
+                    R.raw.wrong_keep_trying
+                )
+                val randomAudio = wrongAudioFiles.random()
+                try {
+                    val mediaPlayer = MediaPlayer.create(context, randomAudio)
+                    mediaPlayer?.start()
+                    mediaPlayer?.setOnCompletionListener {
+                        it.release()
+                    }
+                } catch (e: Exception) {
+                    // Fallback to TTS if audio playback fails
+                    ttsManager.speak(wrongAffirmations.random())
+                }
             }
         }
     }
