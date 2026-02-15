@@ -1,5 +1,8 @@
 package com.example.app.ui.feature.learn.learnmode
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -42,6 +45,8 @@ import com.example.app.data.AppDatabase
 import com.example.app.data.entity.LearnerProfileAnnotation
 import com.example.app.data.repository.SetRepository
 import com.example.app.service.WatchConnectionManager
+import com.example.app.speech.DeepgramTTSManager
+import com.example.app.speech.TextToSpeechManager
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
 import kotlinx.coroutines.Dispatchers
@@ -163,7 +168,28 @@ fun LearnModeSessionScreen(
 
     // Get WatchConnectionManager instance
     val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
-    
+
+    // Initialize TTS managers
+    val deepgramTtsManager = remember { DeepgramTTSManager(context) }
+    val nativeTtsManager = remember { TextToSpeechManager(context) }
+
+    // Check internet connectivity
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+    val isNetworkAvailable = networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+    // Determine which TTS to use (Deepgram needs both API key AND internet)
+    val useDeepgram = deepgramTtsManager.isConfigured() && isNetworkAvailable
+    Log.d("LearnModeSession", "TTS Configuration - Deepgram configured: ${deepgramTtsManager.isConfigured()}, Internet available: $isNetworkAvailable, Using Deepgram: $useDeepgram")
+
+    // Cleanup TTS on dispose
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            deepgramTtsManager.stop()
+            nativeTtsManager.shutdown()
+        }
+    }
+
     // Load existing annotations for this student and set when the screen loads
     LaunchedEffect(setId, studentId, sessionKey) {
         if (setId > 0 && studentId.isNotBlank()) {
@@ -309,6 +335,27 @@ fun LearnModeSessionScreen(
                 maskedIndex = currentWord.selectedLetterIndex,
                 configurationType = currentWord.configurationType
             )
+
+            // Speak random phrase based on question type
+            launch {
+                try {
+                    if (useDeepgram) {
+                        Log.d("LearnModeSession", "Using Deepgram TTS")
+                        deepgramTtsManager.speakRandomPhrase(
+                            currentWord.configurationType,
+                            if (currentWord.configurationType == "Name the Picture") null else currentWord.word
+                        )
+                    } else {
+                        Log.d("LearnModeSession", "Using Native TTS")
+                        nativeTtsManager.speakRandomPhrase(
+                            currentWord.configurationType,
+                            if (currentWord.configurationType == "Name the Picture") null else currentWord.word
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e("LearnModeSession", "Error playing TTS", e)
+                }
+            }
         }
     }
 
