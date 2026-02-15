@@ -984,20 +984,65 @@ private fun ProgressCheckDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val mediaPlayer = remember { MediaPlayer() }
+
+    // Lists of specific affirmative audio files
+    val correctAffirmatives = listOf(
+        R.raw.correct_great_effort_on_that_task,
+        R.raw.correct_you_completed_that_perfectly,
+        R.raw.correct_your_focus_is_impressive,
+        R.raw.correct_youre_making_a_fantastic_progress,
+        R.raw.correct_that_was_an_excellent_attempt,
+        R.raw.correct_you_handled_that_very_well,
+        R.raw.correct_your_hard_work_is_paying_off,
+        R.raw.correct_keep_up_the_good_work,
+        R.raw.correct_you_are_doing_really_well,
+        R.raw.correct_you_did_a_great_job
+    )
+
+    val wrongAffirmatives = listOf(
+        R.raw.wrong_youre_learning_so_keep_going,
+        R.raw.wrong_think_carefully_and_try_one_more_time,
+        R.raw.wrong_its_okay_to_make_mistakes_keep_trying,
+        R.raw.wrong_believe_in_yourself_and_try_again,
+        R.raw.wrong_stay_patient_and_keep_working,
+        R.raw.wrong_give_it_another_try_and_do_your_best,
+        R.raw.wrong_try_again_with_confidence,
+        R.raw.wrong_youre_almost_there_keep_going,
+        R.raw.wrong_keep_practicing_and_youll_get_it,
+        R.raw.wrong_take_your_time_and_try_once_more,
+        R.raw.wrong_you_can_do_better_on_the_next_try,
+        R.raw.wrong_dont_worry_try_again
+    )
 
     // Play audio when dialog appears
     DisposableEffect(isCorrect) {
-        try {
-            val audioResId = if (isCorrect) R.raw.correct else R.raw.wrong
-            mediaPlayer.reset()
-            val afd = context.resources.openRawResourceFd(audioResId)
-            mediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-            afd.close()
-            mediaPlayer.prepare()
-            mediaPlayer.start()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        val mediaPlayer = MediaPlayer()
+
+        fun playAudio(resId: Int, onComplete: (() -> Unit)? = null) {
+            try {
+                mediaPlayer.reset()
+                val afd = context.resources.openRawResourceFd(resId)
+                mediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
+                mediaPlayer.prepare()
+                mediaPlayer.setOnCompletionListener {
+                    onComplete?.invoke()
+                }
+                mediaPlayer.start()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete?.invoke()
+            }
+        }
+
+        // Play base sound first, then random affirmative
+        val baseResId = if (isCorrect) R.raw.correct else R.raw.wrong
+        val affirmativeList = if (isCorrect) correctAffirmatives else wrongAffirmatives
+        val randomAffirmative = affirmativeList.random()
+
+        playAudio(baseResId) {
+            // Play random affirmative after base sound finishes
+            playAudio(randomAffirmative)
         }
 
         onDispose {
