@@ -28,6 +28,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import android.media.MediaPlayer
 import com.example.app.R
 
 private val CorrectColor = Color(0xFFCCDB00)
@@ -42,6 +46,25 @@ fun ProgressCheckDialog(
     predictedLetter: String,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val mediaPlayer = remember { MediaPlayer() }
+    
+    // Play audio when dialog appears
+    DisposableEffect(isCorrect) {
+        try {
+            val audioResId = if (isCorrect) R.raw.correct else R.raw.wrong
+            mediaPlayer.reset()
+            mediaPlayer.setDataSource(context, android.net.Uri.parse("android.resource://${context.packageName}/$audioResId"))
+            mediaPlayer.prepare()
+            mediaPlayer.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
+        onDispose {
+            mediaPlayer.release()
+        }
+    }
     // Extract first name only for more friendly tone
     val firstName = studentName.split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: ""
     

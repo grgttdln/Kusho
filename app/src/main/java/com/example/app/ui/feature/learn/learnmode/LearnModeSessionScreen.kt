@@ -1,9 +1,11 @@
 package com.example.app.ui.feature.learn.learnmode
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -981,6 +983,28 @@ private fun ProgressCheckDialog(
     predictedLetter: String,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val mediaPlayer = remember { MediaPlayer() }
+
+    // Play audio when dialog appears
+    DisposableEffect(isCorrect) {
+        try {
+            val audioResId = if (isCorrect) R.raw.correct else R.raw.wrong
+            mediaPlayer.reset()
+            val afd = context.resources.openRawResourceFd(audioResId)
+            mediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            afd.close()
+            mediaPlayer.prepare()
+            mediaPlayer.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        onDispose {
+            mediaPlayer.release()
+        }
+    }
+
     // Extract first name only for more friendly tone
     val firstName = studentName.split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: ""
 
