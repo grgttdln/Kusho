@@ -32,6 +32,7 @@ class WearMessageListenerService : WearableListenerService() {
         private const val MESSAGE_PATH_REQUEST_DEVICE_INFO = "/request_device_info"
         private const val MESSAGE_PATH_BATTERY_STATUS = "/battery_status"
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
+        private const val MESSAGE_PATH_PAIRING_ACCEPTED = "/pairing_accepted"
 
         // Learn Mode message paths
         private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
@@ -51,6 +52,14 @@ class WearMessageListenerService : WearableListenerService() {
         Log.d(TAG, "📨 Message received: ${messageEvent.path}")
         
         when (messageEvent.path) {
+            MESSAGE_PATH_PAIRING_ACCEPTED -> {
+                Log.d(TAG, "✅ Pairing accepted by phone! Saving paired status.")
+                val prefs = applicationContext.getSharedPreferences("kusho_prefs", android.content.Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putBoolean("is_paired", true)
+                    .putBoolean("is_skipped", false)
+                    .apply()
+            }
             MESSAGE_PATH_REQUEST_BATTERY -> {
                 Log.d(TAG, "🔋 Battery request received from phone")
                 sendBatteryStatusToPhone()

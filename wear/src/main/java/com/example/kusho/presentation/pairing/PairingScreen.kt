@@ -45,11 +45,9 @@ fun PairingScreen(
     
     val pairingState by viewModel.pairingState.collectAsState()
     
-    // Start pairing-specific monitoring when screen appears
+    // Stop global monitoring while on pairing screen
     LaunchedEffect(Unit) {
-        // Stop global monitoring while we're on pairing screen
         connectionMonitor.stopMonitoring()
-        viewModel.startMonitoring()
     }
     
     // Navigate to home when pairing is successful
@@ -64,12 +62,7 @@ fun PairingScreen(
         }
     }
     
-    // Stop monitoring when screen is disposed
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.stopMonitoring()
-        }
-    }
+    // No auto-monitoring needed - user initiates via button
     
     Box(
         modifier = modifier
@@ -79,7 +72,7 @@ fun PairingScreen(
     ) {
         when (pairingState) {
             is PairingState.Prompt -> {
-                PromptContent()
+                PromptContent(onConnectToPhone = { viewModel.connectToPhone() })
             }
             is PairingState.Checking -> {
                 CheckingContent()
@@ -106,16 +99,22 @@ fun PairingScreen(
                     }
                 )
             }
+            is PairingState.WaitingForAcceptance -> {
+                WaitingForAcceptanceContent()
+            }
+            is PairingState.Declined -> {
+                DeclinedContent(onRetry = { viewModel.retry() })
+            }
         }
     }
 }
 
 /**
- * Prompt state - "Open Kusho' app for Pairing"
+ * Prompt state - "Connect to Phone" button
  */
 @Composable
 private fun PromptContent(
-    onSkip: (() -> Unit)? = null
+    onConnectToPhone: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -129,22 +128,42 @@ private fun PromptContent(
             painter = painterResource(id = R.drawable.dis_pairing_m),
             contentDescription = "Pairing prompt",
             modifier = Modifier
-                .size(100.dp)
-                .padding(bottom = 16.dp),
+                .size(80.dp)
+                .padding(bottom = 8.dp),
             contentScale = ContentScale.Fit
         )
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         
         // Instructions
         Text(
-            text = "Open Kusho' app\nfor Pairing",
+            text = "Pair with Phone",
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             color = Color.White,
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Connect to Phone button
+        Button(
+            onClick = onConnectToPhone,
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .height(40.dp),
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = Color(0xFF4A90E2)
+            )
+        ) {
+            Text(
+                text = "Connect to Phone",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+        }
     }
 }
 
@@ -420,5 +439,88 @@ private fun BluetoothOffContent() {
             textAlign = TextAlign.Center,
             lineHeight = 16.sp
         )
+    }
+}
+
+/**
+ * Waiting for phone to accept pairing request
+ */
+@Composable
+private fun WaitingForAcceptanceContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(50.dp),
+            strokeWidth = 4.dp,
+            indicatorColor = Color(0xFF49A9FF)
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Waiting for\nphone to accept...",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp
+        )
+    }
+}
+
+/**
+ * Phone declined the pairing request
+ */
+@Composable
+private fun DeclinedContent(
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.dis_remove),
+            contentDescription = "Declined",
+            modifier = Modifier.size(80.dp),
+            contentScale = ContentScale.Fit
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Request Declined",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFF6B6B),
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Button(
+            onClick = onRetry,
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .height(36.dp),
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = Color(0xFF4A90E2)
+            )
+        ) {
+            Text(
+                text = "Try Again",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+        }
     }
 }

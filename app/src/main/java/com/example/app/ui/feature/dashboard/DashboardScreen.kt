@@ -1,4 +1,4 @@
-package com.example.app.ui.feature.dashboard
+﻿package com.example.app.ui.feature.dashboard
 
 import android.Manifest
 import android.app.Activity
@@ -48,6 +48,7 @@ import com.example.app.data.SessionManager
 import com.example.app.data.entity.Activity as ActivityEntity
 import com.example.app.service.ConnectionState
 import com.example.app.service.WatchConnectionManager
+import com.example.app.service.PairingRequestEvent
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.dashboard.BatteryIcon
 import com.example.app.ui.components.dashboard.getWatchImageResource
@@ -75,6 +76,7 @@ fun DashboardScreen(
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showInstallInstructionsDialog by remember { mutableStateOf(false) }
+    val pairingRequest by viewModel.pairingRequest.collectAsState()
     val greeting = viewModel.getGreeting()
     
     // Bluetooth enable request launcher (must be declared first)
@@ -232,6 +234,33 @@ fun DashboardScreen(
                 )
             }
 
+            // Watch Pairing Request Dialog
+            pairingRequest?.let { request ->
+                AlertDialog(
+                    onDismissRequest = { viewModel.declinePairingRequest(request.nodeId) },
+                    title = { Text(text = "Watch Pairing Request", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Text(
+                            text = "\"${request.watchName}\" is requesting to connect.\n\nAccept or Decline?"
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = { viewModel.acceptPairingRequest(request.nodeId) }
+                        ) {
+                            Text(text = "Accept", color = Color(0xFF4CAF50))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { viewModel.declinePairingRequest(request.nodeId) }
+                        ) {
+                            Text(text = "Decline", color = Color(0xFFE53935))
+                        }
+                    }
+                )
+            }
+
             // User Profile Section
             Row(
                 modifier = Modifier
@@ -332,13 +361,17 @@ fun DashboardScreen(
                     },
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (watchDevice.isConnected) Color(0xFFE9FCFF) else Color(0xFFF5F5F5)
+                    containerColor = when {
+                        pairingRequest != null -> Color(0xFFFFF8E1) // Amber tint while waiting
+                        watchDevice.isConnected -> Color(0xFFE9FCFF)
+                        else -> Color(0xFFF5F5F5)
+                    }
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Refresh button
-                    if (watchDevice.isConnected) {
+                    // Refresh button (hidden while pairing request pending)
+                    if (watchDevice.isConnected && pairingRequest == null) {
                         IconButton(
                             onClick = {
                                 viewModel.checkWatchConnection()
@@ -373,51 +406,91 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.Top
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = when (watchDevice.connectionState) {
-                                    ConnectionState.WATCH_CONNECTED -> watchDevice.name
-                                    ConnectionState.WATCH_PAIRED_NO_APP -> watchDevice.name
-                                    ConnectionState.BLUETOOTH_OFF -> "Bluetooth Off"
-                                    ConnectionState.NO_WATCH -> "No Watch Connected"
-                                },
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (watchDevice.isConnected) Color(0xFF3FA9F8) else Color(0xFF888888),
-                                lineHeight = 27.sp
-                            )
+                            if (pairingRequest != null) {
+                                // Pending pairing request — show waiting state
+                                Text(
+                                    text = pairingRequest!!.watchName,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFFF9800),
+                                    lineHeight = 27.sp
+                                )
 
-                            Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                            Text(
-                                text = when (watchDevice.connectionState) {
-                                    ConnectionState.WATCH_CONNECTED -> "Connected"
-                                    ConnectionState.WATCH_PAIRED_NO_APP -> "Install Kusho app on watch"
-                                    ConnectionState.BLUETOOTH_OFF -> "Turn on Bluetooth"
-                                    ConnectionState.NO_WATCH -> "Tap to connect"
-                                },
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = when (watchDevice.connectionState) {
-                                    ConnectionState.WATCH_CONNECTED -> Color(0xFF3FA9F8)
-                                    ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800)
-                                    else -> Color(0xFF888888)
-                                },
-                                lineHeight = 21.sp
-                            )
+                                Text(
+                                    text = "Waiting to pair...",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color(0xFFFF9800),
+                                    lineHeight = 21.sp
+                                )
 
-                            Spacer(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.weight(1f))
 
-                            if (watchDevice.connectionState == ConnectionState.WATCH_CONNECTED) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    BatteryIcon(percentage = watchDevice.batteryPercentage)
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color(0xFFFF9800)
+                                    )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = watchDevice.batteryPercentage?.let { "$it%" } ?: "Loading...",
-                                        fontSize = 14.sp,
+                                        text = "Confirm in dialog above",
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Normal,
-                                        color = Color(0xFF3FA9F8),
-                                        lineHeight = 21.sp
+                                        color = Color(0xFFBB8800),
+                                        lineHeight = 18.sp
                                     )
+                                }
+                            } else {
+                                // Normal connection state display
+                                Text(
+                                    text = when (watchDevice.connectionState) {
+                                        ConnectionState.WATCH_CONNECTED -> watchDevice.name
+                                        ConnectionState.WATCH_PAIRED_NO_APP -> watchDevice.name
+                                        ConnectionState.BLUETOOTH_OFF -> "Bluetooth Off"
+                                        ConnectionState.NO_WATCH -> "No Watch Connected"
+                                    },
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (watchDevice.isConnected) Color(0xFF3FA9F8) else Color(0xFF888888),
+                                    lineHeight = 27.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = when (watchDevice.connectionState) {
+                                        ConnectionState.WATCH_CONNECTED -> "Connected"
+                                        ConnectionState.WATCH_PAIRED_NO_APP -> "Install Kusho app on watch"
+                                        ConnectionState.BLUETOOTH_OFF -> "Turn on Bluetooth"
+                                        ConnectionState.NO_WATCH -> "Tap to connect"
+                                    },
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = when (watchDevice.connectionState) {
+                                        ConnectionState.WATCH_CONNECTED -> Color(0xFF3FA9F8)
+                                        ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800)
+                                        else -> Color(0xFF888888)
+                                    },
+                                    lineHeight = 21.sp
+                                )
+
+                                Spacer(modifier = Modifier.weight(1f))
+
+                                if (watchDevice.connectionState == ConnectionState.WATCH_CONNECTED) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        BatteryIcon(percentage = watchDevice.batteryPercentage)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = watchDevice.batteryPercentage?.let { "$it%" } ?: "Loading...",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Normal,
+                                            color = Color(0xFF3FA9F8),
+                                            lineHeight = 21.sp
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -427,7 +500,11 @@ fun DashboardScreen(
                             contentDescription = "Watch",
                             modifier = Modifier.size(111.dp),
                             contentScale = ContentScale.Fit,
-                            alpha = if (watchDevice.isConnected) 1f else 0.4f
+                            alpha = when {
+                                pairingRequest != null -> 0.6f
+                                watchDevice.isConnected -> 1f
+                                else -> 0.4f
+                            }
                         )
                     }
                 }

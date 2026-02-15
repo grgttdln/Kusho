@@ -21,4 +21,10 @@ sealed class PairingState {
     
     /** Max retry attempts reached - show skip/try again options */
     data class MaxRetriesReached(val attemptCount: Int) : PairingState()
+    
+    /** Waiting for the phone user to accept the pairing request */
+    object WaitingForAcceptance : PairingState()
+    
+    /** Phone user declined the pairing request */
+    object Declined : PairingState()
 }

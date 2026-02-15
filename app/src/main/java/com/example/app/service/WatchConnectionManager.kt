@@ -41,6 +41,15 @@ data class WatchDeviceInfo(
     val lastUpdated: Long = System.currentTimeMillis()
 )
 
+/**
+ * Represents an incoming pairing request from a watch
+ */
+data class PairingRequestEvent(
+    val nodeId: String = "",
+    val watchName: String = "Smartwatch",
+    val timestamp: Long = 0L
+)
+
 class WatchConnectionManager private constructor(private val context: Context) {
     
     private val nodeClient: NodeClient by lazy { Wearable.getNodeClient(context) }
@@ -81,6 +90,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
     val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
 
+    // Pairing request from watch
+    private val _pairingRequest = MutableStateFlow<PairingRequestEvent?>(null)
+    val pairingRequest: StateFlow<PairingRequestEvent?> = _pairingRequest.asStateFlow()
+
     companion object {
         @Volatile
         private var INSTANCE: WatchConnectionManager? = null
@@ -103,6 +116,12 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
         private const val MESSAGE_PATH_PING = "/kusho/ping"
         private const val MESSAGE_PATH_PONG = "/kusho/pong"
+
+        // Pairing handshake message paths
+        private const val MESSAGE_PATH_PAIRING_REQUEST = "/pairing_request"
+        private const val MESSAGE_PATH_PAIRING_ACCEPTED = "/pairing_accepted"
+        private const val MESSAGE_PATH_PAIRING_DECLINED = "/pairing_declined"
+        private const val PREFS_PAIRING = "kusho_pairing"
 
         // Learn Mode message paths
         private const val MESSAGE_PATH_LEARN_MODE_SKIP = "/learn_mode_skip"
@@ -582,8 +601,44 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * Handle incoming messages from watch
      */
     private fun handleIncomingMessage(messageEvent: MessageEvent) {
-        Log.d(TAG, "📥 Processing message: ${messageEvent.path}")
+        Log.d(TAG, "📥 Processing message: ${messageEvent.path} from ${messageEvent.sourceNodeId}")
+        
+        // Data lockdown: sensor and gesture data must come from the paired watch node
+        val sensorAndGesturePaths = setOf(
+            MESSAGE_PATH_LEARN_MODE_SKIP,
+            MESSAGE_PATH_LETTER_INPUT,
+            MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED,
+            MESSAGE_PATH_TUTORIAL_MODE_SKIP,
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
+            MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED
+        )
+        
+        if (messageEvent.path in sensorAndGesturePaths) {
+            val pairedNodeId = getPairedWatchNodeId()
+            if (pairedNodeId != null && messageEvent.sourceNodeId != pairedNodeId) {
+                Log.w(TAG, "⚠️ DATA LOCKDOWN: Ignoring ${messageEvent.path} from unpaired node ${messageEvent.sourceNodeId} (paired: $pairedNodeId)")
+                return
+            }
+        }
+        
         when (messageEvent.path) {
+            MESSAGE_PATH_PAIRING_REQUEST -> {
+                Log.d(TAG, "🤝 Pairing request received from watch: ${messageEvent.sourceNodeId}")
+                try {
+                    val json = org.json.JSONObject(String(messageEvent.data))
+                    val watchName = json.optString("watchName", "Smartwatch")
+                    _pairingRequest.value = PairingRequestEvent(
+                        nodeId = messageEvent.sourceNodeId,
+                        watchName = watchName,
+                        timestamp = System.currentTimeMillis()
+                    )
+                } catch (e: Exception) {
+                    _pairingRequest.value = PairingRequestEvent(
+                        nodeId = messageEvent.sourceNodeId,
+                        timestamp = System.currentTimeMillis()
+                    )
+                }
+            }
             MESSAGE_PATH_PING -> {
                 // Watch is checking if Kusho app is running - respond with PONG
                 Log.d(TAG, "🏓 Received PING from watch, sending PONG response")
@@ -678,6 +733,64 @@ class WatchConnectionManager private constructor(private val context: Context) {
             displayName.contains("Watch", ignoreCase = true) -> displayName
             else -> "Smartwatch" // Default name for non-Galaxy watches
         }
+    }
+    
+    /**
+     * Accept a pairing request from a watch.
+     * Saves the watch Node ID locally and sends /pairing_accepted back.
+     */
+    fun acceptPairing(nodeId: String) {
+        // Save the paired watch node ID
+        val prefs = context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+        prefs.edit().putString("paired_watch_node_id", nodeId).apply()
+        Log.d(TAG, "✅ Saved paired watch node ID: $nodeId")
+        
+        // Send acceptance message back to watch
+        scope.launch {
+            try {
+                messageClient.sendMessage(
+                    nodeId,
+                    MESSAGE_PATH_PAIRING_ACCEPTED,
+                    "accepted".toByteArray()
+                ).await()
+                Log.d(TAG, "✅ Pairing acceptance sent to watch $nodeId")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send pairing acceptance", e)
+            }
+        }
+        
+        // Clear the request
+        _pairingRequest.value = null
+    }
+    
+    /**
+     * Decline a pairing request from a watch.
+     * Sends /pairing_declined back to the requesting node.
+     */
+    fun declinePairing(nodeId: String) {
+        scope.launch {
+            try {
+                messageClient.sendMessage(
+                    nodeId,
+                    MESSAGE_PATH_PAIRING_DECLINED,
+                    "declined".toByteArray()
+                ).await()
+                Log.d(TAG, "❌ Pairing declined for watch $nodeId")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send pairing decline", e)
+            }
+        }
+        
+        // Clear the request
+        _pairingRequest.value = null
+    }
+    
+    /**
+     * Get the saved paired watch node ID (or null if not paired via handshake yet)
+     */
+    fun getPairedWatchNodeId(): String? {
+        return context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+            .getString("paired_watch_node_id", null)
     }
     
     /**
