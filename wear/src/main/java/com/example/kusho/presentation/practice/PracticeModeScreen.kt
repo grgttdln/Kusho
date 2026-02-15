@@ -134,10 +134,26 @@ private fun PracticeModeContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
-    // Speak the question when entering QUESTION state
+    // Play the question audio or speak it with TTS when entering QUESTION state
     LaunchedEffect(uiState.state, uiState.currentQuestion) {
         if (uiState.state == PracticeModeViewModel.State.QUESTION && uiState.currentQuestion != null) {
-            ttsManager.speak(uiState.currentQuestion!!.question)
+            val question = uiState.currentQuestion!!
+            if (question.audioResId != null) {
+                // Play audio file if available
+                try {
+                    val mediaPlayer = MediaPlayer.create(context, question.audioResId)
+                    mediaPlayer?.start()
+                    mediaPlayer?.setOnCompletionListener {
+                        it.release()
+                    }
+                } catch (e: Exception) {
+                    // Fallback to TTS if audio playback fails
+                    ttsManager.speak(question.question)
+                }
+            } else {
+                // Use TTS if no audio file
+                ttsManager.speak(question.question)
+            }
         }
     }
 
@@ -147,7 +163,22 @@ private fun PracticeModeContent(
             // Set up shake listener to repeat the question
             shakeDetector.setOnShakeListener {
                 uiState.currentQuestion?.let { question ->
-                    ttsManager.speak(question.question)
+                    if (question.audioResId != null) {
+                        // Play audio file if available
+                        try {
+                            val mediaPlayer = MediaPlayer.create(context, question.audioResId)
+                            mediaPlayer?.start()
+                            mediaPlayer?.setOnCompletionListener {
+                                it.release()
+                            }
+                        } catch (e: Exception) {
+                            // Fallback to TTS if audio playback fails
+                            ttsManager.speak(question.question)
+                        }
+                    } else {
+                        // Use TTS if no audio file
+                        ttsManager.speak(question.question)
+                    }
                 }
             }
             shakeDetector.startListening()
@@ -214,7 +245,8 @@ private fun PracticeModeContent(
                     R.raw.correct_excellent,
                     R.raw.correct_well_done,
                     R.raw.correct_great_work,
-                    R.raw.correct_good_job
+                    R.raw.correct_good_job,
+                    R.raw.correct_amazing_effort
                 )
                 val randomAudio = correctAudioFiles.random()
                 try {

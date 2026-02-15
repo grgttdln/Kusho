@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.kusho.R
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
@@ -23,7 +24,8 @@ data class PracticeQuestion(
     val question: String,
     val expectedAnswer: String, // The letter or answer expected
     val category: QuestionCategory,
-    val emoji: String? = null // Optional emoji for PICTURE_MATCH questions
+    val emoji: String? = null, // Optional emoji for PICTURE_MATCH questions
+    val audioResId: Int? = null // Optional audio resource ID to play instead of TTS
 )
 
 enum class QuestionCategory {
@@ -53,50 +55,50 @@ class PracticeModeViewModel(
         // Practice questions
         private val PRACTICE_QUESTIONS = listOf(
             // Tracing & Copying Letters
-            PracticeQuestion("Can you trace the letter A?", "A", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter B using your finger?", "B", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter L?", "L", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter C?", "C", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter D?", "D", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter E?", "E", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter F?", "F", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter G?", "G", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter H?", "H", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter I?", "I", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter J?", "J", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter K?", "K", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter M?", "M", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter N?", "N", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter O?", "O", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter P?", "P", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter Q?", "Q", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter R?", "R", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter S?", "S", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter T?", "T", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter U?", "U", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter V?", "V", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter W?", "W", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter X?", "X", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you trace the letter Y?", "Y", QuestionCategory.TRACING_COPYING),
-            PracticeQuestion("Can you copy the letter Z?", "Z", QuestionCategory.TRACING_COPYING),
+            PracticeQuestion("Can you trace the letter A?", "A", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_a),
+            PracticeQuestion("Can you trace the letter B?", "B", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_b),
+            PracticeQuestion("Can you copy the letter L?", "L", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_l),
+            PracticeQuestion("Can you trace the letter C?", "C", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_c),
+            PracticeQuestion("Can you trace the letter D?", "D", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_d),
+            PracticeQuestion("Can you copy the letter E?", "E", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_e),
+            PracticeQuestion("Can you trace the letter F?", "F", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_f),
+            PracticeQuestion("Can you copy the letter G?", "G", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_g),
+            PracticeQuestion("Can you trace the letter H?", "H", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_h),
+            PracticeQuestion("Can you copy the letter I?", "I", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_i),
+            PracticeQuestion("Can you trace the letter J?", "J", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_j),
+            PracticeQuestion("Can you copy the letter K?", "K", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_k),
+            PracticeQuestion("Can you trace the letter M?", "M", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_m),
+            PracticeQuestion("Can you copy the letter N?", "N", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_n),
+            PracticeQuestion("Can you trace the letter O?", "O", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_o),
+            PracticeQuestion("Can you copy the letter P?", "P", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_p),
+            PracticeQuestion("Can you trace the letter Q?", "Q", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_q),
+            PracticeQuestion("Can you copy the letter R?", "R", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_r),
+            PracticeQuestion("Can you trace the letter S?", "S", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_s),
+            PracticeQuestion("Can you copy the letter T?", "T", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_t),
+            PracticeQuestion("Can you trace the letter U?", "U", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_u),
+            PracticeQuestion("Can you copy the letter V?", "V", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_v),
+            PracticeQuestion("Can you trace the letter W?", "W", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_w),
+            PracticeQuestion("Can you copy the letter X?", "X", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_x),
+            PracticeQuestion("Can you trace the letter Y?", "Y", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_trace_upper_y),
+            PracticeQuestion("Can you copy the letter Z?", "Z", QuestionCategory.TRACING_COPYING, audioResId = R.raw.qa_copy_upper_z),
 
             // Uppercase & Lowercase Practice
-            PracticeQuestion("Can you write an uppercase A?", "A", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase b?", "b", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write an uppercase C?", "C", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase d?", "d", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write an uppercase E?", "E", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase f?", "f", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write an uppercase G?", "G", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase h?", "h", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write an uppercase I?", "I", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase j?", "j", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write an uppercase K?", "K", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase l?", "l", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write an uppercase M?", "M", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase n?", "n", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write an uppercase O?", "O", QuestionCategory.UPPERCASE_LOWERCASE),
-            PracticeQuestion("Can you write a lowercase p?", "p", QuestionCategory.UPPERCASE_LOWERCASE),
+            PracticeQuestion("Can you write an uppercase A?", "A", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_a),
+            PracticeQuestion("Can you write a lowercase b?", "b", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_b),
+            PracticeQuestion("Can you write an uppercase C?", "C", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_c),
+            PracticeQuestion("Can you write a lowercase d?", "d", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_d),
+            PracticeQuestion("Can you write an uppercase E?", "E", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_e),
+            PracticeQuestion("Can you write a lowercase f?", "f", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_f),
+            PracticeQuestion("Can you write an uppercase G?", "G", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_g),
+            PracticeQuestion("Can you write a lowercase h?", "h", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_h),
+            PracticeQuestion("Can you write an uppercase I?", "I", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_i),
+            PracticeQuestion("Can you write a lowercase j?", "j", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_j),
+            PracticeQuestion("Can you write an uppercase K?", "K", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_k),
+            PracticeQuestion("Can you write a lowercase l?", "l", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_l),
+            PracticeQuestion("Can you write an uppercase M?", "M", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_m),
+            PracticeQuestion("Can you write a lowercase n?", "n", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_n),
+            PracticeQuestion("Can you write an uppercase O?", "O", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_upper_o),
+            PracticeQuestion("Can you write a lowercase p?", "p", QuestionCategory.UPPERCASE_LOWERCASE, audioResId = R.raw.qa_ul_lower_p),
 
             // Letter Sound Match (Phonics) - TTS friendly (sound + example word)
             PracticeQuestion("Which letter makes the sound \"b\" as in \"ball\"?", "B", QuestionCategory.LETTER_SOUND),
