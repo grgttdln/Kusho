@@ -221,6 +221,27 @@ private fun PracticeModeContent(
         )
     }
 
+    // Track last spoken prediction to avoid double TTS
+    var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
+
+    // Speak the predicted letter when entering SHOWING_PREDICTION state
+    LaunchedEffect(uiState.state, uiState.prediction) {
+        if (uiState.state == PracticeModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
+            if (lastSpokenPrediction != uiState.prediction) {
+                lastSpokenPrediction = uiState.prediction
+                ttsManager.speakLetter(uiState.prediction!!)
+            }
+        }
+    }
+
+    // Reset last spoken prediction when starting a new attempt
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == PracticeModeViewModel.State.IDLE ||
+            uiState.state == PracticeModeViewModel.State.COUNTDOWN) {
+            lastSpokenPrediction = null
+        }
+    }
+
     // Speak feedback when we enter RESULT state
     LaunchedEffect(uiState.state, uiState.isAnswerCorrect) {
         if (uiState.state == PracticeModeViewModel.State.RESULT) {
