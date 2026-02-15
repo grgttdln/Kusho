@@ -1,5 +1,6 @@
 package com.example.app.ui.components.tutorial
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -39,7 +40,8 @@ fun LetterTypeSelectionDialog(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f))
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
     ) {
         Dialog(
             onDismissRequest = onDismiss,
@@ -63,12 +65,12 @@ fun LetterTypeSelectionDialog(
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color.White)
                 ) {
-                    // Blue header section
+                    // Yellow header section
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(70.dp)
-                            .background(Color(0xFF49A9FF))
+                            .background(Color(0xFFEDBB00))
                     )
 
                     // White content section
@@ -99,38 +101,60 @@ fun LetterTypeSelectionDialog(
                             Button(
                                 onClick = { onSelectType("capital") },
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(28.dp),
+                                    .weight(1f),
+                                shape = RoundedCornerShape(20.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF49A9FF)
-                                )
+                                    containerColor = Color.White
+                                ),
+                                border = BorderStroke(2.dp, Color(0xFFEDBB00)),
+                                contentPadding = PaddingValues(12.dp)
                             ) {
-                                Text(
-                                    text = "CAPITAL",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_uppercase),
+                                        contentDescription = "Capital letters",
+                                        modifier = Modifier.size(180.dp),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                    Text(
+                                        text = "Uppercase",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF0B0B0B)
+                                    )
+                                }
                             }
 
                             // Small button
                             Button(
                                 onClick = { onSelectType("small") },
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(28.dp),
+                                    .weight(1f),
+                                shape = RoundedCornerShape(20.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF49A9FF)
-                                )
+                                    containerColor = Color.White
+                                ),
+                                border = BorderStroke(2.dp, Color(0xFFEDBB00)),
+                                contentPadding = PaddingValues(12.dp)
                             ) {
-                                Text(
-                                    text = "small",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_lowercase),
+                                        contentDescription = "Small letters",
+                                        modifier = Modifier.size(180.dp),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                    Text(
+                                        text = "Lowercase",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF0B0B0B)
+                                    )
+                                }
                             }
                         }
                     }

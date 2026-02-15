@@ -151,6 +151,7 @@ fun TutorialActivityCard(
             )
         }
     }
+    }
 }
 
 @Preview(
@@ -186,5 +187,4 @@ fun TutorialActivityCardSelectedPreview() {
             )
         }
     }
-}
 
