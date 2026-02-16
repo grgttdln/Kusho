@@ -15,12 +15,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,9 +41,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
@@ -234,31 +240,128 @@ fun DashboardScreen(
                 )
             }
 
-            // Watch Pairing Request Dialog
+            // Watch Pairing Request Modal
             pairingRequest?.let { request ->
-                AlertDialog(
+                Dialog(
                     onDismissRequest = { viewModel.declinePairingRequest(request.nodeId) },
-                    title = { Text(text = "Watch Pairing Request", fontWeight = FontWeight.Bold) },
-                    text = {
-                        Text(
-                            text = "\"${request.watchName}\" is requesting to connect.\n\nAccept or Decline?"
+                    properties = DialogProperties(
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = true,
+                        usePlatformDefaultWidth = false
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .wrapContentHeight(),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        // Main card content (positioned below the mascot)
+                        Column(
+                            modifier = Modifier
+                                .padding(top = 80.dp)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Color.White)
+                        ) {
+                            // Blue header section
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(70.dp)
+                                    .background(Color(0xFF49A9FF))
+                            )
+
+                            // White content section
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                                    .padding(top = 24.dp, bottom = 32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Watch Pairing Request",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0B0B0B),
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text(
+                                    text = "\"${request.watchName}\" is requesting to connect.",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color(0xFF555555),
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                // Buttons row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    // Accept button
+                                    Button(
+                                        onClick = { viewModel.acceptPairingRequest(request.nodeId) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(56.dp),
+                                        shape = RoundedCornerShape(28.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF49A9FF)
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Accept",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    // Decline button
+                                    Button(
+                                        onClick = { viewModel.declinePairingRequest(request.nodeId) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(56.dp)
+                                            .border(
+                                                width = 0.dp,
+                                                color = Color.Transparent,
+                                                shape = RoundedCornerShape(28.dp)
+                                            ),
+                                        shape = RoundedCornerShape(28.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFFD6EDFF)
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Decline",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF49A9FF)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Mascot image overlapping the top
+                        Image(
+                            painter = painterResource(id = R.drawable.dis_question),
+                            contentDescription = "Pairing request",
+                            modifier = Modifier
+                                .size(160.dp)
+                                .offset(y = 0.dp),
+                            contentScale = ContentScale.Fit
                         )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = { viewModel.acceptPairingRequest(request.nodeId) }
-                        ) {
-                            Text(text = "Accept", color = Color(0xFF4CAF50))
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            onClick = { viewModel.declinePairingRequest(request.nodeId) }
-                        ) {
-                            Text(text = "Decline", color = Color(0xFFE53935))
-                        }
                     }
-                )
+                }
             }
 
             // User Profile Section
@@ -448,6 +551,7 @@ fun DashboardScreen(
                                 Text(
                                     text = when (watchDevice.connectionState) {
                                         ConnectionState.WATCH_CONNECTED -> watchDevice.name
+                                        ConnectionState.WATCH_NEEDS_HANDSHAKE -> watchDevice.name
                                         ConnectionState.WATCH_PAIRED_NO_APP -> watchDevice.name
                                         ConnectionState.BLUETOOTH_OFF -> "Bluetooth Off"
                                         ConnectionState.NO_WATCH -> "No Watch Connected"
@@ -463,6 +567,7 @@ fun DashboardScreen(
                                 Text(
                                     text = when (watchDevice.connectionState) {
                                         ConnectionState.WATCH_CONNECTED -> "Connected"
+                                        ConnectionState.WATCH_NEEDS_HANDSHAKE -> "Open watch app and tap connect"
                                         ConnectionState.WATCH_PAIRED_NO_APP -> "Install Kusho app on watch"
                                         ConnectionState.BLUETOOTH_OFF -> "Turn on Bluetooth"
                                         ConnectionState.NO_WATCH -> "Tap to connect"
@@ -471,6 +576,7 @@ fun DashboardScreen(
                                     fontWeight = FontWeight.Normal,
                                     color = when (watchDevice.connectionState) {
                                         ConnectionState.WATCH_CONNECTED -> Color(0xFF3FA9F8)
+                                        ConnectionState.WATCH_NEEDS_HANDSHAKE -> Color(0xFFFF9800)
                                         ConnectionState.WATCH_PAIRED_NO_APP -> Color(0xFFFF9800)
                                         else -> Color(0xFF888888)
                                     },

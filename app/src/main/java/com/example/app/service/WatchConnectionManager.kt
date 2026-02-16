@@ -28,6 +28,7 @@ enum class ConnectionState {
     BLUETOOTH_OFF,           // Bluetooth is disabled
     NO_WATCH,               // Bluetooth on, but no watch paired at all
     WATCH_PAIRED_NO_APP,    // Watch paired, but Kusho app not installed/running
+    WATCH_NEEDS_HANDSHAKE,  // Kusho app found but pairing handshake not completed
     WATCH_CONNECTED         // Watch paired AND Kusho app running
 }
 
@@ -170,7 +171,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                     when (state) {
                         BluetoothAdapter.STATE_OFF -> {
-                            // Bluetooth turned off - immediately update to disconnected
+                            // Bluetooth turned off - clear pairing so handshake is required on reconnect
+                            this@WatchConnectionManager.context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+                                .edit().remove("paired_watch_node_id").apply()
+                            Log.d(TAG, "🔵 Bluetooth OFF — cleared paired_watch_node_id")
                             _deviceInfo.value = WatchDeviceInfo(
                                 isConnected = false,
                                 connectionState = ConnectionState.BLUETOOTH_OFF
@@ -269,18 +273,34 @@ class WatchConnectionManager private constructor(private val context: Context) {
             
             when {
                 watchNodeWithApp != null -> {
-                    // CASE 3: Watch paired AND Kusho app installed/running
                     val deviceName = getDeviceName(watchNodeWithApp.displayName)
-                    _deviceInfo.value = WatchDeviceInfo(
-                        name = deviceName,
-                        nodeId = watchNodeWithApp.id,
-                        isConnected = true,
-                        connectionState = ConnectionState.WATCH_CONNECTED,
-                        batteryPercentage = 0, // Will be updated by battery request
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                    requestBatteryStatus(watchNodeWithApp)
-                    return true
+                    val pairedNodeId = getPairedWatchNodeId()
+                    
+                    if (pairedNodeId != null && watchNodeWithApp.id == pairedNodeId) {
+                        // CASE 3a: Kusho app found AND matches paired node — fully connected
+                        _deviceInfo.value = WatchDeviceInfo(
+                            name = deviceName,
+                            nodeId = watchNodeWithApp.id,
+                            isConnected = true,
+                            connectionState = ConnectionState.WATCH_CONNECTED,
+                            batteryPercentage = _deviceInfo.value.batteryPercentage, // preserve existing
+                            lastUpdated = System.currentTimeMillis()
+                        )
+                        requestBatteryStatus(watchNodeWithApp)
+                        return true
+                    } else {
+                        // CASE 3b: Kusho app found but node not paired — needs handshake
+                        Log.d(TAG, "⏳ Watch ${watchNodeWithApp.id} has Kusho but is not paired (saved: $pairedNodeId)")
+                        _deviceInfo.value = WatchDeviceInfo(
+                            name = deviceName,
+                            nodeId = watchNodeWithApp.id,
+                            isConnected = false,
+                            connectionState = ConnectionState.WATCH_NEEDS_HANDSHAKE,
+                            batteryPercentage = null, // do NOT leak battery
+                            lastUpdated = System.currentTimeMillis()
+                        )
+                        return false
+                    }
                 }
                 
                 allNodes.isNotEmpty() -> {
@@ -568,10 +588,12 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 
                 Log.d(TAG, "🔋 Phone requesting battery - isConnected: ${currentDevice.isConnected}, state: ${currentDevice.connectionState}, nodeId: ${currentDevice.nodeId}")
                 
-                // Only request if watch is fully connected with app
+                // Only request if watch is fully connected with app AND paired
+                val pairedNodeId = getPairedWatchNodeId()
                 if (currentDevice.isConnected && 
                     currentDevice.connectionState == ConnectionState.WATCH_CONNECTED &&
-                    currentDevice.nodeId.isNotEmpty()) {
+                    currentDevice.nodeId.isNotEmpty() &&
+                    pairedNodeId != null && currentDevice.nodeId == pairedNodeId) {
                     
                     // Send immediate battery request (with retry)
                     repeat(3) { attempt ->
@@ -603,20 +625,21 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private fun handleIncomingMessage(messageEvent: MessageEvent) {
         Log.d(TAG, "📥 Processing message: ${messageEvent.path} from ${messageEvent.sourceNodeId}")
         
-        // Data lockdown: sensor and gesture data must come from the paired watch node
-        val sensorAndGesturePaths = setOf(
+        // Data lockdown: sensor, gesture, and battery data must come from the paired watch node
+        val lockedDownPaths = setOf(
             MESSAGE_PATH_LEARN_MODE_SKIP,
             MESSAGE_PATH_LETTER_INPUT,
             MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED,
             MESSAGE_PATH_TUTORIAL_MODE_SKIP,
             MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
-            MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED
+            MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED,
+            MESSAGE_PATH_BATTERY_STATUS
         )
         
-        if (messageEvent.path in sensorAndGesturePaths) {
+        if (messageEvent.path in lockedDownPaths) {
             val pairedNodeId = getPairedWatchNodeId()
-            if (pairedNodeId != null && messageEvent.sourceNodeId != pairedNodeId) {
-                Log.w(TAG, "⚠️ DATA LOCKDOWN: Ignoring ${messageEvent.path} from unpaired node ${messageEvent.sourceNodeId} (paired: $pairedNodeId)")
+            if (pairedNodeId == null || messageEvent.sourceNodeId != pairedNodeId) {
+                Log.w(TAG, "⚠️ DATA LOCKDOWN: Ignoring ${messageEvent.path} from node ${messageEvent.sourceNodeId} (paired: $pairedNodeId)")
                 return
             }
         }
@@ -759,8 +782,17 @@ class WatchConnectionManager private constructor(private val context: Context) {
             }
         }
         
-        // Clear the request
+        // Clear the request and immediately promote to WATCH_CONNECTED
         _pairingRequest.value = null
+        _deviceInfo.value = _deviceInfo.value.copy(
+            isConnected = true,
+            connectionState = ConnectionState.WATCH_CONNECTED
+        )
+        
+        // Trigger connection check + battery request now that pairing is saved
+        scope.launch {
+            checkConnection()
+        }
     }
     
     /**
@@ -781,8 +813,18 @@ class WatchConnectionManager private constructor(private val context: Context) {
             }
         }
         
-        // Clear the request
+        // Remove saved pairing so device is truly unpaired
+        context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+            .edit().remove("paired_watch_node_id").apply()
+        Log.d(TAG, "🗑️ Cleared paired_watch_node_id from SharedPreferences")
+        
+        // Clear the request, reset battery, and move to WATCH_NEEDS_HANDSHAKE
         _pairingRequest.value = null
+        _deviceInfo.value = _deviceInfo.value.copy(
+            batteryPercentage = null,
+            isConnected = false,
+            connectionState = ConnectionState.WATCH_NEEDS_HANDSHAKE
+        )
     }
     
     /**
