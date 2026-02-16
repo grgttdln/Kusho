@@ -483,6 +483,104 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         val word = _uiState.value.wordInput.trim()
         return word.isNotBlank() && word.all { it.isLetter() } && !_uiState.value.isLoading
     }
+
+    /**
+     * Show the Activity Creation modal.
+     */
+    fun showActivityCreationModal() {
+        _uiState.update { it.copy(isActivityCreationModalVisible = true) }
+    }
+
+    /**
+     * Hide the Activity Creation modal and reset its state.
+     */
+    fun hideActivityCreationModal() {
+        _uiState.update {
+            it.copy(
+                isActivityCreationModalVisible = false,
+                activityInput = "",
+                selectedActivityWordIds = emptySet(),
+                isActivityCreationLoading = false
+            )
+        }
+    }
+
+    /**
+     * Update the activity input text.
+     */
+    fun onActivityInputChanged(input: String) {
+        _uiState.update {
+            it.copy(activityInput = input)
+        }
+    }
+
+    /**
+     * Toggle word selection for activity creation.
+     */
+    fun onActivityWordSelectionChanged(wordId: Long, isSelected: Boolean) {
+        _uiState.update { state: LessonUiState ->
+            val currentSelection = state.selectedActivityWordIds
+            val newSelection = if (isSelected) {
+                currentSelection + wordId
+            } else {
+                currentSelection - wordId
+            }
+            state.copy(selectedActivityWordIds = newSelection)
+        }
+    }
+
+    /**
+     * Select all words for activity creation.
+     */
+    fun onSelectAllActivityWords() {
+        _uiState.update { state: LessonUiState ->
+            val allWordIds = state.words.map { it.id }.toSet()
+            // If all words are already selected, deselect all; otherwise select all
+            val newSelection = if (state.selectedActivityWordIds == allWordIds) {
+                emptySet()
+            } else {
+                allWordIds
+            }
+            state.copy(selectedActivityWordIds = newSelection)
+        }
+    }
+
+    /**
+     * Create activity with selected words (placeholder for actual implementation).
+     */
+    fun createActivity() {
+        val userId = currentUserId
+        if (userId == null || userId == 0L) {
+            // Handle not logged in
+            return
+        }
+
+        val activityDescription = _uiState.value.activityInput.trim()
+        val selectedWordIds = _uiState.value.selectedActivityWordIds
+
+        if (activityDescription.isBlank() || selectedWordIds.isEmpty()) {
+            return
+        }
+
+        _uiState.update { it.copy(isActivityCreationLoading = true) }
+
+        viewModelScope.launch {
+            // TODO: Implement actual activity creation logic
+            // This is where you would call your API or repository to create the activity
+
+            // For now, just simulate a delay and close the modal
+            kotlinx.coroutines.delay(1500)
+
+            _uiState.update {
+                it.copy(
+                    isActivityCreationModalVisible = false,
+                    activityInput = "",
+                    selectedActivityWordIds = emptySet(),
+                    isActivityCreationLoading = false
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -505,6 +603,11 @@ data class LessonUiState(
     val editSelectedMediaUri: Uri? = null,
     val editInputError: String? = null,
     val editImageError: String? = null,
-    val isEditLoading: Boolean = false
+    val isEditLoading: Boolean = false,
+    // Activity creation modal state
+    val isActivityCreationModalVisible: Boolean = false,
+    val activityInput: String = "",
+    val selectedActivityWordIds: Set<Long> = emptySet(),
+    val isActivityCreationLoading: Boolean = false
 )
 

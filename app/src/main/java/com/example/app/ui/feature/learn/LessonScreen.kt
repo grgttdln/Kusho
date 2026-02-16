@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.data.entity.Word
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.wordbank.ActivityCreationModal
 import com.example.app.ui.components.wordbank.WordAddedConfirmationModal
 import com.example.app.ui.components.wordbank.WordBankEditModal
 import com.example.app.ui.components.wordbank.WordBankItem
@@ -158,14 +160,37 @@ fun LessonScreen(
                 )
             }
 
-            // Fixed "+ Word Bank" Button above bottom nav
+            // Fixed "+ Word Bank" Button and Magic Wand Button above bottom nav
             Spacer(Modifier.height(16.dp))
 
-            AddWordBankButton(
-                onClick = {
-                    viewModel.showWordBankModal()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AddWordBankButton(
+                    onClick = {
+                        viewModel.showWordBankModal()
+                    }
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                // Magic Wand Button
+                IconButton(
+                    onClick = { viewModel.showActivityCreationModal() },
+                    modifier = Modifier
+                        .size(75.dp)
+                        .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_wand),
+                        contentDescription = "Magic Wand",
+                        modifier = Modifier.size(28.dp),
+                        contentScale = ContentScale.Fit
+                    )
                 }
-            )
+            }
 
             Spacer(Modifier.height(16.dp))
         }
@@ -240,6 +265,22 @@ fun LessonScreen(
             onDismiss = {
                 viewModel.hideEditModal()
             }
+        )
+
+        // Activity Creation Modal
+        ActivityCreationModal(
+            isVisible = uiState.isActivityCreationModalVisible,
+            activityInput = uiState.activityInput,
+            words = uiState.words,
+            selectedWordIds = uiState.selectedActivityWordIds,
+            isLoading = uiState.isActivityCreationLoading,
+            onActivityInputChanged = { viewModel.onActivityInputChanged(it) },
+            onWordSelectionChanged = { wordId, isSelected ->
+                viewModel.onActivityWordSelectionChanged(wordId, isSelected)
+            },
+            onSelectAll = { viewModel.onSelectAllActivityWords() },
+            onCreateActivity = { viewModel.createActivity() },
+            onDismiss = { viewModel.hideActivityCreationModal() }
         )
     }
 }
