@@ -31,8 +31,13 @@ import com.example.app.ui.feature.learn.set.SelectWordsScreen
 import com.example.app.ui.feature.learn.ConfirmationScreen
 import com.example.app.ui.feature.learn.learnmode.LearnModeActivitySelectionScreen
 import com.example.app.ui.feature.learn.generate.GenerateActivityScreen
-import com.example.app.ui.feature.learn.generate.GenerateActivityViewModel
 import com.example.app.ui.feature.learn.generate.AISetReviewScreen
+import com.example.app.ui.feature.learn.generate.EditableSet
+import com.example.app.ui.feature.learn.generate.EditableWord
+import com.example.app.ui.feature.learn.generate.mapAiConfigTypeToUi
+import com.example.app.data.model.AiGeneratedActivity
+import com.google.gson.Gson
+import com.example.app.ui.feature.learn.LessonViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
@@ -88,13 +93,13 @@ fun MainNavigationContainer(
     var wordsToExclude by remember { mutableStateOf(listOf<String>()) }
     
     // --- AI GENERATION STATE ---
-    var aiGenerateViewModel by remember { mutableStateOf<GenerateActivityViewModel?>(null) }
+    val lessonViewModel: LessonViewModel = viewModel()
     var aiCreatedSetIds by remember { mutableStateOf(listOf<Long>()) }
     var aiActivityTitle by remember { mutableStateOf("") }
     var aiActivityDescription by remember { mutableStateOf("") }
     var aiGeneratedJsonResult by remember { mutableStateOf("") }
-    var aiGeneratedSets by remember { mutableStateOf(listOf<com.example.app.data.model.AiGeneratedSet>()) }
-    var currentAiSetIndex by remember { mutableStateOf(0) }
+    var aiEditableSets by remember { mutableStateOf(listOf<EditableSet>()) }
+    var currentAiSetIndex by remember { mutableIntStateOf(0) }
     var aiWordsToAdd by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
 
     // --- REPOSITORY & CONTEXT HELPERS ---
@@ -104,6 +109,7 @@ fun MainNavigationContainer(
     val wordRepository = remember { WordRepository(AppDatabase.getInstance(context).wordDao()) }
     val database = remember { AppDatabase.getInstance(context) }
     val setRepository = remember { SetRepository(database) }
+    val coroutineScope = rememberCoroutineScope()
 
     when (currentScreen) {
         0 -> DashboardScreen(
@@ -153,9 +159,49 @@ fun MainNavigationContainer(
             onNavigateToSets = { currentScreen = 7 },
             onNavigateToAIGenerate = { jsonResult ->
                 aiGeneratedJsonResult = jsonResult
-                currentScreen = 48
+                // Parse JSON and initialize editable sets
+                try {
+                    val activity = Gson().fromJson(jsonResult, AiGeneratedActivity::class.java)
+                    val parsedSets = activity?.sets?.map { set ->
+                        EditableSet(
+                            title = set.title,
+                            description = set.description,
+                            words = set.words.map { word ->
+                                EditableWord(
+                                    word = word.word,
+                                    configurationType = mapAiConfigTypeToUi(word.configurationType),
+                                    selectedLetterIndex = word.selectedLetterIndex
+                                )
+                            }
+                        )
+                    } ?: emptyList()
+
+                    // Run overlap detection before showing review screen
+                    coroutineScope.launch {
+                        val generatedWordLists = parsedSets.map { set ->
+                            set.words.map { it.word }
+                        }
+                        val overlaps = setRepository.findOverlappingSets(userId, generatedWordLists)
+
+                        aiEditableSets = parsedSets.mapIndexed { index, set ->
+                            val match = overlaps[index]
+                            if (match != null) {
+                                set.copy(overlapMatch = match)
+                            } else {
+                                set
+                            }
+                        }
+                        currentAiSetIndex = 0
+                        currentScreen = 48
+                    }
+                } catch (e: Exception) {
+                    aiEditableSets = emptyList()
+                    currentAiSetIndex = 0
+                    currentScreen = 48
+                }
             },
-            modifier = modifier
+            modifier = modifier,
+            viewModel = lessonViewModel
         )
         4 -> TutorialModeScreen(
             onBack = { currentScreen = 1 },
@@ -663,14 +709,18 @@ fun MainNavigationContainer(
                 aiActivityTitle = activityTitle
                 aiActivityDescription = activityDescription
                 aiCreatedSetIds = setIds
-                
+
                 // Navigate directly to activity creation
                 currentScreen = 49
             },
             generatedJson = aiGeneratedJsonResult,
             userId = userId,
+            editableSets = aiEditableSets,
+            onEditableSetsChange = { aiEditableSets = it },
+            currentSetIndex = currentAiSetIndex,
+            onCurrentSetIndexChange = { currentAiSetIndex = it },
             onRegenerateSet = { setTitle, setDescription, onResult ->
-                aiGenerateViewModel?.regenerateSet(setTitle, setDescription, onResult)
+                lessonViewModel.regenerateSet(setTitle, setDescription, onResult)
             },
             onAddWordsClick = { existingWords ->
                 wordsToExclude = existingWords
@@ -703,15 +753,14 @@ fun MainNavigationContainer(
             prelinkedSetIds = aiCreatedSetIds,
             onNavigate = { currentScreen = it },
             onBackClick = { currentScreen = 48 },
-            onActivityCreated = { 
+            onActivityCreated = {
                 // Reset AI state
-                aiGenerateViewModel?.reset()
                 aiCreatedSetIds = emptyList()
                 aiActivityTitle = ""
                 aiActivityDescription = ""
-                aiGeneratedSets = emptyList()
+                aiEditableSets = emptyList()
                 currentAiSetIndex = 0
-                currentScreen = 10 
+                currentScreen = 10
             },
             modifier = modifier
         )
