@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -55,6 +56,7 @@ fun AISetReviewScreen(
     currentSetIndex: Int,
     onCurrentSetIndexChange: (Int) -> Unit,
     onRegenerateSet: (currentSetTitle: String, currentSetDescription: String, onResult: (String?) -> Unit) -> Unit = { _, _, _ -> },
+    onDiscardSet: () -> Unit = {},
     onAddWordsClick: (existingWords: List<String>) -> Unit = {},
     additionalWords: List<SetRepository.SelectedWordConfig> = emptyList(),
     modifier: Modifier = Modifier
@@ -210,6 +212,7 @@ fun AISetReviewScreen(
                                 )
                             })
                         },
+                        onDiscardSet = onDiscardSet,
                         onRegenerateSet = {
                             isRegenerating = true
                             regenerationError = null
@@ -250,6 +253,12 @@ fun AISetReviewScreen(
                             // TODO: Add logic to generate an additional set
                         },
                         onProceedClick = {
+                            // Block save if any set still has an undecided overlap
+                            val hasUndecided = editableSets.any {
+                                it.overlapMatch != null && it.mergeDecision == MergeDecision.UNDECIDED
+                            }
+                            if (hasUndecided) return@SetReviewCard
+
                             isSaving = true
                             coroutineScope.launch {
                                 val savedSetIds = mutableListOf<Long>()

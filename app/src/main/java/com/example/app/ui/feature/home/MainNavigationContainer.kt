@@ -178,18 +178,24 @@ fun MainNavigationContainer(
 
                     // Run overlap detection before showing review screen
                     coroutineScope.launch {
-                        val generatedWordLists = parsedSets.map { set ->
-                            set.words.map { it.word }
-                        }
-                        val overlaps = setRepository.findOverlappingSets(userId, generatedWordLists)
-
-                        aiEditableSets = parsedSets.mapIndexed { index, set ->
-                            val match = overlaps[index]
-                            if (match != null) {
-                                set.copy(overlapMatch = match)
-                            } else {
-                                set
+                        try {
+                            val generatedWordLists = parsedSets.map { set ->
+                                set.words.map { it.word }
                             }
+                            val overlaps = setRepository.findOverlappingSets(userId, generatedWordLists)
+
+                            aiEditableSets = parsedSets.mapIndexed { index, set ->
+                                val match = overlaps[index]
+                                if (match != null) {
+                                    set.copy(overlapMatch = match)
+                                } else {
+                                    set
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Overlap detection failed -- proceed without overlap data
+                            android.util.Log.e("MainNavigation", "Overlap detection failed", e)
+                            aiEditableSets = parsedSets
                         }
                         currentAiSetIndex = 0
                         currentScreen = 48
