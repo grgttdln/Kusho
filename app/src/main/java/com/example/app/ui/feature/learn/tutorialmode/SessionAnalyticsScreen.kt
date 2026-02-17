@@ -1,5 +1,6 @@
 package com.example.app.ui.feature.learn.tutorialmode
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -12,6 +13,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -51,6 +53,23 @@ fun SessionAnalyticsScreen(
     // Notify watch that session is complete when this screen is displayed
     LaunchedEffect(Unit) {
         watchConnectionManager.notifyTutorialModeSessionComplete()
+    }
+
+    // Play finish audio when screen appears (same pattern as Learn Mode)
+    val mediaPlayer = remember { MediaPlayer() }
+    DisposableEffect(Unit) {
+        try {
+            mediaPlayer.reset()
+            mediaPlayer.setDataSource(context, android.net.Uri.parse("android.resource://${context.packageName}/${R.raw.finish}"))
+            mediaPlayer.prepare()
+            mediaPlayer.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        onDispose {
+            mediaPlayer.release()
+        }
     }
     
     // Wrapper functions to notify watch before navigating away

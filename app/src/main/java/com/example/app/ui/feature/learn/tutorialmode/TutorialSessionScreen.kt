@@ -1,5 +1,10 @@
 package com.example.app.ui.feature.learn.tutorialmode
 
+import android.content.Context
+import android.media.MediaPlayer
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,6 +23,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,7 +49,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
-import com.example.app.ui.components.common.ProgressCheckDialog
+import com.example.app.speech.DeepgramTTSManager
+import com.example.app.speech.TextToSpeechManager
 import com.example.app.ui.components.common.ProgressIndicator
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
@@ -73,7 +80,28 @@ fun TutorialSessionScreen(
 ) {
     val context = LocalContext.current
     val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
-    
+
+    // Initialize TTS managers (same pattern as Learn Mode)
+    val deepgramTtsManager = remember { DeepgramTTSManager(context) }
+    val nativeTtsManager = remember { TextToSpeechManager(context) }
+
+    // Check internet connectivity
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+    val isNetworkAvailable = networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+    // Determine which TTS to use (Deepgram needs both API key AND internet)
+    val useDeepgram = deepgramTtsManager.isConfigured() && isNetworkAvailable
+    Log.d("TutorialSession", "TTS Configuration - Deepgram configured: ${deepgramTtsManager.isConfigured()}, Internet available: $isNetworkAvailable, Using Deepgram: $useDeepgram")
+
+    // Cleanup TTS on dispose
+    DisposableEffect(Unit) {
+        onDispose {
+            deepgramTtsManager.stop()
+            nativeTtsManager.shutdown()
+        }
+    }
+
     var currentStep by remember { mutableIntStateOf(initialStep) }
     var showProgressCheck by remember { mutableStateOf(false) }
     var isCorrectGesture by remember { mutableStateOf(false) }
@@ -212,7 +240,7 @@ fun TutorialSessionScreen(
     // notifyTutorialModeEnded() is now called from SessionAnalyticsScreen
     // when the user leaves (Practice Again or Continue).
     
-    // Send current letter data to watch whenever it changes
+    // Send current letter data to watch whenever it changes AND speak TTS prompt
     LaunchedEffect(currentStep, currentLetter) {
         if (currentLetter.isNotEmpty()) {
             watchConnectionManager.sendTutorialModeLetterData(
@@ -221,6 +249,30 @@ fun TutorialSessionScreen(
                 currentIndex = currentStep,
                 totalLetters = calculatedTotalSteps
             )
+
+            // Speak TTS prompt for the current letter (same pattern as Learn Mode)
+            val caseLabel = if (letterType.lowercase() == "capital") "uppercase" else "lowercase"
+            val phrase = listOf(
+                "Can you write $caseLabel $currentLetter?",
+                "Let's practice $caseLabel $currentLetter!",
+                "Try writing $caseLabel $currentLetter.",
+                "Trace the letter $caseLabel $currentLetter!",
+                "Now let's write $caseLabel $currentLetter."
+            ).random()
+
+            launch {
+                try {
+                    if (useDeepgram) {
+                        Log.d("TutorialSession", "Using Deepgram TTS for letter: $currentLetter")
+                        deepgramTtsManager.speak(phrase)
+                    } else {
+                        Log.d("TutorialSession", "Using Native TTS for letter: $currentLetter")
+                        nativeTtsManager.speak(phrase)
+                    }
+                } catch (e: Exception) {
+                    Log.e("TutorialSession", "Error playing TTS", e)
+                }
+            }
         }
     }
     
@@ -277,9 +329,9 @@ fun TutorialSessionScreen(
         }
     }
 
-    // Progress Check Dialog
+    // Progress Check Dialog (private version with two-phase audio, matching Learn Mode)
     if (showProgressCheck) {
-        ProgressCheckDialog(
+        TutorialProgressCheckDialog(
             isCorrect = isCorrectGesture,
             studentName = studentName,
             targetLetter = currentLetter,
@@ -390,7 +442,6 @@ fun TutorialSessionScreen(
             // Annotate button (left) - opens learner profile annotation dialog
             IconButton(onClick = {
                 showAnnotationDialog = true
-                onAudioClick()
             }) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_annotate),
@@ -556,7 +607,7 @@ fun TutorialSessionScreenPreview() {
 
 
 @Composable
-private fun ProgressCheckDialog(
+private fun TutorialProgressCheckDialog(
     isCorrect: Boolean,
     studentName: String,
     targetLetter: String,
@@ -564,6 +615,73 @@ private fun ProgressCheckDialog(
     predictedLetter: String,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    // Lists of specific affirmative audio files (same as Learn Mode)
+    val correctAffirmatives = listOf(
+        R.raw.correct_great_effort_on_that_task,
+        R.raw.correct_you_completed_that_perfectly,
+        R.raw.correct_your_focus_is_impressive,
+        R.raw.correct_youre_making_a_fantastic_progress,
+        R.raw.correct_that_was_an_excellent_attempt,
+        R.raw.correct_you_handled_that_very_well,
+        R.raw.correct_your_hard_work_is_paying_off,
+        R.raw.correct_keep_up_the_good_work,
+        R.raw.correct_you_are_doing_really_well,
+        R.raw.correct_you_did_a_great_job
+    )
+
+    val wrongAffirmatives = listOf(
+        R.raw.wrong_youre_learning_so_keep_going,
+        R.raw.wrong_think_carefully_and_try_one_more_time,
+        R.raw.wrong_its_okay_to_make_mistakes_keep_trying,
+        R.raw.wrong_believe_in_yourself_and_try_again,
+        R.raw.wrong_stay_patient_and_keep_working,
+        R.raw.wrong_give_it_another_try_and_do_your_best,
+        R.raw.wrong_try_again_with_confidence,
+        R.raw.wrong_youre_almost_there_keep_going,
+        R.raw.wrong_keep_practicing_and_youll_get_it,
+        R.raw.wrong_take_your_time_and_try_once_more,
+        R.raw.wrong_you_can_do_better_on_the_next_try,
+        R.raw.wrong_dont_worry_try_again
+    )
+
+    // Play two-phase audio when dialog appears (base sound → random affirmative)
+    DisposableEffect(isCorrect) {
+        val mediaPlayer = MediaPlayer()
+
+        fun playAudio(resId: Int, onComplete: (() -> Unit)? = null) {
+            try {
+                mediaPlayer.reset()
+                val afd = context.resources.openRawResourceFd(resId)
+                mediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
+                mediaPlayer.prepare()
+                mediaPlayer.setOnCompletionListener {
+                    onComplete?.invoke()
+                }
+                mediaPlayer.start()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete?.invoke()
+            }
+        }
+
+        // Play base sound first, then random affirmative
+        val baseResId = if (isCorrect) R.raw.correct else R.raw.wrong
+        val affirmativeList = if (isCorrect) correctAffirmatives else wrongAffirmatives
+        val randomAffirmative = affirmativeList.random()
+
+        playAudio(baseResId) {
+            // Play random affirmative after base sound finishes
+            playAudio(randomAffirmative)
+        }
+
+        onDispose {
+            mediaPlayer.release()
+        }
+    }
+
     // Extract first name only for more friendly tone
     val firstName = studentName.split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: ""
     
