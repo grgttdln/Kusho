@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Word
+import com.example.app.data.model.AiGenerationResult
+import com.example.app.data.repository.GeminiRepository
 import com.example.app.data.repository.WordRepository
 import com.example.app.util.ImageStorageManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +31,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private val wordRepository = WordRepository(database.wordDao())
     private val sessionManager = SessionManager.getInstance(application)
     private val imageStorageManager = ImageStorageManager(application)
+    private val geminiRepository = GeminiRepository()
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -546,12 +549,13 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Create activity with selected words (placeholder for actual implementation).
+     * Generate activity using AI with selected words.
+     * Stores the generated JSON result and signals completion via callback.
      */
-    fun createActivity() {
+    fun createActivity(onGenerationComplete: (String) -> Unit) {
         val userId = currentUserId
         if (userId == null || userId == 0L) {
-            // Handle not logged in
+            _uiState.update { it.copy(activityError = "Please log in to generate activities") }
             return
         }
 
@@ -559,25 +563,38 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         val selectedWordIds = _uiState.value.selectedActivityWordIds
 
         if (activityDescription.isBlank() || selectedWordIds.isEmpty()) {
+            _uiState.update { it.copy(activityError = "Please enter a description and select at least one word") }
             return
         }
 
-        _uiState.update { it.copy(isActivityCreationLoading = true) }
+        val selectedWords = _uiState.value.words
+            .filter { selectedWordIds.contains(it.id) }
+
+        _uiState.update { it.copy(isActivityCreationLoading = true, activityError = null) }
 
         viewModelScope.launch {
-            // TODO: Implement actual activity creation logic
-            // This is where you would call your API or repository to create the activity
-
-            // For now, just simulate a delay and close the modal
-            kotlinx.coroutines.delay(1500)
-
-            _uiState.update {
-                it.copy(
-                    isActivityCreationModalVisible = false,
-                    activityInput = "",
-                    selectedActivityWordIds = emptySet(),
-                    isActivityCreationLoading = false
-                )
+            when (val result = geminiRepository.generateActivity(activityDescription, selectedWords)) {
+                is AiGenerationResult.Success -> {
+                    val jsonResult = com.google.gson.Gson().toJson(result.data)
+                    _uiState.update {
+                        it.copy(
+                            isActivityCreationModalVisible = false,
+                            activityInput = "",
+                            selectedActivityWordIds = emptySet(),
+                            isActivityCreationLoading = false,
+                            generatedJsonResult = jsonResult
+                        )
+                    }
+                    onGenerationComplete(jsonResult)
+                }
+                is AiGenerationResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isActivityCreationLoading = false,
+                            activityError = result.message
+                        )
+                    }
+                }
             }
         }
     }
@@ -608,6 +625,8 @@ data class LessonUiState(
     val isActivityCreationModalVisible: Boolean = false,
     val activityInput: String = "",
     val selectedActivityWordIds: Set<Long> = emptySet(),
-    val isActivityCreationLoading: Boolean = false
+    val isActivityCreationLoading: Boolean = false,
+    val activityError: String? = null,
+    val generatedJsonResult: String? = null
 )
 

@@ -1,6 +1,7 @@
 package com.example.app.ui.feature.home
 
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.example.app.data.SessionManager
@@ -29,6 +30,10 @@ import com.example.app.ui.feature.learn.set.EditSetScreen
 import com.example.app.ui.feature.learn.set.SelectWordsScreen
 import com.example.app.ui.feature.learn.ConfirmationScreen
 import com.example.app.ui.feature.learn.learnmode.LearnModeActivitySelectionScreen
+import com.example.app.ui.feature.learn.generate.GenerateActivityScreen
+import com.example.app.ui.feature.learn.generate.GenerateActivityViewModel
+import com.example.app.ui.feature.learn.generate.AISetReviewScreen
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun MainNavigationContainer(
@@ -81,6 +86,16 @@ fun MainNavigationContainer(
     var wordsForCreation by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
     var wordsForEdit by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
     var wordsToExclude by remember { mutableStateOf(listOf<String>()) }
+    
+    // --- AI GENERATION STATE ---
+    var aiGenerateViewModel by remember { mutableStateOf<GenerateActivityViewModel?>(null) }
+    var aiCreatedSetIds by remember { mutableStateOf(listOf<Long>()) }
+    var aiActivityTitle by remember { mutableStateOf("") }
+    var aiActivityDescription by remember { mutableStateOf("") }
+    var aiGeneratedJsonResult by remember { mutableStateOf("") }
+    var aiGeneratedSets by remember { mutableStateOf(listOf<com.example.app.data.model.AiGeneratedSet>()) }
+    var currentAiSetIndex by remember { mutableStateOf(0) }
+    var aiWordsToAdd by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
 
     // --- REPOSITORY & CONTEXT HELPERS ---
     val context = LocalContext.current
@@ -136,6 +151,10 @@ fun MainNavigationContainer(
             onNavigate = { currentScreen = it },
             onNavigateToActivities = { currentScreen = 6 },
             onNavigateToSets = { currentScreen = 7 },
+            onNavigateToAIGenerate = { jsonResult ->
+                aiGeneratedJsonResult = jsonResult
+                currentScreen = 48
+            },
             modifier = modifier
         )
         4 -> TutorialModeScreen(
@@ -633,6 +652,67 @@ fun MainNavigationContainer(
         )
         45 -> com.example.app.ui.feature.learn.learnmode.LearnModeFinishedScreen(
             onEndSession = { currentScreen = 0 },
+            modifier = modifier
+        )
+        // --- AI ACTIVITY GENERATION FLOW ---
+        48 -> AISetReviewScreen(
+            onNavigate = { currentScreen = it },
+            onBackClick = { currentScreen = 6 },
+            onFinish = { activityTitle, activityDescription, setIds ->
+                // Store activity info and created set IDs
+                aiActivityTitle = activityTitle
+                aiActivityDescription = activityDescription
+                aiCreatedSetIds = setIds
+                
+                // Navigate directly to activity creation
+                currentScreen = 49
+            },
+            generatedJson = aiGeneratedJsonResult,
+            userId = userId,
+            onRegenerateSet = { setTitle, setDescription, onResult ->
+                aiGenerateViewModel?.regenerateSet(setTitle, setDescription, onResult)
+            },
+            onAddWordsClick = { existingWords ->
+                wordsToExclude = existingWords
+                aiWordsToAdd = emptyList()
+                currentScreen = 50
+            },
+            additionalWords = aiWordsToAdd,
+            modifier = modifier
+        )
+        50 -> {
+            LaunchedEffect(Unit) {
+                availableWords = wordRepository.getWordsForUserOnce(userId)
+            }
+            SelectWordsScreen(
+                availableWords = availableWords,
+                excludeWords = wordsToExclude,
+                isAddingToExistingSet = true,
+                onBackClick = { currentScreen = 48 },
+                onWordsSelected = { words ->
+                    aiWordsToAdd = words
+                    currentScreen = 48
+                },
+                modifier = modifier
+            )
+        }
+        49 -> AddNewActivityScreen(
+            userId = userId,
+            prefillTitle = aiActivityTitle,
+            prefillDescription = aiActivityDescription,
+            prelinkedSetIds = aiCreatedSetIds,
+            onNavigate = { currentScreen = it },
+            onBackClick = { currentScreen = 48 },
+            onActivityCreated = { 
+                // Reset AI state
+                aiGenerateViewModel?.reset()
+                aiCreatedSetIds = emptyList()
+                aiActivityTitle = ""
+                aiActivityDescription = ""
+                aiGeneratedSets = emptyList()
+                currentAiSetIndex = 0
+                currentScreen = 10 
+            },
             modifier = modifier
         )
     }

@@ -54,6 +54,7 @@ fun ActivityCreationModal(
     words: List<Word>,
     selectedWordIds: Set<Long>,
     isLoading: Boolean,
+    error: String? = null,
     onActivityInputChanged: (String) -> Unit,
     onWordSelectionChanged: (Long, Boolean) -> Unit,
     onSelectAll: () -> Unit,
@@ -150,6 +151,18 @@ fun ActivityCreationModal(
                             onCreateActivity()
                         }
                     )
+
+                    // Error message
+                    if (error != null) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = error,
+                            color = Color.Red,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
 

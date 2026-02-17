@@ -47,6 +47,7 @@ fun LessonScreen(
     onNavigate: (Int) -> Unit,
     onNavigateToActivities: () -> Unit = {},
     onNavigateToSets: () -> Unit = {},
+    onNavigateToAIGenerate: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: LessonViewModel = viewModel()
 ) {
@@ -274,14 +275,20 @@ fun LessonScreen(
             words = uiState.words,
             selectedWordIds = uiState.selectedActivityWordIds,
             isLoading = uiState.isActivityCreationLoading,
+            error = uiState.activityError,
             onActivityInputChanged = { viewModel.onActivityInputChanged(it) },
             onWordSelectionChanged = { wordId, isSelected ->
                 viewModel.onActivityWordSelectionChanged(wordId, isSelected)
             },
             onSelectAll = { viewModel.onSelectAllActivityWords() },
-            onCreateActivity = { viewModel.createActivity() },
+            onCreateActivity = {
+                viewModel.createActivity { jsonResult ->
+                    onNavigateToAIGenerate(jsonResult)
+                }
+            },
             onDismiss = { viewModel.hideActivityCreationModal() }
         )
+
     }
 }
 

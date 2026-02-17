@@ -36,6 +36,8 @@ fun AddSetScreen(
     modifier: Modifier = Modifier,
     userId: Long = 0L,
     activityId: Long? = null,
+    prefillTitle: String = "",
+    prefillDescription: String = "",
     onBackClick: () -> Unit = {},
     onAddWordsClick: (existingWords: List<String>) -> Unit = {},
     onCreateSet: (setTitle: String, setDescription: String, words: List<SetRepository.SelectedWordConfig>) -> Unit = { _, _, _ -> },
@@ -44,8 +46,8 @@ fun AddSetScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
-    var setTitle by remember { mutableStateOf(uiState.setTitle) }
-    var setDescription by remember { mutableStateOf(uiState.setDescription) }
+    var setTitle by remember { mutableStateOf(prefillTitle.ifBlank { uiState.setTitle }) }
+    var setDescription by remember { mutableStateOf(prefillDescription.ifBlank { uiState.setDescription }) }
     var internalWords by remember { mutableStateOf(selectedWords) }
     var showDuplicateError by remember { mutableStateOf(false) }
 

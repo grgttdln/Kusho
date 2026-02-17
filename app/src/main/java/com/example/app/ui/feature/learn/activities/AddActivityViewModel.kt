@@ -200,4 +200,29 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
     fun resetForm() {
         _uiState.value = AddActivityUiState()
     }
+
+    /**
+     * Add pre-linked sets by their IDs (used for AI-generated activities)
+     */
+    fun addPrelinkedSets(setIds: List<Long>) {
+        viewModelScope.launch {
+            setIds.forEach { setId ->
+                val setDetails = setRepository.getSetDetails(setId)
+                setDetails?.let { details ->
+                    val chapterInfo = ChapterInfo(
+                        setId = setId,
+                        title = details.set.title,
+                        itemCount = details.words.size
+                    )
+                    _uiState.update { state ->
+                        if (state.selectedChapters.none { it.setId == setId }) {
+                            state.copy(selectedChapters = state.selectedChapters + chapterInfo)
+                        } else {
+                            state
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

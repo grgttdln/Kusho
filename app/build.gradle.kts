@@ -33,6 +33,11 @@ android {
         val deepgramApiKey = localProperties.getProperty("DEEPGRAM_API_KEY", "")
         buildConfigField("String", "DEEPGRAM_API_KEY", "\"${deepgramApiKey}\"")
         println("Deepgram API Key configured: ${if (deepgramApiKey.isNotBlank()) "YES" else "NO"}")
+
+        // OpenRouter API Key from local.properties (for AI activity generation)
+        val openrouterApiKey = localProperties.getProperty("OPENROUTER_API_KEY", "")
+        buildConfigField("String", "OPENROUTER_API_KEY", "\"${openrouterApiKey}\"")
+        println("OpenRouter API Key configured: ${if (openrouterApiKey.isNotBlank()) "YES" else "NO"}")
     }
 
     buildTypes {

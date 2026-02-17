@@ -165,14 +165,14 @@ private fun SetItemRow(
     modifier: Modifier = Modifier
 ) {
     val category = when (setWord.configurationType.lowercase()) {
-        "fill in the blank" -> "Fill in the Blanks"
-        "identification", "air writing" -> "Write the Word"
+        "fill in the blanks", "fill in the blank" -> "Fill in the Blanks"
+        "write the word", "identification", "air writing" -> "Write the Word"
         "name the picture" -> "Name the Picture"
         else -> setWord.configurationType.replaceFirstChar { it.uppercase() }
     }
-    
-    val isFullWordPurple = setWord.configurationType.lowercase() in listOf("identification", "air writing", "name the picture", "write the word")
-    val isFillInTheBlank = setWord.configurationType.lowercase() == "fill in the blank"
+
+    val isFullWordPurple = setWord.configurationType.lowercase() in listOf("write the word", "identification", "air writing", "name the picture")
+    val isFillInTheBlank = setWord.configurationType.lowercase() in listOf("fill in the blanks", "fill in the blank")
     
     Column(modifier = modifier) {
         Row(
