@@ -13,13 +13,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
@@ -40,12 +48,63 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 
 /**
+ * Modifier extension for dashed border
+ */
+fun Modifier.dashedBorder(
+    color: Color,
+    strokeWidth: Dp = 1.dp,
+    dashLength: Dp = 6.dp,
+    gapLength: Dp = 4.dp,
+    cornerRadius: Dp = 8.dp
+) = this.then(
+    Modifier.drawBehind {
+        val strokeWidthPx = strokeWidth.toPx()
+        val dashLengthPx = dashLength.toPx()
+        val gapLengthPx = gapLength.toPx()
+        val cornerRadiusPx = cornerRadius.toPx()
+
+        val path = androidx.compose.ui.graphics.Path().apply {
+            addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    rect = androidx.compose.ui.geometry.Rect(
+                        left = strokeWidthPx / 2,
+                        top = strokeWidthPx / 2,
+                        right = size.width - strokeWidthPx / 2,
+                        bottom = size.height - strokeWidthPx / 2
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadiusPx, cornerRadiusPx)
+                )
+            )
+        }
+
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(
+                width = strokeWidthPx,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                    intervals = floatArrayOf(dashLengthPx, gapLengthPx)
+                )
+            )
+        )
+    }
+)
+
+/**
  * Data class representing a selectable chip option
  */
 data class ChipOption(
     val label: String,
     val color: Color,
     val isSelected: Boolean = false
+)
+
+/**
+ * Data class representing a level of progress option with icon
+ */
+data class LevelOption(
+    val label: String,
+    val iconResId: Int
 )
 
 /**
@@ -57,7 +116,7 @@ fun SelectableChip(
     dotColor: Color,
     isSelected: Boolean,
     onClick: () -> Unit,
-    accentColor: Color = Color(0xFFAE8EFB)
+    accentColor: Color = Color(0xFF42A5F5)
 ) {
     val borderColor = if (isSelected) accentColor else Color(0xFFE0E0E0)
     val backgroundColor = if (isSelected) accentColor.copy(alpha = 0.1f) else Color.White
@@ -91,6 +150,52 @@ fun SelectableChip(
 }
 
 /**
+ * Level of Progress chip with icon
+ * Shows icon and text with blue color scheme
+ * When selected: blue background with white text and white icon
+ * When not selected: white background with blue border, blue text and blue icon
+ */
+@Composable
+fun LevelProgressChip(
+    label: String,
+    iconResId: Int,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    accentColor: Color = Color(0xFF42A5F5),
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (isSelected) accentColor else Color.White
+    val contentColor = if (isSelected) Color.White else accentColor
+
+    Card(
+        modifier = modifier
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        border = if (!isSelected) BorderStroke(2.dp, accentColor) else null
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Image(
+                painter = painterResource(id = iconResId),
+                contentDescription = label,
+                modifier = Modifier.size(24.dp),
+                colorFilter = ColorFilter.tint(contentColor)
+            )
+            Text(
+                text = label,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = contentColor
+            )
+        }
+    }
+}
+
+/**
  * Learner Profile Annotation Dialog
  * Shows when the annotate button is clicked to allow teachers to record observations
  * Features scrollable content and smooth slide-up/down animation
@@ -112,8 +217,8 @@ fun LearnerProfileAnnotationDialog(
         challenges: List<String>,
         challengesNote: String
     ) -> Unit,
-    accentColor: Color = Color(0xFFAE8EFB), // Primary color for borders, text, chips
-    buttonColor: Color = Color(0xFFAE8EFB) // Button background color
+    accentColor: Color = Color(0xFF42A5F5), // Primary color for borders, text, chips
+    buttonColor: Color = Color(0xFF42A5F5) // Button background color
 ) {
     // Animation state for slide-up/down effect
     var isVisible by remember { mutableStateOf(false) }
@@ -153,12 +258,12 @@ fun LearnerProfileAnnotationDialog(
         isVisible = true
     }
 
-    // Level of Progress options
+    // Level of Progress options with icons
     val levelOptions = listOf(
-        ChipOption("Beginning", Color(0xFFFF6B6B)),
-        ChipOption("Developing", Color(0xFFFFB800)),
-        ChipOption("Proficient", Color(0xFF4CAF50)),
-        ChipOption("Advanced", Color(0xFF2196F3))
+        LevelOption("Beginning", R.drawable.ic_1),
+        LevelOption("Developing", R.drawable.ic_2),
+        LevelOption("Proficient", R.drawable.ic_3),
+        LevelOption("Advanced", R.drawable.ic_4)
     )
     // Initialize with existing data
     var selectedLevel by remember { mutableStateOf(existingData.levelOfProgress) }
@@ -262,37 +367,40 @@ fun LearnerProfileAnnotationDialog(
                         )
                         Spacer(Modifier.height(12.dp))
 
-                        // Level chips - first row
+                        // Level chips - first row (2 chips)
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            levelOptions.take(3).forEach { option ->
-                                SelectableChip(
+                            levelOptions.take(2).forEach { option ->
+                                LevelProgressChip(
                                     label = option.label,
-                                    dotColor = option.color,
+                                    iconResId = option.iconResId,
                                     isSelected = selectedLevel == option.label,
                                     onClick = {
                                         selectedLevel = if (selectedLevel == option.label) null else option.label
                                     },
-                                    accentColor = accentColor
+                                    accentColor = accentColor,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
                         Spacer(Modifier.height(8.dp))
-                        // Level chips - second row
+                        // Level chips - second row (2 chips)
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            levelOptions.drop(3).forEach { option ->
-                                SelectableChip(
+                            levelOptions.drop(2).forEach { option ->
+                                LevelProgressChip(
                                     label = option.label,
-                                    dotColor = option.color,
+                                    iconResId = option.iconResId,
                                     isSelected = selectedLevel == option.label,
                                     onClick = {
                                         selectedLevel = if (selectedLevel == option.label) null else option.label
                                     },
-                                    accentColor = accentColor
+                                    accentColor = accentColor,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -348,17 +456,36 @@ fun LearnerProfileAnnotationDialog(
                                 maxLines = 4
                             )
                         } else {
-                            Row(
+                            Box(
                                 modifier = Modifier
+                                    .fillMaxWidth()
+                                    .dashedBorder(
+                                        color = accentColor,
+                                        strokeWidth = 1.dp,
+                                        dashLength = 6.dp,
+                                        gapLength = 4.dp,
+                                        cornerRadius = 8.dp
+                                    )
                                     .clickable { showStrengthsNoteField = true }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "+ Add Note",
-                                    fontSize = 14.sp,
-                                    color = accentColor
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Add Note",
+                                        fontSize = 14.sp,
+                                        color = accentColor
+                                    )
+                                }
                             }
                         }
 
@@ -413,17 +540,36 @@ fun LearnerProfileAnnotationDialog(
                                 maxLines = 4
                             )
                         } else {
-                            Row(
+                            Box(
                                 modifier = Modifier
+                                    .fillMaxWidth()
+                                    .dashedBorder(
+                                        color = accentColor,
+                                        strokeWidth = 1.dp,
+                                        dashLength = 6.dp,
+                                        gapLength = 4.dp,
+                                        cornerRadius = 8.dp
+                                    )
                                     .clickable { showChallengesNoteField = true }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "+ Add Note",
-                                    fontSize = 14.sp,
-                                    color = accentColor
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Add Note",
+                                        fontSize = 14.sp,
+                                        color = accentColor
+                                    )
+                                }
                             }
                         }
 

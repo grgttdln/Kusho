@@ -64,6 +64,7 @@ private val BlueButtonColor = Color(0xFF3FA9F8)
 private val YellowIconColor = Color(0xFFFFC700) // #FFC700 for tutorial mode icons
 private val OrangeButtonColor = Color(0xFFFF8C42) // Orange for tutorial mode button
 private val LightYellowTooltipColor = Color(0xFFFFF9E6) // Light yellow for tooltip
+private val BlueAnnotationColor = Color(0xFF42A5F5) // Blue for annotation dialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -342,8 +343,8 @@ fun TutorialSessionScreen(
             studentName = studentName,
             existingData = existingAnnotation,
             onDismiss = { showAnnotationDialog = false },
-            accentColor = YellowIconColor,
-            buttonColor = OrangeButtonColor,
+            accentColor = BlueAnnotationColor,
+            buttonColor = BlueAnnotationColor,
             onAddNote = { levelOfProgress, strengthsObserved, strengthsNote, challenges, challengesNote ->
                 // Create new annotation data
                 val newAnnotationData = AnnotationData(

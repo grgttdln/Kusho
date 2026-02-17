@@ -66,6 +66,7 @@ private val PurpleColor = Color(0xFFAE8EFB)
 private val LightPurpleColor = Color(0xFFE7DDFE)
 private val CompletedLetterColor = Color(0xFFAE8EFB)
 private val PendingLetterColor = Color(0xFF808080)
+private val BlueColor = Color(0xFF42A5F5)
 
 /**
  * Letters that have very similar writing structures between uppercase and lowercase
@@ -573,8 +574,8 @@ fun LearnModeSessionScreen(
             studentName = studentName,
             existingData = existingAnnotation,
             onDismiss = { showAnnotationDialog = false },
-            accentColor = PurpleColor,
-            buttonColor = PurpleColor,
+            accentColor = BlueColor,
+            buttonColor = BlueColor,
             onAddNote = { levelOfProgress, strengthsObserved, strengthsNote, challenges, challengesNote ->
                 // Create new annotation data
                 val newAnnotationData = AnnotationData(
