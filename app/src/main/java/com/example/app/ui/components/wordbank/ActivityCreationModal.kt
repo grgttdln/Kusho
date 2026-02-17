@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -307,19 +309,43 @@ private fun WordSelectionSection(
                 modifier = Modifier.fillMaxWidth()
             )
         } else {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            val scrollState = rememberScrollState()
+            val row1Words = words.filterIndexed { index, _ -> index % 2 == 0 }
+            val row2Words = words.filterIndexed { index, _ -> index % 2 != 0 }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                words.forEach { word ->
-                    val isSelected = selectedWordIds.contains(word.id)
-                    WordChip(
-                        word = word.word,
-                        isSelected = isSelected,
-                        isEnabled = !isLoading,
-                        onClick = { onWordSelectionChanged(word.id, !isSelected) }
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    row1Words.forEach { word ->
+                        val isSelected = selectedWordIds.contains(word.id)
+                        WordChip(
+                            word = word.word,
+                            isSelected = isSelected,
+                            isEnabled = !isLoading,
+                            onClick = { onWordSelectionChanged(word.id, !isSelected) }
+                        )
+                    }
+                }
+                if (row2Words.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        row2Words.forEach { word ->
+                            val isSelected = selectedWordIds.contains(word.id)
+                            WordChip(
+                                word = word.word,
+                                isSelected = isSelected,
+                                isEnabled = !isLoading,
+                                onClick = { onWordSelectionChanged(word.id, !isSelected) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -342,6 +368,7 @@ private fun WordChip(
 
     Box(
         modifier = Modifier
+            .width(100.dp)
             .clip(RoundedCornerShape(20.dp))
             .border(
                 width = 1.5.dp,
@@ -350,13 +377,16 @@ private fun WordChip(
             )
             .background(if (isEnabled) backgroundColor else backgroundColor.copy(alpha = 0.3f))
             .clickable(enabled = isEnabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = word,
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
-            color = if (isEnabled) textColor else textColor.copy(alpha = 0.5f)
+            color = if (isEnabled) textColor else textColor.copy(alpha = 0.5f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
