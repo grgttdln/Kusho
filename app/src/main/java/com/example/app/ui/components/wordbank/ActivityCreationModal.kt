@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -206,6 +207,10 @@ private fun ActivityInputSection(
         OutlinedTextField(
             value = activityInput,
             onValueChange = onActivityInputChanged,
+            textStyle = TextStyle(
+                color = Color(0xFF49A9FF),
+                fontSize = 16.sp
+            ),
             placeholder = {
                 Text(
                     text = "Describe your activity...",
@@ -223,7 +228,10 @@ private fun ActivityInputSection(
                 unfocusedContainerColor = Color.White,
                 cursorColor = Color(0xFF49A9FF),
                 disabledBorderColor = Color(0xFFE0E0E0),
-                disabledContainerColor = Color(0xFFF5F5F5)
+                disabledContainerColor = Color(0xFFF5F5F5),
+                focusedTextColor = Color(0xFF49A9FF),
+                unfocusedTextColor = Color(0xFF49A9FF),
+                disabledTextColor = Color(0xFF49A9FF).copy(alpha = 0.5f)
             ),
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(
