@@ -516,4 +516,79 @@ class SetRepository(
 
         results
     }
+
+    /**
+     * Add new words to an existing set (merge operation).
+     * Only inserts words that don't already exist in the set.
+     * Updates the set's itemCount and updatedAt timestamp.
+     *
+     * @param setId The ID of the existing set to merge into
+     * @param userId The user ID (needed to lookup word entities)
+     * @param newWords List of new word configurations to add
+     * @return AddSetResult.Success with the existing setId, or Error
+     */
+    suspend fun addWordsToExistingSet(
+        setId: Long,
+        userId: Long,
+        newWords: List<SelectedWordConfig>
+    ): AddSetResult = withContext(Dispatchers.IO) {
+        if (newWords.isEmpty()) {
+            Log.d(TAG_REPO, "addWordsToExistingSet: no new words to add, returning existing setId")
+            return@withContext AddSetResult.Success(setId)
+        }
+
+        val set = setDao.getSetById(setId)
+            ?: return@withContext AddSetResult.Error("Set not found")
+
+        val userWords = wordDao.getWordsByUserIdOnce(userId)
+        val wordMap = userWords.associateBy { it.word }
+        val (allWordsExist, missingWords) = validateWordsExist(newWords, wordMap)
+
+        if (!allWordsExist) {
+            return@withContext AddSetResult.Error(
+                "Some words were not found: ${missingWords.joinToString(", ")}"
+            )
+        }
+
+        return@withContext try {
+            database.withTransaction {
+                // Get existing words in the set to avoid duplicates
+                val existingSetWords = setWordDao.getSetWords(setId)
+                val existingWordIds = existingSetWords.map { it.wordId }.toSet()
+
+                val setWordsToInsert = newWords.mapNotNull { selected ->
+                    val word = wordMap[selected.wordName]!!
+                    if (word.id in existingWordIds) {
+                        null // Skip duplicates
+                    } else {
+                        SetWord(
+                            setId = setId,
+                            wordId = word.id,
+                            configurationType = selected.configurationType,
+                            selectedLetterIndex = selected.selectedLetterIndex,
+                            imagePath = selected.imagePath
+                        )
+                    }
+                }
+
+                if (setWordsToInsert.isNotEmpty()) {
+                    setWordDao.insertSetWords(setWordsToInsert)
+                    val newCount = existingSetWords.size + setWordsToInsert.size
+                    setDao.updateSet(
+                        setId = setId,
+                        title = set.title,
+                        description = set.description,
+                        itemCount = newCount,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    Log.d(TAG_REPO, "Merged ${setWordsToInsert.size} new words into set $setId")
+                }
+
+                setId
+            }.let { AddSetResult.Success(it) }
+        } catch (e: Exception) {
+            Log.e(TAG_REPO, "Failed to merge words into set: ${e.message}", e)
+            AddSetResult.Error("Failed to merge words: ${e.message ?: "Unknown error"}")
+        }
+    }
 }
