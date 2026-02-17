@@ -253,7 +253,7 @@ fun AISetReviewScreen(
                             isSaving = true
                             coroutineScope.launch {
                                 val savedSetIds = mutableListOf<Long>()
-                                
+
                                 editableSets.forEach { set ->
                                     val selectedWords = set.words.map { word ->
                                         SetRepository.SelectedWordConfig(
@@ -262,13 +262,25 @@ fun AISetReviewScreen(
                                             selectedLetterIndex = word.selectedLetterIndex
                                         )
                                     }
-                                    
-                                    when (val result = setRepository.addSetWithWords(
-                                        title = set.title,
-                                        description = set.description,
-                                        userId = userId,
-                                        selectedWords = selectedWords
-                                    )) {
+
+                                    val result = if (set.mergeDecision == MergeDecision.MERGE && set.overlapMatch != null) {
+                                        // Merge path: add only new words to existing set
+                                        setRepository.addWordsToExistingSet(
+                                            setId = set.overlapMatch.matchedSetId,
+                                            userId = userId,
+                                            newWords = selectedWords
+                                        )
+                                    } else {
+                                        // Create path: save as new set (existing behavior)
+                                        setRepository.addSetWithWords(
+                                            title = set.title,
+                                            description = set.description,
+                                            userId = userId,
+                                            selectedWords = selectedWords
+                                        )
+                                    }
+
+                                    when (result) {
                                         is SetRepository.AddSetResult.Success -> {
                                             savedSetIds.add(result.setId)
                                         }
@@ -277,9 +289,9 @@ fun AISetReviewScreen(
                                         }
                                     }
                                 }
-                                
+
                                 isSaving = false
-                                
+
                                 generatedActivity?.let { activity ->
                                     onFinish(
                                         activity.activity.title,
@@ -288,6 +300,25 @@ fun AISetReviewScreen(
                                     )
                                 }
                             }
+                        },
+                        onMergeIntoExisting = {
+                            val match = set.overlapMatch ?: return@SetReviewCard
+                            val newWordNames = match.newWords.map { it.lowercase() }.toSet()
+                            val newWordsOnly = set.words.filter { it.word.lowercase() in newWordNames }
+                            onEditableSetsChange(editableSets.toMutableList().apply {
+                                this[currentSetIndex] = set.copy(
+                                    title = match.matchedSetTitle,
+                                    words = newWordsOnly,
+                                    mergeDecision = MergeDecision.MERGE
+                                )
+                            })
+                        },
+                        onCreateAsNew = {
+                            onEditableSetsChange(editableSets.toMutableList().apply {
+                                this[currentSetIndex] = set.copy(
+                                    mergeDecision = MergeDecision.CREATE_NEW
+                                )
+                            })
                         }
                     )
                     
@@ -327,11 +358,81 @@ private fun SetReviewCard(
     isSaving: Boolean = false,
     onAddMoreSetClick: () -> Unit = {},
     onProceedClick: () -> Unit = {},
+    onMergeIntoExisting: () -> Unit = {},
+    onCreateAsNew: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier.fillMaxWidth()
     ) {
+        // Overlap detection banner
+        if (set.overlapMatch != null && set.mergeDecision == MergeDecision.UNDECIDED) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = Color(0xFFF0F9FF),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = Color(0xFFC5E5FD),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Similar to \"${set.overlapMatch.matchedSetTitle}\"",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF3FA9F8)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${set.overlapMatch.overlappingWords.size} words already exist in this set",
+                    fontSize = 13.sp,
+                    color = Color(0xFF666666)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = onMergeIntoExisting,
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3FA9F8)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text(
+                            text = "Merge into existing",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onCreateAsNew,
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color(0xFF3FA9F8)),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text(
+                            text = "Create as new",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF3FA9F8)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         // Add a Set Title Field
         Text(
             text = "Add a Set Title",
