@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 import com.example.app.data.entity.Word
+import com.example.app.data.repository.GenerationPhase
 
 /**
  * Activity Creation Modal component for creating activities with selected words.
@@ -57,6 +58,7 @@ fun ActivityCreationModal(
     words: List<Word>,
     selectedWordIds: Set<Long>,
     isLoading: Boolean,
+    generationPhase: GenerationPhase = GenerationPhase.Idle,
     error: String? = null,
     onActivityInputChanged: (String) -> Unit,
     onWordSelectionChanged: (Long, Boolean) -> Unit,
@@ -148,6 +150,7 @@ fun ActivityCreationModal(
                     // Magic button
                     MagicButton(
                         isLoading = isLoading,
+                        generationPhase = generationPhase,
                         isEnabled = isSubmitEnabled,
                         onClick = {
                             focusManager.clearFocus()
@@ -397,6 +400,7 @@ private fun WordChip(
 @Composable
 private fun MagicButton(
     isLoading: Boolean,
+    generationPhase: GenerationPhase = GenerationPhase.Idle,
     isEnabled: Boolean,
     onClick: () -> Unit
 ) {
@@ -417,6 +421,18 @@ private fun MagicButton(
                 modifier = Modifier.size(24.dp),
                 color = Color.White,
                 strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = when (generationPhase) {
+                    is GenerationPhase.Filtering -> "Filtering words... (1/3)"
+                    is GenerationPhase.Grouping -> "Grouping sets... (2/3)"
+                    is GenerationPhase.Configuring -> "Configuring... (3/3)"
+                    else -> "Generating..."
+                },
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
             )
         } else {
             // Wand icon

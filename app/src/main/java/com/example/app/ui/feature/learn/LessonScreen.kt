@@ -53,6 +53,7 @@ fun LessonScreen(
 ) {
     // Collect UI state from ViewModel
     val uiState by viewModel.uiState.collectAsState()
+    val generationPhase by viewModel.generationPhase.collectAsState()
 
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -275,6 +276,7 @@ fun LessonScreen(
             words = uiState.words,
             selectedWordIds = uiState.selectedActivityWordIds,
             isLoading = uiState.isActivityCreationLoading,
+            generationPhase = generationPhase,
             error = uiState.activityError,
             onActivityInputChanged = { viewModel.onActivityInputChanged(it) },
             onWordSelectionChanged = { wordId, isSelected ->

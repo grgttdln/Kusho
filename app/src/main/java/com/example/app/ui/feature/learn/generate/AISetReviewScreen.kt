@@ -35,6 +35,8 @@ import com.example.app.data.model.AiGeneratedActivity
 import com.example.app.data.model.AiWordConfig
 import com.example.app.data.repository.SetRepository
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.DeleteConfirmationDialog
+import com.example.app.ui.components.DeleteType
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
 
@@ -92,7 +94,8 @@ fun AISetReviewScreen(
                                 EditableWord(
                                     word = wordConfig.wordName,
                                     configurationType = wordConfig.configurationType,
-                                    selectedLetterIndex = wordConfig.selectedLetterIndex
+                                    selectedLetterIndex = wordConfig.selectedLetterIndex,
+                                    hasImage = !wordConfig.imagePath.isNullOrBlank()
                                 )
                             }
                         )
@@ -224,6 +227,12 @@ fun AISetReviewScreen(
                                 }
                                 try {
                                     val newActivity = Gson().fromJson(newJson, AiGeneratedActivity::class.java)
+                                    // Build image lookup from existing editable words
+                                    val wordsWithImages = editableSets
+                                        .flatMap { it.words }
+                                        .filter { it.hasImage }
+                                        .map { it.word }
+                                        .toSet()
                                     newActivity?.sets?.firstOrNull()?.let { newSet ->
                                         onEditableSetsChange(editableSets.toMutableList().apply {
                                             this[currentSetIndex] = EditableSet(
@@ -233,7 +242,8 @@ fun AISetReviewScreen(
                                                     EditableWord(
                                                         word = word.word,
                                                         configurationType = mapAiConfigTypeToUi(word.configurationType),
-                                                        selectedLetterIndex = word.selectedLetterIndex
+                                                        selectedLetterIndex = word.selectedLetterIndex,
+                                                        hasImage = word.word in wordsWithImages
                                                     )
                                                 }
                                             )
@@ -318,7 +328,9 @@ fun AISetReviewScreen(
                                 this[currentSetIndex] = set.copy(
                                     title = match.matchedSetTitle,
                                     words = newWordsOnly,
-                                    mergeDecision = MergeDecision.MERGE
+                                    mergeDecision = MergeDecision.MERGE,
+                                    preMergeTitle = set.title,
+                                    preMergeWords = set.words
                                 )
                             })
                         },
@@ -326,6 +338,17 @@ fun AISetReviewScreen(
                             onEditableSetsChange(editableSets.toMutableList().apply {
                                 this[currentSetIndex] = set.copy(
                                     mergeDecision = MergeDecision.CREATE_NEW
+                                )
+                            })
+                        },
+                        onUndoDecision = {
+                            onEditableSetsChange(editableSets.toMutableList().apply {
+                                this[currentSetIndex] = set.copy(
+                                    title = set.preMergeTitle ?: set.title,
+                                    words = set.preMergeWords ?: set.words,
+                                    mergeDecision = MergeDecision.UNDECIDED,
+                                    preMergeTitle = null,
+                                    preMergeWords = null
                                 )
                             })
                         }
@@ -369,73 +392,171 @@ private fun SetReviewCard(
     onProceedClick: () -> Unit = {},
     onMergeIntoExisting: () -> Unit = {},
     onCreateAsNew: () -> Unit = {},
+    onUndoDecision: () -> Unit = {},
+    onDiscardSet: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    DeleteConfirmationDialog(
+        isVisible = showDiscardDialog,
+        deleteType = DeleteType.SET,
+        onConfirm = {
+            showDiscardDialog = false
+            onDiscardSet()
+        },
+        onDismiss = { showDiscardDialog = false }
+    )
+
     Column(
         modifier = modifier.fillMaxWidth()
     ) {
         // Overlap detection banner
-        if (set.overlapMatch != null && set.mergeDecision == MergeDecision.UNDECIDED) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = Color(0xFFF0F9FF),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = Color(0xFFC5E5FD),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "Similar to \"${set.overlapMatch.matchedSetTitle}\"",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF3FA9F8)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${set.overlapMatch.overlappingWords.size} words already exist in this set",
-                    fontSize = 13.sp,
-                    color = Color(0xFF666666)
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = onMergeIntoExisting,
-                        modifier = Modifier.weight(1f).height(40.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF3FA9F8)
-                        ),
-                        contentPadding = PaddingValues(horizontal = 8.dp)
+        if (set.overlapMatch != null) {
+            when (set.mergeDecision) {
+                MergeDecision.UNDECIDED -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = Color(0xFFF0F9FF),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = Color(0xFFC5E5FD),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(16.dp)
                     ) {
                         Text(
-                            text = "Merge into existing",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = onCreateAsNew,
-                        modifier = Modifier.weight(1f).height(40.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, Color(0xFF3FA9F8)),
-                        contentPadding = PaddingValues(horizontal = 8.dp)
-                    ) {
-                        Text(
-                            text = "Create as new",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
+                            text = "Similar to \"${set.overlapMatch.matchedSetTitle}\"",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF3FA9F8)
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${set.overlapMatch.overlappingWords.size} words already exist in this set",
+                            fontSize = 13.sp,
+                            color = Color(0xFF666666)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = onMergeIntoExisting,
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF3FA9F8)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Merge into existing",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = onCreateAsNew,
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, Color(0xFF3FA9F8)),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Create as new",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF3FA9F8)
+                                )
+                            }
+                        }
+                    }
+                }
+                MergeDecision.MERGE -> {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = Color(0xFFE8F5E9),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = Color(0xFFA5D6A7),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Merging into \"${set.overlapMatch.matchedSetTitle}\"",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF2E7D32)
+                            )
+                            Text(
+                                text = "${set.words.size} new word${if (set.words.size != 1) "s" else ""} will be added",
+                                fontSize = 13.sp,
+                                color = Color(0xFF666666)
+                            )
+                        }
+                        TextButton(onClick = onUndoDecision) {
+                            Text(
+                                text = "Undo",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF2E7D32)
+                            )
+                        }
+                    }
+                }
+                MergeDecision.CREATE_NEW -> {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = Color(0xFFF0F9FF),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = Color(0xFFC5E5FD),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Creating as new set",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF3FA9F8)
+                            )
+                            Text(
+                                text = "Similar to \"${set.overlapMatch.matchedSetTitle}\"",
+                                fontSize = 13.sp,
+                                color = Color(0xFF666666)
+                            )
+                        }
+                        TextButton(onClick = onUndoDecision) {
+                            Text(
+                                text = "Undo",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF3FA9F8)
+                            )
+                        }
                     }
                 }
             }
@@ -453,49 +574,7 @@ private fun SetReviewCard(
 
         OutlinedTextField(
             value = set.title,
-            onValueChange = { onSetChange(set.copy(title = it)) },
-            placeholder = { 
-                Text(
-                    text = "E.g, Tall letters",
-                    fontSize = 16.sp,
-                    color = Color(0xFFC5E5FD),
-                    fontWeight = FontWeight.Normal
-                )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF3FA9F8),
-                unfocusedBorderColor = Color(0xFFC5E5FD),
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                cursorColor = Color(0xFF3FA9F8),
-                focusedTextColor = Color(0xFF0B0B0B),
-                unfocusedTextColor = Color(0xFF0B0B0B)
-            ),
-            textStyle = androidx.compose.ui.text.TextStyle(
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal
-            ),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Add Description Field
-        Text(
-            text = "Add Description",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Normal,
-            color = Color(0xFF0B0B0B),
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        OutlinedTextField(
-            value = set.description,
-            onValueChange = { onSetChange(set.copy(description = it)) },
+            onValueChange = { if (it.length <= 15) onSetChange(set.copy(title = it)) },
             placeholder = {
                 Text(
                     text = "E.g, Tall letters",
@@ -505,8 +584,7 @@ private fun SetReviewCard(
                 )
             },
             modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
+                .fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFF3FA9F8),
@@ -522,7 +600,66 @@ private fun SetReviewCard(
                 fontWeight = FontWeight.Normal
             ),
             singleLine = true,
-            maxLines = 1
+            supportingText = {
+                Text(
+                    text = "${set.title.length}/15",
+                    fontSize = 12.sp,
+                    color = Color(0xFF999999),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.End
+                )
+            }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Add Description Field
+        Text(
+            text = "Add Description",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color(0xFF0B0B0B),
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        OutlinedTextField(
+            value = set.description,
+            onValueChange = { if (it.length <= 30) onSetChange(set.copy(description = it)) },
+            placeholder = {
+                Text(
+                    text = "E.g, Words ending in -at",
+                    fontSize = 16.sp,
+                    color = Color(0xFFC5E5FD),
+                    fontWeight = FontWeight.Normal
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF3FA9F8),
+                unfocusedBorderColor = Color(0xFFC5E5FD),
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White,
+                cursorColor = Color(0xFF3FA9F8),
+                focusedTextColor = Color(0xFF0B0B0B),
+                unfocusedTextColor = Color(0xFF0B0B0B)
+            ),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal
+            ),
+            singleLine = true,
+            maxLines = 1,
+            supportingText = {
+                Text(
+                    text = "${set.description.length}/30",
+                    fontSize = 12.sp,
+                    color = Color(0xFF999999),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.End
+                )
+            }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -642,6 +779,32 @@ private fun SetReviewCard(
             )
         }
 
+        // Discard Set Button - Always visible
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = { showDiscardDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.5.dp, Color(0xFFE57373)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFFE57373)
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Discard Set",
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Discard This Set",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
         // Bottom Buttons - Only show on the last set
         if (showBottomButtons) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -670,7 +833,7 @@ private fun SetReviewCard(
                         color = Color(0xFF3FA9F8)
                     )
                 }
-                
+
                 // Proceed Button (filled style) - saves all sets and finishes
                 Button(
                     onClick = onProceedClick,
@@ -714,7 +877,13 @@ private fun WordReviewItem(
     modifier: Modifier = Modifier
 ) {
     var expandedDropdown by remember { mutableStateOf(false) }
-    val dropdownOptions = listOf("Fill in the Blank", "Name the Picture", "Write the Word")
+    val dropdownOptions = remember(word.hasImage) {
+        if (word.hasImage) {
+            listOf("Fill in the Blank", "Name the Picture", "Write the Word")
+        } else {
+            listOf("Fill in the Blank", "Write the Word")
+        }
+    }
     val showLetterSelection = word.configurationType == "Fill in the Blank"
 
     Column(
@@ -919,13 +1088,16 @@ data class EditableSet(
     val description: String,
     val words: List<EditableWord>,
     val overlapMatch: SetRepository.OverlapResult? = null,
-    val mergeDecision: MergeDecision = MergeDecision.UNDECIDED
+    val mergeDecision: MergeDecision = MergeDecision.UNDECIDED,
+    val preMergeTitle: String? = null,
+    val preMergeWords: List<EditableWord>? = null
 )
 
 data class EditableWord(
     val word: String,
     val configurationType: String,
-    val selectedLetterIndex: Int = 0
+    val selectedLetterIndex: Int = 0,
+    val hasImage: Boolean = false
 )
 
 // Helper functions to map between AI and UI config types
@@ -1031,6 +1203,7 @@ fun AISetReviewScreenPreview() {
         currentSetIndex = currentSetIndex,
         onCurrentSetIndexChange = { currentSetIndex = it },
         onRegenerateSet = { _, _, _ -> },
+        onDiscardSet = {},
         onAddWordsClick = {}
     )
 }

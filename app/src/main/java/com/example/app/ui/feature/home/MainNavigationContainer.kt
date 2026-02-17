@@ -159,25 +159,32 @@ fun MainNavigationContainer(
             onNavigateToSets = { currentScreen = 7 },
             onNavigateToAIGenerate = { jsonResult ->
                 aiGeneratedJsonResult = jsonResult
-                // Parse JSON and initialize editable sets
-                try {
-                    val activity = Gson().fromJson(jsonResult, AiGeneratedActivity::class.java)
-                    val parsedSets = activity?.sets?.map { set ->
-                        EditableSet(
-                            title = set.title,
-                            description = set.description,
-                            words = set.words.map { word ->
-                                EditableWord(
-                                    word = word.word,
-                                    configurationType = mapAiConfigTypeToUi(word.configurationType),
-                                    selectedLetterIndex = word.selectedLetterIndex
-                                )
-                            }
-                        )
-                    } ?: emptyList()
+                // Parse JSON, resolve image availability, and initialize editable sets
+                coroutineScope.launch {
+                    try {
+                        val activity = Gson().fromJson(jsonResult, AiGeneratedActivity::class.java)
+                        val allWords = wordRepository.getWordsForUserOnce(userId)
+                        val wordsWithImages = allWords
+                            .filter { !it.imagePath.isNullOrBlank() }
+                            .map { it.word }
+                            .toSet()
 
-                    // Run overlap detection before showing review screen
-                    coroutineScope.launch {
+                        val parsedSets = activity?.sets?.map { set ->
+                            EditableSet(
+                                title = set.title,
+                                description = set.description,
+                                words = set.words.map { word ->
+                                    EditableWord(
+                                        word = word.word,
+                                        configurationType = mapAiConfigTypeToUi(word.configurationType),
+                                        selectedLetterIndex = word.selectedLetterIndex,
+                                        hasImage = word.word in wordsWithImages
+                                    )
+                                }
+                            )
+                        } ?: emptyList()
+
+                        // Run overlap detection before showing review screen
                         try {
                             val generatedWordLists = parsedSets.map { set ->
                                 set.words.map { it.word }
@@ -199,11 +206,11 @@ fun MainNavigationContainer(
                         }
                         currentAiSetIndex = 0
                         currentScreen = 48
+                    } catch (e: Exception) {
+                        aiEditableSets = emptyList()
+                        currentAiSetIndex = 0
+                        currentScreen = 48
                     }
-                } catch (e: Exception) {
-                    aiEditableSets = emptyList()
-                    currentAiSetIndex = 0
-                    currentScreen = 48
                 }
             },
             modifier = modifier,
@@ -727,6 +734,20 @@ fun MainNavigationContainer(
             onCurrentSetIndexChange = { currentAiSetIndex = it },
             onRegenerateSet = { setTitle, setDescription, onResult ->
                 lessonViewModel.regenerateSet(setTitle, setDescription, onResult)
+            },
+            onDiscardSet = {
+                val updatedSets = aiEditableSets.toMutableList().apply {
+                    removeAt(currentAiSetIndex)
+                }
+                if (updatedSets.isEmpty()) {
+                    // No sets left — navigate back
+                    currentScreen = 6
+                } else {
+                    aiEditableSets = updatedSets
+                    if (currentAiSetIndex >= updatedSets.size) {
+                        currentAiSetIndex = updatedSets.size - 1
+                    }
+                }
             },
             onAddWordsClick = { existingWords ->
                 wordsToExclude = existingWords

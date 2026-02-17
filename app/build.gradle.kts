@@ -34,10 +34,10 @@ android {
         buildConfigField("String", "DEEPGRAM_API_KEY", "\"${deepgramApiKey}\"")
         println("Deepgram API Key configured: ${if (deepgramApiKey.isNotBlank()) "YES" else "NO"}")
 
-        // OpenRouter API Key from local.properties (for AI activity generation)
-        val openrouterApiKey = localProperties.getProperty("OPENROUTER_API_KEY", "")
-        buildConfigField("String", "OPENROUTER_API_KEY", "\"${openrouterApiKey}\"")
-        println("OpenRouter API Key configured: ${if (openrouterApiKey.isNotBlank()) "YES" else "NO"}")
+        // Gemini API Key from local.properties (for AI activity generation)
+        val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY", "")
+        buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey}\"")
+        println("Gemini API Key configured: ${if (geminiApiKey.isNotBlank()) "YES" else "NO"}")
     }
 
     buildTypes {
@@ -96,11 +96,14 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // Retrofit for API calls
+    // Retrofit for API calls (used by other services)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Google AI SDK for Gemini
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

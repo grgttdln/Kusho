@@ -461,12 +461,12 @@ class SetRepository(
     )
 
     /**
-     * Find existing sets that overlap 50%+ with the given generated word lists.
+     * Find existing sets where a strict majority (>50%) of generated words already exist.
      * Returns one OverlapResult per generated set that has a match (best match only).
      *
      * @param userId The user's ID
      * @param generatedSets List of word-name lists, one per generated set
-     * @return Map of generatedSetIndex -> OverlapResult for sets with 50%+ overlap
+     * @return Map of generatedSetIndex -> OverlapResult for sets with >50% overlap
      */
     suspend fun findOverlappingSets(
         userId: Long,
@@ -488,8 +488,6 @@ class SetRepository(
         generatedSets.forEachIndexed { genIndex, generatedWords ->
             val generatedWordList = generatedWords.map { word -> word.lowercase() }
             val generatedWordSet = generatedWordList.toHashSet()
-            val threshold = (generatedWordSet.size * 0.5).toInt().coerceAtLeast(1)
-
             var bestMatch: OverlapResult? = null
             var bestOverlapCount = 0
 
@@ -498,7 +496,8 @@ class SetRepository(
                 val existingLowerSet = existingWords.map { word -> word.lowercase() }.toHashSet()
                 val overlap = generatedWordSet.filter { it in existingLowerSet }
 
-                if (overlap.size >= threshold && overlap.size > bestOverlapCount) {
+                // Strict majority: overlap must be more than half the generated words
+                if (overlap.size > generatedWordSet.size / 2 && overlap.size > bestOverlapCount) {
                     bestOverlapCount = overlap.size
                     val newWords = generatedWordSet.filter { it !in existingLowerSet }
                     bestMatch = OverlapResult(

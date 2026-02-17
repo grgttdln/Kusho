@@ -9,6 +9,7 @@ import com.example.app.data.SessionManager
 import com.example.app.data.entity.Word
 import com.example.app.data.model.AiGenerationResult
 import com.example.app.data.repository.GeminiRepository
+import com.example.app.data.repository.GenerationPhase
 import com.example.app.data.repository.WordRepository
 import com.example.app.util.ImageStorageManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,8 +37,15 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
 
+    private val _generationPhase = MutableStateFlow<GenerationPhase>(GenerationPhase.Idle)
+    val generationPhase: StateFlow<GenerationPhase> = _generationPhase.asStateFlow()
+
     // Current user ID (null if not logged in)
     private var currentUserId: Long? = null
+
+    // Cached generation context for regeneration
+    private var lastGenerationPrompt: String = ""
+    private var lastSelectedWords: List<Word> = emptyList()
 
     init {
         // Observe the current user session
@@ -498,6 +506,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
      * Hide the Activity Creation modal and reset its state.
      */
     fun hideActivityCreationModal() {
+        _generationPhase.value = GenerationPhase.Idle
         _uiState.update {
             it.copy(
                 isActivityCreationModalVisible = false,
@@ -570,11 +579,24 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         val selectedWords = _uiState.value.words
             .filter { selectedWordIds.contains(it.id) }
 
+        // Cache for regeneration
+        lastGenerationPrompt = activityDescription
+        lastSelectedWords = selectedWords
+
         _uiState.update { it.copy(isActivityCreationLoading = true, activityError = null) }
+        _generationPhase.value = GenerationPhase.Filtering
 
         viewModelScope.launch {
-            when (val result = geminiRepository.generateActivity(activityDescription, selectedWords)) {
+            val result = geminiRepository.generateActivity(
+                activityDescription,
+                selectedWords
+            ) { phase ->
+                _generationPhase.value = phase
+            }
+
+            when (result) {
                 is AiGenerationResult.Success -> {
+                    _generationPhase.value = GenerationPhase.Idle
                     val jsonResult = com.google.gson.Gson().toJson(result.data)
                     _uiState.update {
                         it.copy(
@@ -588,12 +610,52 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                     onGenerationComplete(jsonResult)
                 }
                 is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
                     _uiState.update {
                         it.copy(
                             isActivityCreationLoading = false,
                             activityError = result.message
                         )
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * Regenerate a single set using the same GeminiRepository that did the original generation.
+     * Reuses cached filtered words from Step 1.
+     */
+    fun regenerateSet(
+        currentSetTitle: String,
+        currentSetDescription: String,
+        onResult: (String?) -> Unit
+    ) {
+        if (lastSelectedWords.isEmpty()) {
+            onResult(null)
+            return
+        }
+
+        viewModelScope.launch {
+            val result = geminiRepository.regenerateSet(
+                prompt = lastGenerationPrompt,
+                availableWords = lastSelectedWords,
+                currentSetTitle = currentSetTitle,
+                currentSetDescription = currentSetDescription,
+                onPhaseChange = { phase ->
+                    _generationPhase.value = phase
+                }
+            )
+
+            when (result) {
+                is AiGenerationResult.Success -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    val gson = com.google.gson.Gson()
+                    onResult(gson.toJson(result.data))
+                }
+                is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    onResult(null)
                 }
             }
         }

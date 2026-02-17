@@ -10,6 +10,7 @@ import com.example.app.data.model.AiGeneratedActivity
 import com.example.app.data.model.AiGeneratedSet
 import com.example.app.data.model.AiGenerationResult
 import com.example.app.data.repository.GeminiRepository
+import com.example.app.data.repository.GenerationPhase
 import com.example.app.data.repository.SetRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,9 @@ class GenerateActivityViewModel(application: Application) : AndroidViewModel(app
 
     private val _uiState = MutableStateFlow(GenerateActivityUiState())
     val uiState: StateFlow<GenerateActivityUiState> = _uiState.asStateFlow()
+
+    private val _generationPhase = MutableStateFlow<GenerationPhase>(GenerationPhase.Idle)
+    val generationPhase: StateFlow<GenerationPhase> = _generationPhase.asStateFlow()
 
     private var currentUserId: Long? = null
     private var generatedData: AiGeneratedActivity? = null
@@ -142,11 +146,20 @@ class GenerateActivityViewModel(application: Application) : AndroidViewModel(app
             .filter { state.selectedWordIds.contains(it.id) }
 
         _uiState.update { it.copy(isGenerating = true, error = null) }
+        _generationPhase.value = GenerationPhase.Filtering
 
         viewModelScope.launch {
-            when (val result = geminiRepository.generateActivity(state.prompt, selectedWords)) {
+            val result = geminiRepository.generateActivity(
+                state.prompt,
+                selectedWords
+            ) { phase ->
+                _generationPhase.value = phase
+            }
+
+            when (result) {
                 is AiGenerationResult.Success -> {
                     generatedData = result.data
+                    _generationPhase.value = GenerationPhase.Complete
                     _uiState.update {
                         it.copy(
                             isGenerating = false,
@@ -157,6 +170,7 @@ class GenerateActivityViewModel(application: Application) : AndroidViewModel(app
                     }
                 }
                 is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
                     _uiState.update {
                         it.copy(
                             isGenerating = false,
@@ -221,24 +235,31 @@ class GenerateActivityViewModel(application: Application) : AndroidViewModel(app
 
         val state = _uiState.value
         val selectedWords = state.words.filter { state.selectedWordIds.contains(it.id) }
-        
+
         if (selectedWords.isEmpty()) {
             onResult(null)
             return
         }
 
         viewModelScope.launch {
-            when (val result = geminiRepository.regenerateSet(
+            val result = geminiRepository.regenerateSet(
                 prompt = state.prompt,
                 availableWords = selectedWords,
                 currentSetTitle = currentSetTitle,
-                currentSetDescription = currentSetDescription
-            )) {
+                currentSetDescription = currentSetDescription,
+                onPhaseChange = { phase ->
+                    _generationPhase.value = phase
+                }
+            )
+
+            when (result) {
                 is AiGenerationResult.Success -> {
+                    _generationPhase.value = GenerationPhase.Idle
                     val gson = com.google.gson.Gson()
                     onResult(gson.toJson(result.data))
                 }
                 is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
                     onResult(null)
                 }
             }
@@ -251,6 +272,7 @@ class GenerateActivityViewModel(application: Application) : AndroidViewModel(app
     fun reset() {
         generatedData = null
         createdSetIds.clear()
+        _generationPhase.value = GenerationPhase.Idle
         _uiState.update {
             GenerateActivityUiState(
                 words = it.words // Keep the loaded words
@@ -279,3 +301,4 @@ data class GenerateActivityUiState(
     val currentSetIndex: Int = 0,
     val error: String? = null
 )
+
