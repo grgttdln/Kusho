@@ -429,13 +429,17 @@ private fun FeedbackContent(
 @Composable
 private fun CompleteContent() {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Image(
             painter = painterResource(id = R.drawable.dis_watch_complete),
             contentDescription = "Session Complete",
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             contentScale = ContentScale.Fit
         )
     }

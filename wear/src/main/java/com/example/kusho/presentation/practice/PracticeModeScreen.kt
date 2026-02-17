@@ -506,7 +506,7 @@ private fun RecordingContent(
             progress = uiState.recordingProgress,
             modifier = Modifier.fillMaxSize(),
             strokeWidth = 8.dp,
-            indicatorColor = Color.Green
+            indicatorColor = AppColors.PracticeModeColor
         )
         Image(
             painter = painterResource(id = R.drawable.ic_kusho_hand),
