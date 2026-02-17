@@ -1,6 +1,7 @@
 package com.example.app.ui.feature.learn.generate
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,6 +50,10 @@ fun AISetReviewScreen(
     onFinish: (activityTitle: String, activityDescription: String, setIds: List<Long>) -> Unit,
     generatedJson: String,
     userId: Long,
+    editableSets: List<EditableSet>,
+    onEditableSetsChange: (List<EditableSet>) -> Unit,
+    currentSetIndex: Int,
+    onCurrentSetIndexChange: (Int) -> Unit,
     onRegenerateSet: (currentSetTitle: String, currentSetDescription: String, onResult: (String?) -> Unit) -> Unit = { _, _, _ -> },
     onAddWordsClick: (existingWords: List<String>) -> Unit = {},
     additionalWords: List<SetRepository.SelectedWordConfig> = emptyList(),
@@ -58,7 +64,7 @@ fun AISetReviewScreen(
     val setRepository = remember { SetRepository(database) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Parse the JSON into data class
+    // Parse the JSON for activity info (title, description) used in onFinish
     val generatedActivity = remember(generatedJson) {
         try {
             Gson().fromJson(generatedJson, AiGeneratedActivity::class.java)
@@ -67,39 +73,18 @@ fun AISetReviewScreen(
         }
     }
 
-    // State for editable sets
-    var editableSets by remember(generatedActivity) {
-        mutableStateOf<List<EditableSet>>(
-            generatedActivity?.sets?.mapIndexed { index, set ->
-                EditableSet(
-                    title = set.title,
-                    description = set.description,
-                    words = set.words.map { word ->
-                        EditableWord(
-                            word = word.word,
-                            configurationType = mapAiConfigTypeToUi(word.configurationType),
-                            selectedLetterIndex = word.selectedLetterIndex
-                        )
-                    }
-                )
-            } ?: emptyList()
-        )
-    }
-
-    // Current set index
-    var currentSetIndex by remember { mutableStateOf(0) }
     val currentSet = editableSets.getOrNull(currentSetIndex)
     val totalSets = editableSets.size
 
     // Handle additional words being added from SelectWordsScreen
     LaunchedEffect(additionalWords, currentSetIndex) {
         if (additionalWords.isNotEmpty()) {
-            val currentSet = editableSets.getOrNull(currentSetIndex)
-            currentSet?.let { set ->
+            val current = editableSets.getOrNull(currentSetIndex)
+            current?.let { set ->
                 val existingWordNames = set.words.map { it.word }.toSet()
                 val newWords = additionalWords.filter { it.wordName !in existingWordNames }
                 if (newWords.isNotEmpty()) {
-                    editableSets = editableSets.toMutableList().apply {
+                    onEditableSetsChange(editableSets.toMutableList().apply {
                         this[currentSetIndex] = set.copy(
                             words = set.words + newWords.map { wordConfig ->
                                 EditableWord(
@@ -109,7 +94,7 @@ fun AISetReviewScreen(
                                 )
                             }
                         )
-                    }
+                    })
                 }
             }
         }
@@ -127,10 +112,11 @@ fun AISetReviewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 30.dp)
-                .padding(bottom = 150.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 100.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(48.dp))
 
             // Progress Bar (Set indicators) - Always show even with one set
             Row(
@@ -149,78 +135,60 @@ fun AISetReviewScreen(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Top Navigation Bar with Previous/Next Set buttons
+            // Navigation Bar with Previous/Next Set buttons (below progress indicator)
             if (totalSets > 1) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Previous Set Button
+                    // Previous Set Button (Icon only)
                     if (currentSetIndex > 0) {
-                        TextButton(
-                            onClick = { currentSetIndex-- },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = Color(0xFF3FA9F8)
-                            )
+                        IconButton(
+                            onClick = { onCurrentSetIndexChange(currentSetIndex - 1) },
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Previous Set",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
+                                contentDescription = "Previous Set",
+                                tint = Color(0xFF3FA9F8),
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     } else {
-                        Spacer(modifier = Modifier.width(1.dp))
+                        Spacer(modifier = Modifier.size(48.dp))
                     }
 
-                    // Next Set Button
+                    // Set indicator text
+                    Text(
+                        text = "${currentSetIndex + 1} / $totalSets",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF666666)
+                    )
+
+                    // Next Set Button (Icon only)
                     if (currentSetIndex < totalSets - 1) {
-                        TextButton(
-                            onClick = { currentSetIndex++ },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = Color(0xFF3FA9F8)
-                            )
+                        IconButton(
+                            onClick = { onCurrentSetIndexChange(currentSetIndex + 1) },
+                            modifier = Modifier.size(48.dp)
                         ) {
-                            Text(
-                                text = "Next Set",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                contentDescription = "Next Set",
+                                tint = Color(0xFF3FA9F8),
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     } else {
-                        Spacer(modifier = Modifier.width(1.dp))
+                        Spacer(modifier = Modifier.size(48.dp))
                     }
                 }
             }
 
-            // Title
-            Text(
-                text = "Activity Creation with Kuu",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF0B0B0B),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp)
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Current Set Card
             currentSet?.let { set ->
@@ -231,16 +199,16 @@ fun AISetReviewScreen(
                         set = set,
                         isRegenerating = isRegenerating,
                         onSetChange = { updatedSet ->
-                            editableSets = editableSets.toMutableList().apply {
+                            onEditableSetsChange(editableSets.toMutableList().apply {
                                 this[currentSetIndex] = updatedSet
-                            }
+                            })
                         },
                         onWordRemove = { wordIndex ->
-                            editableSets = editableSets.toMutableList().apply {
+                            onEditableSetsChange(editableSets.toMutableList().apply {
                                 this[currentSetIndex] = set.copy(
                                     words = set.words.filterIndexed { i, _ -> i != wordIndex }
                                 )
-                            }
+                            })
                         },
                         onRegenerateSet = {
                             isRegenerating = true
@@ -254,7 +222,7 @@ fun AISetReviewScreen(
                                 try {
                                     val newActivity = Gson().fromJson(newJson, AiGeneratedActivity::class.java)
                                     newActivity?.sets?.firstOrNull()?.let { newSet ->
-                                        editableSets = editableSets.toMutableList().apply {
+                                        onEditableSetsChange(editableSets.toMutableList().apply {
                                             this[currentSetIndex] = EditableSet(
                                                 title = newSet.title,
                                                 description = newSet.description,
@@ -266,7 +234,7 @@ fun AISetReviewScreen(
                                                     )
                                                 }
                                             )
-                                        }
+                                        })
                                     }
                                 } catch (e: Exception) {
                                     regenerationError = "Failed to parse regenerated set"
@@ -275,6 +243,51 @@ fun AISetReviewScreen(
                         },
                         onAddWordsClick = {
                             onAddWordsClick(set.words.map { it.word })
+                        },
+                        showBottomButtons = currentSetIndex == totalSets - 1,
+                        isSaving = isSaving,
+                        onAddMoreSetClick = { 
+                            // TODO: Add logic to generate an additional set
+                        },
+                        onProceedClick = {
+                            isSaving = true
+                            coroutineScope.launch {
+                                val savedSetIds = mutableListOf<Long>()
+                                
+                                editableSets.forEach { set ->
+                                    val selectedWords = set.words.map { word ->
+                                        SetRepository.SelectedWordConfig(
+                                            wordName = word.word,
+                                            configurationType = word.configurationType,
+                                            selectedLetterIndex = word.selectedLetterIndex
+                                        )
+                                    }
+                                    
+                                    when (val result = setRepository.addSetWithWords(
+                                        title = set.title,
+                                        description = set.description,
+                                        userId = userId,
+                                        selectedWords = selectedWords
+                                    )) {
+                                        is SetRepository.AddSetResult.Success -> {
+                                            savedSetIds.add(result.setId)
+                                        }
+                                        is SetRepository.AddSetResult.Error -> {
+                                            android.util.Log.e("AISetReviewScreen", "Failed to save set: ${result.message}")
+                                        }
+                                    }
+                                }
+                                
+                                isSaving = false
+                                
+                                generatedActivity?.let { activity ->
+                                    onFinish(
+                                        activity.activity.title,
+                                        activity.activity.description,
+                                        savedSetIds
+                                    )
+                                }
+                            }
                         }
                     )
                     
@@ -288,106 +301,6 @@ fun AISetReviewScreen(
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center
                         )
-                    }
-                    
-                    // Bottom Buttons - Only show on the last set, at the end of content
-                    if (currentSetIndex == totalSets - 1) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            // Add More Set Button (outline style)
-                            Button(
-                                onClick = {
-                                    // TODO: Add logic to generate an additional set
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White
-                                ),
-                                border = BorderStroke(1.5.dp, Color(0xFF3FA9F8))
-                            ) {
-                                Text(
-                                    text = "Add More Set",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF3FA9F8)
-                                )
-                            }
-                            
-                            // Proceed Button (filled style) - saves all sets and finishes
-                            Button(
-                                onClick = {
-                                    isSaving = true
-                                    coroutineScope.launch {
-                                        val savedSetIds = mutableListOf<Long>()
-                                        
-                                        editableSets.forEach { set ->
-                                            val selectedWords = set.words.map { word ->
-                                                SetRepository.SelectedWordConfig(
-                                                    wordName = word.word,
-                                                    configurationType = word.configurationType,
-                                                    selectedLetterIndex = word.selectedLetterIndex
-                                                )
-                                            }
-                                            
-                                            when (val result = setRepository.addSetWithWords(
-                                                title = set.title,
-                                                description = set.description,
-                                                userId = userId,
-                                                selectedWords = selectedWords
-                                            )) {
-                                                is SetRepository.AddSetResult.Success -> {
-                                                    savedSetIds.add(result.setId)
-                                                }
-                                                is SetRepository.AddSetResult.Error -> {
-                                                    android.util.Log.e("AISetReviewScreen", "Failed to save set: ${result.message}")
-                                                }
-                                            }
-                                        }
-                                        
-                                        isSaving = false
-                                        
-                                        generatedActivity?.let { activity ->
-                                            onFinish(
-                                                activity.activity.title,
-                                                activity.activity.description,
-                                                savedSetIds
-                                            )
-                                        }
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF3FA9F8)
-                                ),
-                                enabled = !isSaving
-                            ) {
-                                if (isSaving) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text(
-                                        text = "Proceed",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -410,6 +323,10 @@ private fun SetReviewCard(
     isRegenerating: Boolean,
     onRegenerateSet: () -> Unit,
     onAddWordsClick: () -> Unit,
+    showBottomButtons: Boolean = false,
+    isSaving: Boolean = false,
+    onAddMoreSetClick: () -> Unit = {},
+    onProceedClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -427,14 +344,30 @@ private fun SetReviewCard(
         OutlinedTextField(
             value = set.title,
             onValueChange = { onSetChange(set.copy(title = it)) },
-            placeholder = { Text("Tall letters", color = Color(0xFF3FA9F8)) },
-            modifier = Modifier.fillMaxWidth(),
+            placeholder = { 
+                Text(
+                    text = "E.g, Tall letters",
+                    fontSize = 16.sp,
+                    color = Color(0xFFC5E5FD),
+                    fontWeight = FontWeight.Normal
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFF3FA9F8),
                 unfocusedBorderColor = Color(0xFFC5E5FD),
                 focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White
+                unfocusedContainerColor = Color.White,
+                cursorColor = Color(0xFF3FA9F8),
+                focusedTextColor = Color(0xFF0B0B0B),
+                unfocusedTextColor = Color(0xFF0B0B0B)
+            ),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal
             ),
             singleLine = true
         )
@@ -453,16 +386,33 @@ private fun SetReviewCard(
         OutlinedTextField(
             value = set.description,
             onValueChange = { onSetChange(set.copy(description = it)) },
-            placeholder = { Text("Tall letters", color = Color(0xFF3FA9F8)) },
-            modifier = Modifier.fillMaxWidth(),
+            placeholder = {
+                Text(
+                    text = "E.g, Tall letters",
+                    fontSize = 16.sp,
+                    color = Color(0xFFC5E5FD),
+                    fontWeight = FontWeight.Normal
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFF3FA9F8),
                 unfocusedBorderColor = Color(0xFFC5E5FD),
                 focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White
+                unfocusedContainerColor = Color.White,
+                cursorColor = Color(0xFF3FA9F8),
+                focusedTextColor = Color(0xFF0B0B0B),
+                unfocusedTextColor = Color(0xFF0B0B0B)
             ),
-            singleLine = true
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal
+            ),
+            singleLine = true,
+            maxLines = 1
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -518,33 +468,34 @@ private fun SetReviewCard(
         }
 
         // Words List
-        set.words.forEachIndexed { wordIndex, word ->
-            WordReviewItem(
-                index = wordIndex + 1,
-                word = word,
-                onConfigurationChange = { newConfig ->
-                    onSetChange(
-                        set.copy(
-                            words = set.words.toMutableList().apply {
-                                this[wordIndex] = word.copy(configurationType = newConfig)
-                            }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            set.words.forEachIndexed { wordIndex, word ->
+                WordReviewItem(
+                    index = wordIndex + 1,
+                    word = word,
+                    onConfigurationChange = { newConfig ->
+                        onSetChange(
+                            set.copy(
+                                words = set.words.toMutableList().apply {
+                                    this[wordIndex] = word.copy(configurationType = newConfig)
+                                }
+                            )
                         )
-                    )
-                },
-                onLetterSelected = { letterIndex ->
-                    onSetChange(
-                        set.copy(
-                            words = set.words.toMutableList().apply {
-                                this[wordIndex] = word.copy(selectedLetterIndex = letterIndex)
-                            }
+                    },
+                    onLetterSelected = { letterIndex ->
+                        onSetChange(
+                            set.copy(
+                                words = set.words.toMutableList().apply {
+                                    this[wordIndex] = word.copy(selectedLetterIndex = letterIndex)
+                                }
+                            )
                         )
-                    )
-                },
-                onRemove = { onWordRemove(wordIndex) }
-            )
-
-            if (wordIndex < set.words.size - 1) {
-                Spacer(modifier = Modifier.height(8.dp))
+                    },
+                    onRemove = { onWordRemove(wordIndex) }
+                )
             }
         }
 
@@ -581,8 +532,65 @@ private fun SetReviewCard(
             )
         }
 
-        // Bottom spacing for words section
-        Spacer(modifier = Modifier.height(24.dp))
+        // Bottom Buttons - Only show on the last set
+        if (showBottomButtons) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Add More Set Button (outline style)
+                Button(
+                    onClick = onAddMoreSetClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White
+                    ),
+                    border = BorderStroke(1.5.dp, Color(0xFF3FA9F8))
+                ) {
+                    Text(
+                        text = "Add More Set",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF3FA9F8)
+                    )
+                }
+                
+                // Proceed Button (filled style) - saves all sets and finishes
+                Button(
+                    onClick = onProceedClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3FA9F8)
+                    ),
+                    enabled = !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = "Proceed",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
     }
 }
 
@@ -599,119 +607,157 @@ private fun WordReviewItem(
     val dropdownOptions = listOf("Fill in the Blank", "Name the Picture", "Write the Word")
     val showLetterSelection = word.configurationType == "Fill in the Blank"
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .border(
-                width = 1.dp,
-                color = Color(0xFF3FA9F8),
-                shape = RoundedCornerShape(15.dp)
-            )
-            .background(Color.White, RoundedCornerShape(15.dp))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+    Column(
+        modifier = modifier.fillMaxWidth()
     ) {
-        // Left side: Index and word/letters
+        // Main row with index, word letters/text, dropdown, and remove button
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color(0xFF3FA9F8),
+                    shape = RoundedCornerShape(15.dp)
+                )
+                .background(Color.White, RoundedCornerShape(15.dp))
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = index.toString(),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF3FA9F8)
-            )
-
-            // Letter buttons for "Fill in the Blank"
-            if (showLetterSelection) {
-                word.word.forEachIndexed { letterIndex, letter ->
-                    LetterButton(
-                        letter = letter,
-                        isSelected = letterIndex == word.selectedLetterIndex,
-                        onClick = { onLetterSelected(letterIndex) }
-                    )
-                }
-            } else {
+            // Left side: Index and letter buttons or word text
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text(
-                    text = word.word,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    text = index.toString(),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
                     color = Color(0xFF3FA9F8)
                 )
-            }
-        }
 
-        // Configuration Dropdown
-        Box {
-            Button(
-                onClick = { expandedDropdown = !expandedDropdown },
-                modifier = Modifier
-                    .height(36.dp)
-                    .width(140.dp),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF3FA9F8)
-                ),
-                contentPadding = PaddingValues(horizontal = 8.dp)
-            ) {
-                Text(
-                    text = word.configurationType,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Dropdown",
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+                Spacer(modifier = Modifier.width(8.dp))
 
-            DropdownMenu(
-                expanded = expandedDropdown,
-                onDismissRequest = { expandedDropdown = false },
-                modifier = Modifier
-                    .background(Color.White, RoundedCornerShape(12.dp))
-                    .border(1.dp, Color(0xFFC5E5FD), RoundedCornerShape(12.dp))
-            ) {
-                dropdownOptions.forEach { option ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = option,
-                                fontSize = 14.sp,
-                                color = if (option == word.configurationType)
-                                    Color(0xFF3FA9F8) else Color(0xFF0B0B0B)
-                            )
-                        },
-                        onClick = {
-                            onConfigurationChange(option)
-                            expandedDropdown = false
-                        }
+                // Letter buttons for "Fill in the Blank" mode
+                if (showLetterSelection) {
+                    word.word.forEachIndexed { letterIndex, letter ->
+                        LetterButton(
+                            letter = letter,
+                            isSelected = letterIndex == word.selectedLetterIndex,
+                            onClick = { onLetterSelected(letterIndex) }
+                        )
+                    }
+                } else {
+                    // Show word as text for other modes
+                    Text(
+                        text = word.word,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF3FA9F8)
                     )
                 }
             }
-        }
 
-        // Remove button
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(28.dp)
-        ) {
-            Text(
-                text = "✕",
-                fontSize = 14.sp,
-                color = Color(0xFF3FA9F8),
-                fontWeight = FontWeight.Bold
-            )
+            // Dropdown button
+            Box {
+                Button(
+                    onClick = { expandedDropdown = !expandedDropdown },
+                    modifier = Modifier
+                        .height(40.dp)
+                        .width(120.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3FA9F8)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text(
+                        text = word.configurationType,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Dropdown",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Dropdown Menu
+                DropdownMenu(
+                    expanded = expandedDropdown,
+                    onDismissRequest = { expandedDropdown = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .background(
+                            color = Color.White,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color(0xFFC5E5FD),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .padding(vertical = 8.dp)
+                        .width(IntrinsicSize.Max)
+                ) {
+                    dropdownOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = option,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = if (option == word.configurationType) Color(0xFF3FA9F8) else Color(0xFF0B0B0B),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Visible
+                                )
+                            },
+                            onClick = {
+                                onConfigurationChange(option)
+                                expandedDropdown = false
+                            },
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .height(40.dp)
+                                .background(
+                                    color = if (option == word.configurationType) Color(0xFFF0F9FF) else Color.Transparent,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .fillMaxWidth()
+                        )
+                        if (option != dropdownOptions.last()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .padding(horizontal = 16.dp)
+                                    .background(Color(0xFFF5F5F5))
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Remove button
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Text(
+                    text = "✕",
+                    fontSize = 14.sp,
+                    color = Color(0xFF3FA9F8),
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -725,40 +771,55 @@ private fun LetterButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.size(32.dp),
-        shape = RoundedCornerShape(8.dp),
+        modifier = modifier
+            .size(30.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSelected) Color(0xFF3FA9F8) else Color.White
         ),
         border = if (!isSelected) {
-            BorderStroke(1.dp, Color(0xFFC5E5FD))
-        } else null,
+            BorderStroke(
+                width = 1.dp,
+                color = Color(0xFFC5E5FD)
+            )
+        } else {
+            null
+        },
         contentPadding = PaddingValues(0.dp)
     ) {
         Text(
             text = letter.toString(),
-            fontSize = 16.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = if (isSelected) Color.White else Color(0xFF3FA9F8)
         )
     }
 }
 
+// Merge decision state for overlap detection
+enum class MergeDecision {
+    UNDECIDED,   // Banner visible, user hasn't chosen
+    MERGE,       // User chose to merge into existing set
+    CREATE_NEW   // User chose to create as new set
+}
+
 // Data classes for UI state
-private data class EditableSet(
+data class EditableSet(
     val title: String,
     val description: String,
-    val words: List<EditableWord>
+    val words: List<EditableWord>,
+    val overlapMatch: SetRepository.OverlapResult? = null,
+    val mergeDecision: MergeDecision = MergeDecision.UNDECIDED
 )
 
-private data class EditableWord(
+data class EditableWord(
     val word: String,
     val configurationType: String,
     val selectedLetterIndex: Int = 0
 )
 
 // Helper functions to map between AI and UI config types
-private fun mapAiConfigTypeToUi(aiType: String): String {
+fun mapAiConfigTypeToUi(aiType: String): String {
     return when (aiType.lowercase()) {
         "fill in the blanks", "fill in the blank" -> "Fill in the Blank"
         "name the picture", "identification" -> "Name the Picture"
@@ -826,13 +887,39 @@ fun AISetReviewScreenPreview() {
       ]
     }
     """.trimIndent()
-    
+
+    val sampleSets = listOf(
+        EditableSet(
+            title = "Basic Animals",
+            description = "Focus on common animal words",
+            words = listOf(
+                EditableWord("cat", "Fill in the Blank", 1),
+                EditableWord("dog", "Name the Picture", 0),
+                EditableWord("bird", "Write the Word", 0)
+            )
+        ),
+        EditableSet(
+            title = "Farm Animals",
+            description = "Words for farm animals",
+            words = listOf(
+                EditableWord("pig", "Fill in the Blank", 0),
+                EditableWord("cow", "Name the Picture", 0)
+            )
+        )
+    )
+    var editableSets by remember { mutableStateOf(sampleSets) }
+    var currentSetIndex by remember { mutableStateOf(0) }
+
     AISetReviewScreen(
         onNavigate = {},
         onBackClick = {},
         onFinish = { _, _, _ -> },
         generatedJson = sampleJson,
         userId = 1L,
+        editableSets = editableSets,
+        onEditableSetsChange = { editableSets = it },
+        currentSetIndex = currentSetIndex,
+        onCurrentSetIndexChange = { currentSetIndex = it },
         onRegenerateSet = { _, _, _ -> },
         onAddWordsClick = {}
     )
