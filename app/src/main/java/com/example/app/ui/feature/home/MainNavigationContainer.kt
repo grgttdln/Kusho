@@ -61,6 +61,7 @@ fun MainNavigationContainer(
     var tutorialSessionTitle by remember { mutableStateOf("") }
     var tutorialLetterType by remember { mutableStateOf("capital") }
     var tutorialSessionStudentId by remember { mutableStateOf(0L) }
+    var selectedDominantHand by remember { mutableStateOf("RIGHT") }
     
     // --- DASHBOARD TUTORIAL FLOW STATE ---
     var dashboardTutorialSection by remember { mutableStateOf("") } // "Vowels" or "Consonants"
@@ -140,20 +141,22 @@ fun MainNavigationContainer(
         )
         4 -> TutorialModeScreen(
             onBack = { currentScreen = 1 },
-            onStudentSelected = { studentId, classId, studentName ->
+            onStudentSelected = { studentId, classId, studentName, dominantHand ->
                 tutorialModeStudentId = studentId
                 tutorialModeClassId = classId
                 tutorialModeStudentName = studentName
+                selectedDominantHand = dominantHand
                 currentScreen = 27
             },
             modifier = modifier
         )
         5 -> LearnModeScreen(
             onBack = { currentScreen = 1 },
-            onStudentSelected = { studentId, classId, studentName ->
+            onStudentSelected = { studentId, classId, studentName, dominantHand ->
                 selectedStudentId = studentId.toString()
                 selectedStudentName = studentName
                 selectedClassId = classId.toString()
+                selectedDominantHand = dominantHand
                 currentScreen = 31 // Navigate to activity selection screen
             },
             modifier = modifier
@@ -428,6 +431,7 @@ fun MainNavigationContainer(
             letterType = tutorialLetterType,
             studentName = tutorialModeStudentName,
             studentId = tutorialSessionStudentId,
+            dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 29 },
             modifier = modifier
         )
@@ -501,6 +505,7 @@ fun MainNavigationContainer(
                 sessionKey = learnModeSessionKey,
                 studentId = selectedStudentId,
                 studentName = selectedStudentName,
+                dominantHand = selectedDominantHand,
                 modifier = modifier,
                 onSessionComplete = { currentScreen = 34 }
             )
@@ -517,12 +522,13 @@ fun MainNavigationContainer(
         // --- DASHBOARD TUTORIAL FLOW ---
         36 -> TutorialStudentSelectionScreen(
             onBack = { currentScreen = 0 },
-            onSelectStudent = { studentId, studentName, classId, letterType ->
+            onSelectStudent = { studentId, studentName, classId, letterType, dominantHand ->
                 tutorialModeStudentId = studentId
                 tutorialModeStudentName = studentName
                 tutorialModeClassId = classId
                 tutorialLetterType = letterType
                 tutorialSessionStudentId = studentId
+                selectedDominantHand = dominantHand
                 currentScreen = 38 // Go directly to TutorialSessionScreen (skip vowels/consonants selection)
             },
             showLetterTypeDialog = true,
@@ -548,6 +554,7 @@ fun MainNavigationContainer(
             letterType = tutorialLetterType,
             studentName = tutorialModeStudentName,
             studentId = tutorialSessionStudentId,
+            dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 39 },
             modifier = modifier
         )
@@ -563,12 +570,13 @@ fun MainNavigationContainer(
         // --- DASHBOARD LEARN FLOW ---
         41 -> TutorialStudentSelectionScreen(
             onBack = { currentScreen = 0 },
-            onSelectStudent = { studentId, studentName, classId, _ ->
+            onSelectStudent = { studentId, studentName, classId, _, dominantHand ->
                 selectedStudentId = studentId.toString()
                 selectedStudentName = studentName
                 selectedClassId = classId.toString()
                 selectedActivityId = dashboardLearnActivityId
                 selectedActivityTitle = dashboardLearnActivityTitle
+                selectedDominantHand = dominantHand
                 currentScreen = 42 // Go to LearnModeSetStatusScreen
             },
             showLetterTypeDialog = false,
@@ -622,6 +630,7 @@ fun MainNavigationContainer(
                 sessionKey = learnModeSessionKey,
                 studentId = selectedStudentId,
                 studentName = selectedStudentName,
+                dominantHand = selectedDominantHand,
                 modifier = modifier,
                 onSessionComplete = { currentScreen = 44 }
             )

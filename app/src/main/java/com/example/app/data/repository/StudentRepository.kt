@@ -54,7 +54,8 @@ class StudentRepository(private val studentDao: StudentDao) {
         fullName: String,
         gradeLevel: String,
         birthday: String,
-        pfpPath: String? = null
+        pfpPath: String? = null,
+        dominantHand: String = "RIGHT"
     ): StudentOperationResult = withContext(Dispatchers.IO) {
         try {
             if (fullName.isBlank()) {
@@ -68,7 +69,8 @@ class StudentRepository(private val studentDao: StudentDao) {
                 fullName = fullName.trim(),
                 gradeLevel = gradeLevel.trim(),
                 birthday = birthday.trim(),
-                pfpPath = pfpPath
+                pfpPath = pfpPath,
+                dominantHand = dominantHand
             )
 
             val studentId = studentDao.insertStudent(newStudent)
@@ -93,7 +95,8 @@ class StudentRepository(private val studentDao: StudentDao) {
         fullName: String,
         gradeLevel: String,
         birthday: String,
-        pfpPath: String? = null
+        pfpPath: String? = null,
+        dominantHand: String? = null
     ): StudentOperationResult = withContext(Dispatchers.IO) {
         try {
             if (fullName.isBlank()) {
@@ -110,7 +113,8 @@ class StudentRepository(private val studentDao: StudentDao) {
                 fullName = fullName.trim(),
                 gradeLevel = gradeLevel.trim(),
                 birthday = birthday.trim(),
-                pfpPath = pfpPath ?: existingStudent.pfpPath
+                pfpPath = pfpPath ?: existingStudent.pfpPath,
+                dominantHand = dominantHand ?: existingStudent.dominantHand
             )
 
             studentDao.updateStudent(updatedStudent)

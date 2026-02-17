@@ -246,6 +246,90 @@ fun StudentDetailsScreen(
                 }
             }
 
+            Spacer(Modifier.height(24.dp))
+
+            // Dominant Hand Section
+            Text(
+                text = "Dominant Hand",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF9E9E9E),
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Left Hand Button
+                OutlinedButton(
+                    onClick = {
+                        viewModel.updateStudentDominantHand(
+                            studentId = studentId.toLongOrNull() ?: 0L,
+                            dominantHand = "LEFT",
+                            onSuccess = {
+                                viewModel.loadStudentDetails(
+                                    studentId = studentId.toLongOrNull() ?: 0L,
+                                    classId = classId.toLongOrNull()
+                                )
+                            }
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (uiState.dominantHand == "LEFT") Color(0xFF3FA9F8) else Color.White,
+                        contentColor = if (uiState.dominantHand == "LEFT") Color.White else Color(0xFF3FA9F8)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.5.dp,
+                        color = if (uiState.dominantHand == "LEFT") Color(0xFF3FA9F8) else Color(0xFFE0E0E0)
+                    )
+                ) {
+                    Text(
+                        text = "Left",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                // Right Hand Button
+                OutlinedButton(
+                    onClick = {
+                        viewModel.updateStudentDominantHand(
+                            studentId = studentId.toLongOrNull() ?: 0L,
+                            dominantHand = "RIGHT",
+                            onSuccess = {
+                                viewModel.loadStudentDetails(
+                                    studentId = studentId.toLongOrNull() ?: 0L,
+                                    classId = classId.toLongOrNull()
+                                )
+                            }
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (uiState.dominantHand == "RIGHT") Color(0xFF3FA9F8) else Color.White,
+                        contentColor = if (uiState.dominantHand == "RIGHT") Color.White else Color(0xFF3FA9F8)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.5.dp,
+                        color = if (uiState.dominantHand == "RIGHT") Color(0xFF3FA9F8) else Color(0xFFE0E0E0)
+                    )
+                ) {
+                    Text(
+                        text = "Right",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
             Spacer(Modifier.height(42.dp))
 
             // Kuu Card with Overlay

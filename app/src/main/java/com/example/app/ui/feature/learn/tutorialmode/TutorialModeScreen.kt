@@ -29,7 +29,7 @@ import com.example.app.ui.feature.classroom.ClassroomViewModel
 @Composable
 fun TutorialModeScreen(
     onBack: () -> Unit,
-    onStudentSelected: (studentId: Long, classId: Long, studentName: String) -> Unit = { _, _, _ -> },
+    onStudentSelected: (studentId: Long, classId: Long, studentName: String, dominantHand: String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
     classroomViewModel: ClassroomViewModel = viewModel()
 ) {
@@ -140,7 +140,7 @@ fun TutorialModeScreen(
                                     profileImagePath = student.pfpPath,
                                     onClick = {
                                         // No class context in this mode, pass 0L
-                                        onStudentSelected(student.studentId, 0L, student.fullName)
+                                        onStudentSelected(student.studentId, 0L, student.fullName, student.dominantHand)
                                     },
                                     modifier = Modifier.weight(1f)
                                 )

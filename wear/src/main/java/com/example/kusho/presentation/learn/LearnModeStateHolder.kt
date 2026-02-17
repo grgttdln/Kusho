@@ -22,6 +22,7 @@ object LearnModeStateHolder {
         val word: String = "",
         val maskedIndex: Int = -1,
         val configurationType: String = "",
+        val dominantHand: String = "RIGHT", // "LEFT" or "RIGHT"
         val timestamp: Long = 0L // Used to detect new data
     )
 
@@ -56,14 +57,15 @@ object LearnModeStateHolder {
     /**
      * Called by WearMessageListenerService when word data is received
      */
-    fun updateWordData(word: String, maskedIndex: Int, configurationType: String) {
+    fun updateWordData(word: String, maskedIndex: Int, configurationType: String, dominantHand: String = "RIGHT") {
         runOnMainThread {
             try {
-                Log.d(TAG, "📚 Updating word data: $word, masked: $maskedIndex, type: $configurationType")
+                Log.d(TAG, "📚 Updating word data: $word, masked: $maskedIndex, type: $configurationType, hand: $dominantHand")
                 _wordData.value = WordData(
                     word = word,
                     maskedIndex = maskedIndex,
                     configurationType = configurationType,
+                    dominantHand = dominantHand,
                     timestamp = System.currentTimeMillis()
                 )
                 // Reset Write the Word state for new word

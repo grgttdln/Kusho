@@ -32,13 +32,14 @@ import com.example.app.ui.feature.classroom.ClassroomViewModel
 @Composable
 fun TutorialStudentSelectionScreen(
     onBack: () -> Unit,
-    onSelectStudent: (studentId: Long, studentName: String, classId: Long, letterType: String) -> Unit,
+    onSelectStudent: (studentId: Long, studentName: String, classId: Long, letterType: String, dominantHand: String) -> Unit,
     showLetterTypeDialog: Boolean = true,
     modifier: Modifier = Modifier,
     classroomViewModel: ClassroomViewModel = viewModel()
 ) {
     val students by classroomViewModel.allStudents.collectAsState()
     var selectedStudent by remember { mutableStateOf<Triple<Long, String, Long>?>(null) }
+    var selectedStudentHand by remember { mutableStateOf("RIGHT") }
     var showDialog by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -147,12 +148,13 @@ fun TutorialStudentSelectionScreen(
                                     onClick = {
                                         // Store selected student
                                         selectedStudent = Triple(student.studentId, student.fullName, 0L)
+                                        selectedStudentHand = student.dominantHand
                                         if (showLetterTypeDialog) {
                                             // Show letter type dialog for tutorial mode
                                             showDialog = true
                                         } else {
                                             // Skip dialog for learn mode, pass empty letterType
-                                            onSelectStudent(student.studentId, student.fullName, 0L, "")
+                                            onSelectStudent(student.studentId, student.fullName, 0L, "", student.dominantHand)
                                         }
                                     },
                                     modifier = Modifier.weight(1f)
@@ -181,7 +183,7 @@ fun TutorialStudentSelectionScreen(
             onSelectType = { letterType ->
                 showDialog = false
                 selectedStudent?.let { (studentId, studentName, classId) ->
-                    onSelectStudent(studentId, studentName, classId, letterType)
+                    onSelectStudent(studentId, studentName, classId, letterType, selectedStudentHand)
                 }
                 selectedStudent = null
             }
