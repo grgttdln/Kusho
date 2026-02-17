@@ -12,10 +12,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.PopupPositionProvider
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
@@ -57,7 +63,9 @@ private val LightYellowColor = Color(0xFFFFF3C4)
 private val BlueButtonColor = Color(0xFF3FA9F8)
 private val YellowIconColor = Color(0xFFFFC700) // #FFC700 for tutorial mode icons
 private val OrangeButtonColor = Color(0xFFFF8C42) // Orange for tutorial mode button
+private val LightYellowTooltipColor = Color(0xFFFFF9E6) // Light yellow for tooltip
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TutorialSessionScreen(
     title: String,
@@ -83,6 +91,10 @@ fun TutorialSessionScreen(
     // Annotation dialog state
     var showAnnotationDialog by remember { mutableStateOf(false) }
     var annotationsMap by remember { mutableStateOf<Map<Int, AnnotationData>>(emptyMap()) }
+    
+    // Tooltip state for annotation button
+    var showAnnotationTooltip by remember { mutableStateOf(true) }
+    val tooltipState = rememberTooltipState(isPersistent = false)
     
     // Coroutine scope for async operations
     val coroutineScope = rememberCoroutineScope()
@@ -205,7 +217,16 @@ fun TutorialSessionScreen(
     LaunchedEffect(Unit) {
         watchConnectionManager.notifyTutorialModeStarted(studentName, title)
     }
-    
+
+    // Auto-show and auto-dismiss annotation tooltip after 5 seconds
+    LaunchedEffect(showAnnotationTooltip) {
+        if (showAnnotationTooltip) {
+            tooltipState.show()
+            kotlinx.coroutines.delay(5000)
+            showAnnotationTooltip = false
+        }
+    }
+
     // Note: We don't call notifyTutorialModeEnded() here on dispose anymore
     // because we want the watch to keep showing the completion screen
     // while the phone shows the analytics screen.
@@ -388,17 +409,65 @@ fun TutorialSessionScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Annotate button (left) - opens learner profile annotation dialog
-            IconButton(onClick = {
-                showAnnotationDialog = true
-                onAudioClick()
-            }) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_annotate),
-                    contentDescription = "Annotate",
-                    modifier = Modifier.size(28.dp),
-                    contentScale = ContentScale.Fit,
-                    colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
-                )
+            if (showAnnotationTooltip) {
+                TooltipBox(
+                    positionProvider = object : PopupPositionProvider {
+                        override fun calculatePosition(
+                            anchorBounds: androidx.compose.ui.unit.IntRect,
+                            windowSize: androidx.compose.ui.unit.IntSize,
+                            layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                            popupContentSize: androidx.compose.ui.unit.IntSize
+                        ): androidx.compose.ui.unit.IntOffset {
+                            // Position tooltip below the icon with a right offset
+                            val x = anchorBounds.left + (anchorBounds.width / 2) - 15
+                            val y = anchorBounds.bottom + 16 // spacing below
+                            return androidx.compose.ui.unit.IntOffset(x, y)
+                        }
+                    },
+                    tooltip = {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = LightYellowTooltipColor // Light yellow color
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "Click here to Add Note",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                color = Color.Black,
+                                fontSize = 14.sp
+                            )
+                        }
+                    },
+                    state = tooltipState
+                ) {
+                    IconButton(onClick = {
+                        showAnnotationDialog = true
+                        showAnnotationTooltip = false
+                        onAudioClick()
+                    }) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_annotate),
+                            contentDescription = "Annotate",
+                            modifier = Modifier.size(28.dp),
+                            contentScale = ContentScale.Fit,
+                            colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
+                        )
+                    }
+                }
+            } else {
+                IconButton(onClick = {
+                    showAnnotationDialog = true
+                    onAudioClick()
+                }) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_annotate),
+                        contentDescription = "Annotate",
+                        modifier = Modifier.size(28.dp),
+                        contentScale = ContentScale.Fit,
+                        colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
+                    )
+                }
             }
 
             // Skip button (right) - icon instead of text

@@ -16,8 +16,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.PopupPositionProvider
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.app.R
@@ -109,6 +115,7 @@ private data class WordItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LearnModeSessionScreen(
     setId: Long = 0L,
@@ -147,6 +154,9 @@ fun LearnModeSessionScreen(
 
     // State for Learner Profile Annotation Dialog
     var showAnnotationDialog by remember(sessionKey) { mutableStateOf(false) }
+    
+    // State for annotation tooltip - show once when starting
+    var showAnnotationTooltip by remember(sessionKey) { mutableStateOf(true) }
 
     // State for storing annotations per item (itemIndex -> AnnotationData)
     // This is a map keyed by item index within the current set
@@ -218,6 +228,14 @@ fun LearnModeSessionScreen(
     // Notify watch when Learn Mode session starts
     LaunchedEffect(sessionKey) {
         watchConnectionManager.notifyLearnModeStarted()
+    }
+    
+    // Auto-dismiss annotation tooltip after 5 seconds
+    LaunchedEffect(showAnnotationTooltip) {
+        if (showAnnotationTooltip) {
+            kotlinx.coroutines.delay(5000)
+            showAnnotationTooltip = false
+        }
     }
     
     // Handle save-and-complete when session ends
@@ -641,6 +659,16 @@ fun LearnModeSessionScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        // Tooltip state for annotation button
+        val tooltipState = rememberTooltipState(isPersistent = false)
+
+        // Show tooltip on first load
+        LaunchedEffect(showAnnotationTooltip) {
+            if (showAnnotationTooltip) {
+                tooltipState.show()
+            }
+        }
+
         // Annotate and Skip Button Row
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -648,16 +676,63 @@ fun LearnModeSessionScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Annotate button (left) - opens learner profile annotation dialog
-            IconButton(onClick = {
-                showAnnotationDialog = true
-                onAudioClick()
-            }) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_annotate),
-                    contentDescription = "Annotate",
-                    modifier = Modifier.size(28.dp),
-                    contentScale = ContentScale.Fit
-                )
+            if (showAnnotationTooltip) {
+                TooltipBox(
+                    positionProvider = object : PopupPositionProvider {
+                        override fun calculatePosition(
+                            anchorBounds: androidx.compose.ui.unit.IntRect,
+                            windowSize: androidx.compose.ui.unit.IntSize,
+                            layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                            popupContentSize: androidx.compose.ui.unit.IntSize
+                        ): androidx.compose.ui.unit.IntOffset {
+                            // Position tooltip below the icon with a right offset
+                            val x = anchorBounds.left + (anchorBounds.width / 2) - 15
+                            val y = anchorBounds.bottom + 16 // spacing below
+                            return androidx.compose.ui.unit.IntOffset(x, y)
+                        }
+                    },
+                    tooltip = {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFFE7DDFE) // Light purple color
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "Click here to Add Note",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                color = Color.Black,
+                                fontSize = 14.sp
+                            )
+                        }
+                    },
+                    state = tooltipState
+                ) {
+                    IconButton(onClick = {
+                        showAnnotationDialog = true
+                        showAnnotationTooltip = false
+                        onAudioClick()
+                    }) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_annotate),
+                            contentDescription = "Annotate",
+                            modifier = Modifier.size(28.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            } else {
+                IconButton(onClick = {
+                    showAnnotationDialog = true
+                    onAudioClick()
+                }) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_annotate),
+                        contentDescription = "Annotate",
+                        modifier = Modifier.size(28.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                }
             }
 
             // Skip button (right)
