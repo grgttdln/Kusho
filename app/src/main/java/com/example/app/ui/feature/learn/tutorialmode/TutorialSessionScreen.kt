@@ -1,9 +1,6 @@
 package com.example.app.ui.feature.learn.tutorialmode
 
-import android.content.Context
 import android.media.MediaPlayer
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -49,8 +46,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
-import com.example.app.speech.DeepgramTTSManager
-import com.example.app.speech.TextToSpeechManager
 import com.example.app.ui.components.common.ProgressIndicator
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
@@ -81,24 +76,43 @@ fun TutorialSessionScreen(
     val context = LocalContext.current
     val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
 
-    // Initialize TTS managers (same pattern as Learn Mode)
-    val deepgramTtsManager = remember { DeepgramTTSManager(context) }
-    val nativeTtsManager = remember { TextToSpeechManager(context) }
+    // Pre-recorded voice prompt MediaPlayer for letter announcements
+    val voiceMediaPlayer = remember { MediaPlayer() }
 
-    // Check internet connectivity
-    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-    val isNetworkAvailable = networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    // Map of letter (uppercase) -> resource ID for capital voice files
+    val capitalVoiceMap = remember {
+        mapOf(
+            "A" to R.raw.capital_a, "B" to R.raw.capital_b, "C" to R.raw.capital_c,
+            "D" to R.raw.capital_d, "E" to R.raw.capital_e, "F" to R.raw.capital_f,
+            "G" to R.raw.capital_g, "H" to R.raw.capital_h, "I" to R.raw.capital_i,
+            "J" to R.raw.capital_j, "K" to R.raw.capital_k, "L" to R.raw.capital_l,
+            "M" to R.raw.capital_m, "N" to R.raw.capital_n, "O" to R.raw.capital_o,
+            "P" to R.raw.capital_p, "Q" to R.raw.capital_q, "R" to R.raw.capital_r,
+            "S" to R.raw.capital_s, "T" to R.raw.capital_t, "U" to R.raw.capital_u,
+            "V" to R.raw.capital_v, "W" to R.raw.capital_w, "X" to R.raw.capital_x,
+            "Y" to R.raw.capital_y, "Z" to R.raw.capital_z
+        )
+    }
 
-    // Determine which TTS to use (Deepgram needs both API key AND internet)
-    val useDeepgram = deepgramTtsManager.isConfigured() && isNetworkAvailable
-    Log.d("TutorialSession", "TTS Configuration - Deepgram configured: ${deepgramTtsManager.isConfigured()}, Internet available: $isNetworkAvailable, Using Deepgram: $useDeepgram")
+    // Map of letter (uppercase) -> resource ID for small voice files
+    val smallVoiceMap = remember {
+        mapOf(
+            "A" to R.raw.small_a, "B" to R.raw.small_b, "C" to R.raw.small_c,
+            "D" to R.raw.small_d, "E" to R.raw.small_e, "F" to R.raw.small_f,
+            "G" to R.raw.small_g, "H" to R.raw.small_h, "I" to R.raw.small_i,
+            "J" to R.raw.small_j, "K" to R.raw.small_k, "L" to R.raw.small_l,
+            "M" to R.raw.small_m, "N" to R.raw.small_n, "O" to R.raw.small_o,
+            "P" to R.raw.small_p, "Q" to R.raw.small_q, "R" to R.raw.small_r,
+            "S" to R.raw.small_s, "T" to R.raw.small_t, "U" to R.raw.small_u,
+            "V" to R.raw.small_v, "W" to R.raw.small_w, "X" to R.raw.small_x,
+            "Y" to R.raw.small_y, "Z" to R.raw.small_z
+        )
+    }
 
-    // Cleanup TTS on dispose
+    // Cleanup voice MediaPlayer on dispose
     DisposableEffect(Unit) {
         onDispose {
-            deepgramTtsManager.stop()
-            nativeTtsManager.shutdown()
+            voiceMediaPlayer.release()
         }
     }
 
@@ -240,7 +254,7 @@ fun TutorialSessionScreen(
     // notifyTutorialModeEnded() is now called from SessionAnalyticsScreen
     // when the user leaves (Practice Again or Continue).
     
-    // Send current letter data to watch whenever it changes AND speak TTS prompt
+    // Send current letter data to watch whenever it changes AND play pre-recorded voice prompt
     LaunchedEffect(currentStep, currentLetter) {
         if (currentLetter.isNotEmpty()) {
             watchConnectionManager.sendTutorialModeLetterData(
@@ -250,27 +264,20 @@ fun TutorialSessionScreen(
                 totalLetters = calculatedTotalSteps
             )
 
-            // Speak TTS prompt for the current letter (same pattern as Learn Mode)
-            val caseLabel = if (letterType.lowercase() == "capital") "uppercase" else "lowercase"
-            val phrase = listOf(
-                "Can you write $caseLabel $currentLetter?",
-                "Let's practice $caseLabel $currentLetter!",
-                "Try writing $caseLabel $currentLetter.",
-                "Trace the letter $caseLabel $currentLetter!",
-                "Now let's write $caseLabel $currentLetter."
-            ).random()
-
-            launch {
+            // Play pre-recorded voice prompt for the current letter
+            val voiceMap = if (letterType.lowercase() == "capital") capitalVoiceMap else smallVoiceMap
+            val voiceResId = voiceMap[currentLetter.uppercase()]
+            if (voiceResId != null) {
                 try {
-                    if (useDeepgram) {
-                        Log.d("TutorialSession", "Using Deepgram TTS for letter: $currentLetter")
-                        deepgramTtsManager.speak(phrase)
-                    } else {
-                        Log.d("TutorialSession", "Using Native TTS for letter: $currentLetter")
-                        nativeTtsManager.speak(phrase)
-                    }
+                    voiceMediaPlayer.reset()
+                    val afd = context.resources.openRawResourceFd(voiceResId)
+                    voiceMediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
+                    voiceMediaPlayer.prepare()
+                    voiceMediaPlayer.start()
+                    Log.d("TutorialSession", "Playing pre-recorded voice for: $currentLetter ($letterType)")
                 } catch (e: Exception) {
-                    Log.e("TutorialSession", "Error playing TTS", e)
+                    Log.e("TutorialSession", "Error playing voice prompt", e)
                 }
             }
         }
