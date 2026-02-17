@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.example.app.data.AppDatabase
 import com.example.app.data.dao.SetDao
 import com.example.app.data.dao.SetWordDao
+import com.example.app.data.dao.SetWordName
 import com.example.app.data.dao.WordDao
 import com.example.app.data.entity.ActivitySet
 import com.example.app.data.entity.Set
@@ -446,5 +447,73 @@ class SetRepository(
             Log.e(TAG_REPO, "❌ Transaction failed in updateSetWithWords: ${e.message}", e)
             AddSetResult.Error("Failed to update set: ${e.message ?: "Unknown error"}")
         }
+    }
+
+    /**
+     * Result of overlap detection for a single generated set.
+     */
+    data class OverlapResult(
+        val generatedSetIndex: Int,
+        val matchedSetId: Long,
+        val matchedSetTitle: String,
+        val overlappingWords: List<String>,
+        val newWords: List<String>
+    )
+
+    /**
+     * Find existing sets that overlap 50%+ with the given generated word lists.
+     * Returns one OverlapResult per generated set that has a match (best match only).
+     *
+     * @param userId The user's ID
+     * @param generatedSets List of word-name lists, one per generated set
+     * @return Map of generatedSetIndex -> OverlapResult for sets with 50%+ overlap
+     */
+    suspend fun findOverlappingSets(
+        userId: Long,
+        generatedSets: List<List<String>>
+    ): Map<Int, OverlapResult> = withContext(Dispatchers.IO) {
+        val rows = setDao.getSetsWithWordNames(userId)
+        if (rows.isEmpty()) return@withContext emptyMap()
+
+        // Group into setId -> (title, set of word names)
+        val existingSets: Map<Long, Pair<String, Set<String>>> = rows
+            .groupBy { it.setId }
+            .mapValues { (_, entries) ->
+                Pair(entries.first().setTitle, entries.map { it.wordName }.toSet())
+            }
+
+        val results = mutableMapOf<Int, OverlapResult>()
+
+        generatedSets.forEachIndexed { genIndex, generatedWords ->
+            val generatedWordSet = generatedWords.map { it.lowercase() }.toSet()
+            val threshold = (generatedWordSet.size * 0.5).toInt().coerceAtLeast(1)
+
+            var bestMatch: OverlapResult? = null
+            var bestOverlapCount = 0
+
+            for ((setId, pair) in existingSets) {
+                val (title, existingWords) = pair
+                val existingLower = existingWords.map { it.lowercase() }.toSet()
+                val overlap = generatedWordSet.intersect(existingLower)
+
+                if (overlap.size >= threshold && overlap.size > bestOverlapCount) {
+                    bestOverlapCount = overlap.size
+                    val newWords = generatedWordSet - existingLower
+                    bestMatch = OverlapResult(
+                        generatedSetIndex = genIndex,
+                        matchedSetId = setId,
+                        matchedSetTitle = title,
+                        overlappingWords = overlap.toList(),
+                        newWords = newWords.toList()
+                    )
+                }
+            }
+
+            if (bestMatch != null) {
+                results[genIndex] = bestMatch!!
+            }
+        }
+
+        results
     }
 }
