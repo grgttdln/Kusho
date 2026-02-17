@@ -142,13 +142,12 @@ fun AddNewActivityScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Lesson Title Input Field
+            // Activity Title Input Field
             OutlinedTextField(
                 value = activityTitle,
-                onValueChange = { viewModel.setActivityTitle(it) },
+                onValueChange = { if (it.length <= 15) viewModel.setActivityTitle(it) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
                     .padding(horizontal = 15.dp),
                 placeholder = {
                     Text(
@@ -172,7 +171,16 @@ fun AddNewActivityScreen(
                     fontSize = 16.sp,
                     color = Color(0xFF000000)
                 ),
-                singleLine = true
+                singleLine = true,
+                supportingText = {
+                    Text(
+                        text = "${activityTitle.length}/15",
+                        fontSize = 12.sp,
+                        color = Color(0xFF999999),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
+                    )
+                }
             )
 
             Spacer(modifier = Modifier.height(32.dp))

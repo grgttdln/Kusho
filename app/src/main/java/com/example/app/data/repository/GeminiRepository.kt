@@ -1,773 +1,928 @@
 package com.example.app.data.repository
 
+import android.util.Log
 import com.example.app.BuildConfig
+import com.example.app.data.entity.Word
+import com.example.app.data.model.AiActivityInfo
 import com.example.app.data.model.AiGeneratedActivity
 import com.example.app.data.model.AiGeneratedSet
-import com.example.app.data.model.AiWordConfig
-import com.example.app.data.model.Message
-import com.example.app.data.model.OpenRouterRequest
-import com.example.app.data.model.ResponseFormat
-import com.example.app.data.service.GeminiService
-import com.example.app.data.model.AiActivityInfo
 import com.example.app.data.model.AiGenerationResult
+import com.example.app.data.model.AiWordConfig
+import com.example.app.data.model.FilteredWordsResponse
+import com.example.app.data.model.GroupedSetsResponse
+import com.example.app.data.model.SetGroupingResponse
+import com.google.ai.client.generativeai.GenerativeModel
+import com.google.ai.client.generativeai.type.BlockThreshold
+import com.google.ai.client.generativeai.type.HarmCategory
+import com.google.ai.client.generativeai.type.SafetySetting
+import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.Gson
-import com.google.gson.JsonParseException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import java.util.concurrent.TimeUnit
 
 /**
- * Repository for generating activities using OpenRouter AI.
- * Handles prompt building, API calls, response parsing, and validation.
+ * Generation phase for UI progress tracking.
+ */
+sealed class GenerationPhase {
+    object Idle : GenerationPhase()
+    object Filtering : GenerationPhase()
+    object Grouping : GenerationPhase()
+    object Configuring : GenerationPhase()
+    object Complete : GenerationPhase()
+}
+
+/**
+ * Repository for generating activities using Gemini 2.5 Flash Lite.
+ * Uses a 3-step chained approach:
+ *   Step 1: Filter words matching teacher's request
+ *   Step 2: Group filtered words into coherent sets
+ *   Step 3: Assign configuration types to each word
  */
 class GeminiRepository {
 
     private val gson = Gson()
-    private val apiKey: String = BuildConfig.OPENROUTER_API_KEY
+    private val apiKey: String = BuildConfig.GEMINI_API_KEY
 
-    private val openRouterService: GeminiService by lazy {
-        createOpenRouterService()
-    }
+    // Cached Step 1 result for reuse during set regeneration
+    private var cachedFilteredWords: List<String>? = null
 
-    private fun createOpenRouterService(): GeminiService {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
-            } else {
-                HttpLoggingInterceptor.Level.BASIC
-            }
-        }
+    private val safetySettings = listOf(
+        SafetySetting(HarmCategory.HARASSMENT, BlockThreshold.MEDIUM_AND_ABOVE),
+        SafetySetting(HarmCategory.HATE_SPEECH, BlockThreshold.MEDIUM_AND_ABOVE),
+        SafetySetting(HarmCategory.SEXUALLY_EXPLICIT, BlockThreshold.MEDIUM_AND_ABOVE),
+        SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.MEDIUM_AND_ABOVE)
+    )
 
-        val client = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
-
-        return Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(GeminiService::class.java)
+    companion object {
+        private const val TAG = "GeminiRepository"
+        private const val MODEL_NAME = "gemini-2.5-flash-lite"
+        private const val MAX_RETRIES = 2
     }
 
     /**
-     * Regenerate a single set using AI.
-     * Uses the same constraints as generateActivity but returns only one set.
-     *
-     * @param prompt Teacher's natural language description
-     * @param availableWords List of words available in the teacher's word bank
-     * @param currentSetTitle The title of the set being regenerated (for context)
-     * @param currentSetDescription The description of the set being regenerated (for context)
-     * @param maxRetries Maximum number of retry attempts on validation failure
-     * @return Result containing generated set data or error
+     * Create a GenerativeModel with the given system instruction.
      */
-    suspend fun regenerateSet(
-        prompt: String,
-        availableWords: List<com.example.app.data.entity.Word>,
-        currentSetTitle: String,
-        currentSetDescription: String,
-        maxRetries: Int = 2
-    ): AiGenerationResult = withContext(Dispatchers.IO) {
-        var lastError: String? = null
-        
-        repeat(maxRetries + 1) { attempt ->
-            val result = tryRegenerateSet(prompt, availableWords, currentSetTitle, currentSetDescription)
-            
-            when (result) {
-                is AiGenerationResult.Success -> return@withContext result
-                is AiGenerationResult.Error -> {
-                    lastError = result.message
-                    if (!result.canRetry || attempt >= maxRetries) {
-                        return@withContext result
-                    }
-                    kotlinx.coroutines.delay(1000L * (attempt + 1))
-                }
-            }
-        }
-        
-        AiGenerationResult.Error(lastError ?: "Failed to regenerate set after $maxRetries retries")
-    }
-
-    private suspend fun tryRegenerateSet(
-        prompt: String,
-        availableWords: List<com.example.app.data.entity.Word>,
-        currentSetTitle: String,
-        currentSetDescription: String
-    ): AiGenerationResult {
-        return try {
-            android.util.Log.d("GeminiRepository", "Regenerating set: $currentSetTitle")
-            android.util.Log.d("GeminiRepository", "Available words: ${availableWords.map { it.word }}")
-
-            val request = buildRegenerateRequest(prompt, availableWords, currentSetTitle, currentSetDescription)
-            val authHeader = "Bearer $apiKey"
-
-            val response = openRouterService.generateContent(authHeader, request)
-
-            if (!response.isSuccessful) {
-                val errorBody = response.errorBody()?.string() ?: ""
-                val errorMessage = when (response.code()) {
-                    429 -> "API rate limit exceeded. Please try again later."
-                    401 -> "Authentication failed."
-                    402 -> "Payment required."
-                    403 -> "Permission denied."
-                    in 500..599 -> "Server error. Please try again later."
-                    else -> "API error (${response.code()}): $errorBody"
-                }
-                return AiGenerationResult.Error(errorMessage, canRetry = response.code() in 500..599 || response.code() == 429)
-            }
-
-            val body = response.body()
-                ?: return AiGenerationResult.Error("Empty response from API", canRetry = true)
-
-            if (body.error != null) {
-                return AiGenerationResult.Error(
-                    message = "OpenRouter error: ${body.error.message}",
-                    canRetry = true
-                )
-            }
-
-            val generatedText = body.choices?.firstOrNull()?.message?.content
-                ?: return AiGenerationResult.Error("No content generated", canRetry = true)
-
-            android.util.Log.d("GeminiRepository", "Regenerated set response:\n$generatedText")
-
-            // Parse and validate the response
-            return parseAndValidateSetResponse(generatedText, availableWords)
-
-        } catch (e: Exception) {
-            android.util.Log.e("GeminiRepository", "Exception in tryRegenerateSet: ${e.message}", e)
-            AiGenerationResult.Error("Regeneration failed: ${e.message}", canRetry = true)
-        }
-    }
-
-    private fun buildRegenerateRequest(
-        prompt: String,
-        availableWords: List<com.example.app.data.entity.Word>,
-        currentSetTitle: String,
-        currentSetDescription: String
-    ): OpenRouterRequest {
-        val wordsWithImages = availableWords.filter { !it.imagePath.isNullOrBlank() }.map { it.word }
-        val wordsWithoutImages = availableWords.filter { it.imagePath.isNullOrBlank() }.map { it.word }
-        
-        val systemInstruction = """
-You are an assistant for an educational app called Kusho that helps teachers create handwriting practice activities.
-
-The teacher wants to REGENERATE a single set with a different selection of words.
-
-ORIGINAL SET:
-- Title: $currentSetTitle
-- Description: $currentSetDescription
-
-AVAILABLE WORDS (MUST ONLY USE THESE EXACT WORDS):
-${availableWords.map { it.word }.joinToString(", ")}
-
-WORDS WITH IMAGES (can be used for "name the picture"):
-${wordsWithImages.joinToString(", ")}
-
-WORDS WITHOUT IMAGES (CANNOT be used for "name the picture"):
-${wordsWithoutImages.joinToString(", ")}
-
-CONFIGURATION TYPES:
-- "fill in the blanks": Missing letter index (0-indexed). Example: word "cat" with index 1 = "c_t"
-- "name the picture": Show picture, student names the word. CRITICAL: Only use words from the WORDS WITH IMAGES list.
-- "write the word": Write word in the air
-
-RULES:
-1. ONLY use words from the AVAILABLE WORDS list above
-2. Create a DIFFERENT mix of words than the original set
-3. Minimum 5 words and Maximum 8 words in this single set
-4. Keep the same set title or improve it slightly (max 10 characters)
-5. Keep the same description or improve it slightly
-6. For "fill in the blanks": selectedLetterIndex must be valid (0 to word.length-1)
-7. ONLY "fill in the blanks" uses selectedLetterIndex. For other types, use selectedLetterIndex: 0
-8. For "name the picture": ONLY use words that have images
-
-OUTPUT FORMAT - EXTREMELY IMPORTANT:
-You MUST respond with ONLY a valid JSON object. No markdown, no code blocks, no explanations.
-
-The JSON must follow this exact structure:
-{
-  "activity": {
-    "title": "Activity Title",
-    "description": "Brief description"
-  },
-  "sets": [
-    {
-      "title": "Set Title",
-      "description": "What this set covers",
-      "words": [
-        {
-          "word": "word_from_bank",
-          "configurationType": "fill in the blanks",
-          "selectedLetterIndex": 1
-        },
-        {
-          "word": "another_word",
-          "configurationType": "name the picture",
-          "selectedLetterIndex": 0
-        }
-      ]
-    }
-  ]
-}
-
-IMPORTANT: Return ONLY ONE set in the sets array (the regenerated set).
-        """.trimIndent()
-
-        return OpenRouterRequest(
-            model = "nvidia/nemotron-nano-9b-v2:free",
-            messages = listOf(
-                Message(
-                    role = "system",
-                    content = systemInstruction
-                ),
-                Message(
-                    role = "user",
-                    content = "Teacher's original request: $prompt\n\nPlease regenerate this set with a different selection of words."
-                )
-            ),
-            temperature = 0.8f,  // Slightly higher temperature for variety
-            max_tokens = 1024,
-            top_p = 0.95f,
-            response_format = ResponseFormat(type = "json_object")
+    private fun createModel(systemInstruction: String): GenerativeModel {
+        return GenerativeModel(
+            modelName = MODEL_NAME,
+            apiKey = apiKey,
+            generationConfig = generationConfig {
+                temperature = 0.2f
+                topP = 0.95f
+                maxOutputTokens = 2048
+                responseMimeType = "application/json"
+            },
+            safetySettings = safetySettings,
+            systemInstruction = content { text(systemInstruction) }
         )
     }
 
-    /**
-     * Parse and validate a single set response from regeneration.
-     */
-    private fun parseAndValidateSetResponse(
-        jsonText: String,
-        availableWords: List<com.example.app.data.entity.Word>
-    ): AiGenerationResult {
-        // Use the same validation logic as parseAndValidateResponse
-        val result = parseAndValidateResponse(jsonText, availableWords)
-        
-        return when (result) {
-            is AiGenerationResult.Success -> {
-                // Extract just the first set from the result
-                val activity = result.data
-                val firstSet = activity.sets.firstOrNull()
-                    ?: return AiGenerationResult.Error("No set found in regenerated response", canRetry = true)
-                
-                AiGenerationResult.Success(
-                    AiGeneratedActivity(
-                        activity = activity.activity,
-                        sets = listOf(firstSet)
-                    )
-                )
-            }
-            is AiGenerationResult.Error -> result
-        }
-    }
+    // ========== Public API ==========
 
     /**
-     * Generate an activity with sets using AI.
-     * Automatically retries up to 2 times on validation failure.
+     * Generate a complete activity with sets using a 3-step chained approach.
      *
      * @param prompt Teacher's natural language description
-     * @param availableWords List of words available in the teacher's word bank (with image paths for validation)
-     * @param maxRetries Maximum number of retry attempts on validation failure
+     * @param availableWords List of words from the teacher's word bank
+     * @param onPhaseChange Callback for UI progress updates
      * @return Result containing generated activity data or error
      */
     suspend fun generateActivity(
         prompt: String,
-        availableWords: List<com.example.app.data.entity.Word>,
-        maxRetries: Int = 2
+        availableWords: List<Word>,
+        onPhaseChange: suspend (GenerationPhase) -> Unit = {}
     ): AiGenerationResult = withContext(Dispatchers.IO) {
-        var lastError: String? = null
-        
-        repeat(maxRetries + 1) { attempt ->
-            val result = tryGenerate(prompt, availableWords)
-            
-            when (result) {
-                is AiGenerationResult.Success -> return@withContext result
-                is AiGenerationResult.Error -> {
-                    lastError = result.message
-                    if (!result.canRetry || attempt >= maxRetries) {
-                        return@withContext result
-                    }
-                    // Wait briefly before retry
-                    kotlinx.coroutines.delay(1000L * (attempt + 1))
-                }
-            }
-        }
-        
-        AiGenerationResult.Error(lastError ?: "Failed to generate activity after $maxRetries retries")
-    }
+        try {
+            val analyses = analyzeCVCWords(availableWords)
+            val patterns = detectCVCPatterns(analyses)
+            val analysisTable = buildWordAnalysisTable(analyses)
+            val patternsSummary = buildPatternsSummary(patterns)
 
-    private suspend fun tryGenerate(
-        prompt: String,
-        availableWords: List<com.example.app.data.entity.Word>
-    ): AiGenerationResult {
-        return try {
-            android.util.Log.d("GeminiRepository", "Building request with prompt: $prompt")
-            android.util.Log.d("GeminiRepository", "Available words: ${availableWords.map { it.word }}")
-
-            val request = buildRequest(prompt, availableWords)
-            val authHeader = "Bearer $apiKey"
-
-            android.util.Log.d("GeminiRepository", "Making API call to OpenRouter...")
-            val response = openRouterService.generateContent(authHeader, request)
-
-            android.util.Log.d("GeminiRepository", "Response code: ${response.code()}")
-
-            if (!response.isSuccessful) {
-                val errorBody = response.errorBody()?.string() ?: ""
-                android.util.Log.e("GeminiRepository", "API Error: ${response.code()} - $errorBody")
-                val errorMessage = when (response.code()) {
-                    429 -> "API rate limit exceeded. OpenRouter free tier may be temporarily unavailable. Please try again later."
-                    401 -> "Authentication failed. Please check your OpenRouter API key."
-                    402 -> "Payment required. Please add credits to your OpenRouter account."
-                    403 -> "Permission denied. Please check your API key permissions."
-                    in 500..599 -> "Server error (${response.code()}). Please try again later."
-                    else -> "API error (${response.code()}): $errorBody"
-                }
-                return AiGenerationResult.Error(
-                    errorMessage,
-                    canRetry = response.code() in 500..599 || response.code() == 429
-                )
+            // === Step 1: Filter Words ===
+            onPhaseChange(GenerationPhase.Filtering)
+            val filteredWords = retryStep(MAX_RETRIES, "Step 1: Filter") {
+                stepFilterWords(prompt, analysisTable, patternsSummary)
             }
 
-            val body = response.body()
-            if (body == null) {
-                android.util.Log.e("GeminiRepository", "Empty response body")
-                return AiGenerationResult.Error("Empty response from API", canRetry = true)
-            }
-
-            android.util.Log.d("GeminiRepository", "Response body received")
-
-            if (body.error != null) {
-                val errorMessage = body.error.message ?: "Unknown API error"
-                android.util.Log.e("GeminiRepository", "OpenRouter error: $errorMessage")
-                return AiGenerationResult.Error(
-                    message = "OpenRouter error: $errorMessage",
-                    canRetry = true
-                )
-            }
-
-            val generatedText = body.choices?.firstOrNull()?.message?.content
-            if (generatedText == null) {
-                android.util.Log.e("GeminiRepository", "No content in response choices")
-                return AiGenerationResult.Error("No content generated", canRetry = true)
-            }
-
-            android.util.Log.d("GeminiRepository", "Generated text length: ${generatedText.length}")
-            android.util.Log.d("GeminiRepository", "Full response:\n$generatedText")
-
-            val result = parseAndValidateResponse(generatedText, availableWords)
-
-            when (result) {
-                is AiGenerationResult.Success -> {
-                    android.util.Log.d("GeminiRepository", "Successfully parsed and validated response")
-                }
-                is AiGenerationResult.Error -> {
-                    android.util.Log.e("GeminiRepository", "Parse/validation error: ${result.message}")
+            val wordBank = availableWords.map { it.word }.toSet()
+            if (filteredWords == null || filteredWords.words.isNullOrEmpty()) {
+                Log.w(TAG, "Step 1 failed or returned empty, using all words as fallback")
+                cachedFilteredWords = availableWords.map { it.word }
+            } else {
+                // Strip hallucinated words not in word bank
+                cachedFilteredWords = filteredWords.words.filter { it in wordBank }
+                if (cachedFilteredWords!!.size < 3) {
+                    Log.w(TAG, "Too few valid words after filtering (${cachedFilteredWords!!.size}), using all words")
+                    cachedFilteredWords = availableWords.map { it.word }
                 }
             }
 
-            result
+            // Rebuild analysis for filtered words only
+            val filteredWordObjs = availableWords.filter { it.word in cachedFilteredWords!! }
+            val filteredAnalyses = analyzeCVCWords(filteredWordObjs)
+            val filteredPatterns = detectCVCPatterns(filteredAnalyses)
+            val filteredAnalysisTable = buildWordAnalysisTable(filteredAnalyses)
+            val filteredPatternsSummary = buildPatternsSummary(filteredPatterns)
+
+            // === Step 2: Group into Sets ===
+            onPhaseChange(GenerationPhase.Grouping)
+            val groupedSets = retryStep(MAX_RETRIES, "Step 2: Group") {
+                stepGroupIntoSets(prompt, cachedFilteredWords!!, filteredAnalysisTable, filteredPatternsSummary)
+            }
+
+            val setsToUse: GroupedSetsResponse
+            if (groupedSets == null || groupedSets.sets.isNullOrEmpty()) {
+                Log.w(TAG, "Step 2 failed, using algorithmic fallback")
+                setsToUse = algorithmicGrouping(filteredAnalyses, filteredPatterns)
+            } else {
+                setsToUse = validateGroupedSets(groupedSets, wordBank)
+            }
+
+            // === Step 3: Assign Configurations ===
+            onPhaseChange(GenerationPhase.Configuring)
+            val result = retryStep(MAX_RETRIES, "Step 3: Configure") {
+                stepAssignConfigurations(setsToUse, filteredWordObjs, filteredAnalyses)
+            }
+
+            if (result == null) {
+                Log.w(TAG, "Step 3 failed, using default configurations")
+                return@withContext defaultConfigurations(setsToUse, filteredWordObjs)
+            }
+
+            // Final validation
+            validateFinalResult(result, availableWords)
 
         } catch (e: Exception) {
-            android.util.Log.e("GeminiRepository", "Exception in tryGenerate: ${e.message}", e)
-            AiGenerationResult.Error("Generation failed: ${e.message}", canRetry = true)
+            handleException(e, "Generation")
         }
     }
 
     /**
-     * Build the OpenRouter request with system instruction.
+     * Regenerate a single set using Steps 2->3 (skips Step 1, reuses cached filtered words).
+     *
+     * @param prompt Teacher's original prompt
+     * @param availableWords Words from the teacher's word bank
+     * @param currentSetTitle Title of the set being regenerated
+     * @param currentSetDescription Description of the set being regenerated
+     * @param onPhaseChange Callback for UI progress updates
+     * @param maxRetries Maximum retry attempts per step
+     * @return Result containing regenerated set data or error
      */
-    private fun buildRequest(prompt: String, availableWords: List<com.example.app.data.entity.Word>): OpenRouterRequest {
-        val systemInstruction = buildSystemInstruction(availableWords)
+    suspend fun regenerateSet(
+        prompt: String,
+        availableWords: List<Word>,
+        currentSetTitle: String,
+        currentSetDescription: String,
+        onPhaseChange: suspend (GenerationPhase) -> Unit = {},
+        maxRetries: Int = MAX_RETRIES
+    ): AiGenerationResult = withContext(Dispatchers.IO) {
+        try {
+            // Use cached words from Step 1, or fall back to all words
+            val wordsToUse = cachedFilteredWords ?: availableWords.map { it.word }
+            val wordObjs = availableWords.filter { it.word in wordsToUse }
+            val analyses = analyzeCVCWords(wordObjs)
+            val patterns = detectCVCPatterns(analyses)
+            val analysisTable = buildWordAnalysisTable(analyses)
+            val patternsSummary = buildPatternsSummary(patterns)
 
-        return OpenRouterRequest(
-            model = "nvidia/nemotron-nano-9b-v2:free",
-            messages = listOf(
-                Message(
-                    role = "system",
-                    content = systemInstruction
-                ),
-                Message(
-                    role = "user",
-                    content = "Teacher's request: $prompt"
+            // Step 2: Regroup (skip Step 1)
+            onPhaseChange(GenerationPhase.Grouping)
+            val groupedSets = retryStep(maxRetries, "Regen Step 2") {
+                stepRegroupSet(
+                    prompt, wordsToUse, analysisTable, patternsSummary,
+                    currentSetTitle, currentSetDescription
                 )
-            ),
-            temperature = 0.7f,
-            max_tokens = 2048,
-            top_p = 0.95f,
-            response_format = ResponseFormat(type = "json_object")
+            }
+
+            if (groupedSets == null || groupedSets.sets.isNullOrEmpty()) {
+                return@withContext AiGenerationResult.Error(
+                    "Failed to regenerate set. Please try again.",
+                    canRetry = true
+                )
+            }
+
+            val wordBank = availableWords.map { it.word }.toSet()
+            val validatedSets = validateGroupedSets(groupedSets, wordBank)
+
+            // Step 3: Configure
+            onPhaseChange(GenerationPhase.Configuring)
+            val result = retryStep(maxRetries, "Regen Step 3") {
+                stepAssignConfigurations(validatedSets, wordObjs, analyses)
+            }
+
+            if (result == null) {
+                return@withContext defaultConfigurations(validatedSets, wordObjs)
+            }
+
+            validateFinalResult(result, availableWords)
+
+        } catch (e: Exception) {
+            handleException(e, "Regeneration")
+        }
+    }
+
+    // ========== Step Functions ==========
+
+    /**
+     * Step 1: Filter words matching teacher's request.
+     */
+    private suspend fun stepFilterWords(
+        prompt: String,
+        analysisTable: String,
+        patternsSummary: String
+    ): FilteredWordsResponse {
+        val systemInstruction = """
+You are a reading teacher's assistant for young learners (ages 4-8). You ONLY help with phonics, CVC words, and early reading activities. If the teacher's instruction is unrelated to reading/phonics education, or contains inappropriate content, return an empty word list with reasoning explaining why you cannot fulfill the request.
+
+Your task: Given a word list and a teacher's instruction, select ONLY the words that are relevant to the instruction. Consider phonics patterns, word families, and themes when filtering.
+
+CVC CONTEXT:
+- All words are 3-letter CVC (Consonant-Vowel-Consonant) words
+- Students air-write ONE LETTER AT A TIME on a smartwatch
+
+WORD ANALYSIS:
+$analysisTable
+
+DETECTED PATTERNS:
+$patternsSummary
+
+Respond with a JSON object containing:
+- "words": array of selected word strings (ONLY from the word analysis list above)
+- "reasoning": brief explanation of why these words were selected
+        """.trimIndent()
+
+        val userPrompt = "Teacher's request: $prompt\n\nSelect the words from the word analysis that best match this request."
+
+        val model = createModel(systemInstruction)
+        val response = model.generateContent(userPrompt)
+        val json = response.text ?: throw Exception("Empty response from Step 1")
+
+        Log.d(TAG, "Step 1 response: $json")
+        return gson.fromJson(json, FilteredWordsResponse::class.java)
+    }
+
+    /**
+     * Step 2: Group filtered words into coherent educational sets.
+     */
+    private suspend fun stepGroupIntoSets(
+        prompt: String,
+        filteredWords: List<String>,
+        analysisTable: String,
+        patternsSummary: String
+    ): GroupedSetsResponse {
+        val systemInstruction = """
+You are a reading teacher's assistant. Group these CVC words into coherent educational sets.
+
+CRITICAL CONSTRAINT — EVERY set MUST contain AT LEAST 3 words. Sets with fewer than 3 words are INVALID and will be rejected. If a grouping pattern only matches 1-2 words, either merge those words into another set or find a broader pattern that includes at least 3 words.
+
+GROUPING STRATEGIES (use in priority order):
+1. Word Family Sets (highest priority): Group by same rime (cat/bat/hat = "-at" family)
+2. Vowel Sound Sets: Group by same middle vowel (cat/bag/hat = short 'a')
+3. Onset Consonant Sets: Group by same starting letter (cat/cup/can = 'c')
+4. Theme-Based Sets: Group by meaning if the teacher suggests a theme
+
+RULES:
+1. EVERY set MUST have at least 3 words — this is mandatory and non-negotiable
+2. ONLY use words from the provided list - do not invent words
+3. Every word in a set MUST belong to the set's theme - no filler words
+4. Maximum 10 words per set
+5. Create 1-5 sets to coherently group the words
+6. Set titles: max 15 characters (e.g. "-at Family", "Short 'a'")
+7. A smaller, coherent set is always better than a larger, mixed one — but never fewer than 3 words
+
+Respond with a JSON object containing:
+- "sets": array of objects, each with "title" (string), "description" (string), "words" (array of strings, minimum 3)
+        """.trimIndent()
+
+        val userPrompt = """
+Teacher's request: $prompt
+
+Available words: ${filteredWords.joinToString(", ")}
+
+WORD ANALYSIS:
+$analysisTable
+
+DETECTED PATTERNS:
+$patternsSummary
+
+Group these words into coherent educational sets.
+        """.trimIndent()
+
+        val model = createModel(systemInstruction)
+        val response = model.generateContent(userPrompt)
+        val json = response.text ?: throw Exception("Empty response from Step 2")
+
+        Log.d(TAG, "Step 2 response: $json")
+        return gson.fromJson(json, GroupedSetsResponse::class.java)
+    }
+
+    /**
+     * Step 2 variant: Regroup words for set regeneration (avoids old set's theme).
+     */
+    private suspend fun stepRegroupSet(
+        prompt: String,
+        filteredWords: List<String>,
+        analysisTable: String,
+        patternsSummary: String,
+        oldSetTitle: String,
+        oldSetDescription: String
+    ): GroupedSetsResponse {
+        val systemInstruction = """
+You are a reading teacher's assistant. Create a SINGLE new educational set from these CVC words.
+
+CRITICAL CONSTRAINT — The set MUST contain AT LEAST 3 words. Sets with fewer than 3 words are INVALID and will be rejected.
+
+YOUR PRIMARY GOAL: The teacher originally asked for "$prompt". The new set MUST be tailored to this request. Re-read the teacher's instruction carefully and create a set that directly addresses what the teacher is looking for — the words you choose and how you group them should serve the teacher's intent.
+
+SECONDARY CONSTRAINT: Avoid duplicating the previous set:
+- Previous set title: "$oldSetTitle"
+- Previous set description: "$oldSetDescription"
+Choose a different subset of words or a different angle on the teacher's request, but ALWAYS stay aligned with the original instruction.
+
+GROUPING STRATEGIES (pick the one that best matches the teacher's request):
+1. Word Family Sets: Group by same rime (cat/bat/hat = "-at" family)
+2. Vowel Sound Sets: Group by same middle vowel
+3. Onset Consonant Sets: Group by same starting letter
+4. Theme-Based Sets: Group by meaning if the teacher suggests a theme
+
+RULES:
+1. The set MUST have at least 3 words — this is mandatory and non-negotiable
+2. ONLY use words from the provided list
+3. Every word must belong to the set's theme
+4. Maximum 10 words
+5. Set title: max 15 characters, short and concise (e.g. "-at Family", "Short 'a'"). Do NOT include the teacher's full request in the title.
+6. Return ONLY ONE set
+
+Respond with a JSON object containing:
+- "sets": array with exactly ONE object having "title", "description", and "words" (minimum 3) fields
+        """.trimIndent()
+
+        val userPrompt = """
+Teacher's original request: $prompt
+
+I want a new set that is tailored to this request. Pick words and a grouping strategy that best serve what the teacher is asking for.
+
+Available words: ${filteredWords.joinToString(", ")}
+
+WORD ANALYSIS:
+$analysisTable
+
+DETECTED PATTERNS:
+$patternsSummary
+
+Create one new set aligned with the teacher's request (but different from "$oldSetTitle").
+        """.trimIndent()
+
+        val model = createModel(systemInstruction)
+        val response = model.generateContent(userPrompt)
+        val json = response.text ?: throw Exception("Empty response from Step 2 (regen)")
+
+        Log.d(TAG, "Step 2 (regen) response: $json")
+        return gson.fromJson(json, GroupedSetsResponse::class.java)
+    }
+
+    /**
+     * Step 3: Assign configuration types and letter indices to each word.
+     */
+    private suspend fun stepAssignConfigurations(
+        groupedSets: GroupedSetsResponse,
+        availableWords: List<Word>,
+        analyses: List<CVCAnalysis>
+    ): AiGenerationResult {
+        val wordsWithImages = availableWords.filter { !it.imagePath.isNullOrBlank() }.map { it.word }
+        val wordsWithoutImages = availableWords.filter { it.imagePath.isNullOrBlank() }.map { it.word }
+        val setsDescription = groupedSets.sets.joinToString("\n") { set ->
+            "Set \"${set.title}\" (${set.description}): ${set.words.joinToString(", ")}"
+        }
+
+        val systemInstruction = """
+You are a reading teacher's assistant. Assign configuration types and letter indices to each word in each set.
+
+CRITICAL CONSTRAINT — EVERY set MUST keep AT LEAST 3 words. Do NOT remove words from sets. Include ALL words from each set in your output with their configurations.
+
+CONFIGURATION TYPES:
+1. "write the word": Air-write all 3 letters. Good for full word spelling practice.
+2. "fill in the blanks": Air-write ONE missing letter. Choose based on learning goal:
+   - Blank ONSET (selectedLetterIndex: 0) for word family sets -> "_at" teaches beginning consonants
+   - Blank VOWEL (selectedLetterIndex: 1) for same-onset sets -> "c_t" teaches vowel recognition
+   - Blank CODA (selectedLetterIndex: 2) -> "ca_" teaches ending consonants
+3. "name the picture": See picture, air-write all 3 letters. ONLY for words WITH images.
+
+WORDS WITH IMAGES (can use "name the picture"):
+${wordsWithImages.joinToString(", ").ifEmpty { "(none)" }}
+
+WORDS WITHOUT IMAGES (CANNOT use "name the picture"):
+${wordsWithoutImages.joinToString(", ").ifEmpty { "(none)" }}
+
+RULES:
+1. EVERY set MUST contain at least 3 words — include ALL words from the input sets
+2. For "fill in the blanks": selectedLetterIndex must be 0, 1, or 2
+3. For "name the picture" and "write the word": always use selectedLetterIndex: 0
+4. NEVER use "name the picture" for words without images
+5. Activity title: STRICTLY max 15 characters (count carefully!). The title MUST describe the theme of the sets — derive it from the common phonics pattern, word family, or grouping theme (e.g. "-at Words", "Short A Fun", "B Starts"). Do NOT use generic titles like "CVC Practice" or "Word Practice". The title should let a teacher immediately understand what the activity covers.
+6. Set titles: max 15 characters, short and concise (e.g. "-at Family", "Short 'a'"). Preserve the set titles from the input unless they exceed the limit.
+
+Respond with a JSON object containing:
+- "activity": object with "title" (string, STRICTLY max 15 chars)
+- "sets": array of objects, each with:
+  - "title" (string)
+  - "description" (string)
+  - "words": array of objects with "word" (string), "configurationType" (string), "selectedLetterIndex" (integer) — minimum 3 words per set
+        """.trimIndent()
+
+        val wordAnalysis = analyses.joinToString("\n") { a ->
+            "- ${a.word}: onset='${a.onset}', vowel='${a.vowel}', coda='${a.coda}', rime='-${a.rime}', has image: ${if (a.hasImage) "yes" else "no"}"
+        }
+
+        val userPrompt = """
+Here are the grouped sets to configure:
+$setsDescription
+
+WORD ANALYSIS:
+$wordAnalysis
+
+Assign appropriate configuration types and letter indices to each word based on its set's theme and the word's properties.
+        """.trimIndent()
+
+        val model = createModel(systemInstruction)
+        val response = model.generateContent(userPrompt)
+        val json = response.text ?: throw Exception("Empty response from Step 3")
+
+        Log.d(TAG, "Step 3 response: $json")
+        val aiResponse = gson.fromJson(json, AiResponse::class.java)
+        return parseStep3Response(aiResponse, availableWords)
+    }
+
+    // ========== Retry Logic ==========
+
+    private suspend fun <T> retryStep(
+        maxRetries: Int,
+        stepName: String,
+        block: suspend () -> T
+    ): T? {
+        var lastException: Exception? = null
+        repeat(maxRetries + 1) { attempt ->
+            try {
+                return block()
+            } catch (e: Exception) {
+                // Don't retry safety-related blocks
+                val msg = e.message ?: ""
+                if (msg.contains("blocked", ignoreCase = true) ||
+                    msg.contains("safety", ignoreCase = true) ||
+                    msg.contains("SAFETY", ignoreCase = true)
+                ) {
+                    throw e
+                }
+                lastException = e
+                Log.w(TAG, "$stepName attempt ${attempt + 1} failed: ${e.message}")
+                if (attempt < maxRetries) {
+                    delay(1000L * (attempt + 1))
+                }
+            }
+        }
+        Log.e(TAG, "$stepName failed after ${maxRetries + 1} attempts", lastException)
+        return null
+    }
+
+    // ========== Validation ==========
+
+    /**
+     * Parse and validate Step 3 response into AiGenerationResult.
+     */
+    private fun parseStep3Response(
+        response: AiResponse,
+        availableWords: List<Word>
+    ): AiGenerationResult {
+        val wordMap = availableWords.associateBy { it.word }
+
+        // Auto-correct activity title (enforce 15-char limit)
+        val activityTitle = when {
+            response.activity.title.isBlank() -> "CVC Practice"
+            response.activity.title.length > 15 -> {
+                val truncated = response.activity.title.take(15)
+                val lastSpace = truncated.lastIndexOf(' ')
+                if (lastSpace > 5) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
+            }
+            else -> response.activity.title
+        }
+
+        if (response.sets.isEmpty()) {
+            return AiGenerationResult.Error("No sets in response", canRetry = true)
+        }
+
+        val validatedSets = mutableListOf<AiGeneratedSet>()
+        val orphanWords = mutableListOf<AiWordConfig>()
+
+        for ((index, set) in response.sets.withIndex()) {
+            // Auto-correct set title (truncate at word boundary)
+            val setTitle = when {
+                set.title.isBlank() -> "Set ${index + 1}"
+                set.title.length > 15 -> {
+                    val truncated = set.title.take(15)
+                    val lastSpace = truncated.lastIndexOf(' ')
+                    if (lastSpace > 5) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
+                }
+                else -> set.title
+            }
+
+            val validatedWords = mutableListOf<AiWordConfig>()
+
+            for (wordConfig in set.words) {
+                val wordObj = wordMap[wordConfig.word]
+                if (wordObj == null) {
+                    // Skip unknown words instead of failing hard
+                    Log.w(TAG, "Word '${wordConfig.word}' not in word bank, skipping")
+                    continue
+                }
+
+                // Normalize config type
+                val validTypes = mapOf(
+                    "fill in the blanks" to "fill in the blanks",
+                    "fill in the blank" to "fill in the blanks",
+                    "name the picture" to "name the picture",
+                    "write the word" to "write the word"
+                )
+                var configType = validTypes[wordConfig.configurationType.lowercase().trim()]
+                    ?: "write the word"
+
+                // Can't use "name the picture" without image
+                if (configType == "name the picture" && wordObj.imagePath.isNullOrBlank()) {
+                    Log.w(TAG, "Word '${wordConfig.word}' has no image, downgrading from 'name the picture' to 'fill in the blanks'")
+                    configType = "fill in the blanks"
+                }
+
+                // Clamp letter index
+                var letterIndex = wordConfig.selectedLetterIndex
+                if (configType == "fill in the blanks") {
+                    letterIndex = letterIndex.coerceIn(0, wordConfig.word.length - 1)
+                } else {
+                    letterIndex = 0
+                }
+
+                validatedWords.add(
+                    AiWordConfig(
+                        word = wordConfig.word,
+                        configurationType = configType,
+                        selectedLetterIndex = letterIndex
+                    )
+                )
+            }
+
+            // If set has < 3 valid words, collect them as orphans to merge later
+            if (validatedWords.size < 3) {
+                Log.w(TAG, "Set '${setTitle}' has only ${validatedWords.size} valid words, merging into another set")
+                orphanWords.addAll(validatedWords)
+                continue
+            }
+
+            validatedSets.add(
+                AiGeneratedSet(
+                    title = setTitle,
+                    description = set.description,
+                    words = validatedWords
+                )
+            )
+        }
+
+        // Merge orphan words into the last valid set
+        if (orphanWords.isNotEmpty() && validatedSets.isNotEmpty()) {
+            val lastSet = validatedSets.last()
+            val existingWordNames = lastSet.words.map { it.word }.toSet()
+            val uniqueOrphans = orphanWords.filter { it.word !in existingWordNames }
+            if (uniqueOrphans.isNotEmpty()) {
+                validatedSets[validatedSets.lastIndex] = AiGeneratedSet(
+                    title = lastSet.title,
+                    description = lastSet.description,
+                    words = lastSet.words + uniqueOrphans
+                )
+            }
+        } else if (validatedSets.isEmpty() && orphanWords.size >= 3) {
+            // All sets were undersized but we have enough orphan words for one set
+            validatedSets.add(
+                AiGeneratedSet(
+                    title = "CVC Practice",
+                    description = "CVC word practice",
+                    words = orphanWords
+                )
+            )
+        }
+
+        if (validatedSets.isEmpty()) {
+            return AiGenerationResult.Error(
+                "Not enough valid words to create a set (minimum 3 required)",
+                canRetry = true
+            )
+        }
+
+        return AiGenerationResult.Success(
+            AiGeneratedActivity(
+                activity = AiActivityInfo(
+                    title = activityTitle,
+                    description = ""
+                ),
+                sets = validatedSets
+            )
         )
     }
 
-    private fun buildSystemInstruction(availableWords: List<com.example.app.data.entity.Word>): String {
-        val wordsWithImages = availableWords.filter { !it.imagePath.isNullOrBlank() }.map { it.word }
-        val wordsWithoutImages = availableWords.filter { it.imagePath.isNullOrBlank() }.map { it.word }
-        
-        return """
-You are an assistant for an educational app called Kusho that helps teachers create handwriting practice activities.
-
-AVAILABLE WORDS (MUST ONLY USE THESE EXACT WORDS):
-${availableWords.map { it.word }.joinToString(", ")}
-
-WORDS WITH IMAGES (can be used for "name the picture"):
-${wordsWithImages.joinToString(", ")}
-
-WORDS WITHOUT IMAGES (CANNOT be used for "name the picture"):
-${wordsWithoutImages.joinToString(", ")}
-
-CONFIGURATION TYPES:
-- "fill in the blanks": Missing letter index (0-indexed). Example: word "cat" with index 1 = "c_t"
-- "name the picture": Show picture, student names the word. CRITICAL: Only use words from the WORDS WITH IMAGES list above.
-- "write the word": Write word in the air (best for 3-5 letter words)
-
-RULES:
-1. ONLY use words from the AVAILABLE WORDS list above
-2. Minimum 5 words per set and Maximum of 8 words per set
-3. Create 1-3 sets total
-4. Set titles: max 10 characters
-5. Activity title: max 10 characters
-6. For "fill in the blanks": selectedLetterIndex must be valid (0 to word.length-1)
-7. ONLY "fill in the blanks" uses selectedLetterIndex. For "name the picture" and "write the word", always use selectedLetterIndex: 0
-8. For "name the picture": ONLY use words that have images (from WORDS WITH IMAGES list)
-
-OUTPUT FORMAT - EXTREMELY IMPORTANT:
-You MUST respond with ONLY a valid JSON object. No markdown formatting, no code blocks (```), no explanations before or after, no extra text. Your entire response must be a single JSON object.
-
-The JSON must follow this exact structure:
-{
-  "activity": {
-    "title": "Short Activity Title",
-    "description": "Brief description"
-  },
-  "sets": [
-    {
-      "title": "Set 1 Name",
-      "description": "What this set covers",
-      "words": [
-        {
-          "word": "word_from_bank",
-          "configurationType": "fill in the blanks",
-          "selectedLetterIndex": 1
-        },
-        {
-          "word": "another_word",
-          "configurationType": "name the picture",
-          "selectedLetterIndex": 0
-        },
-        {
-          "word": "third_word",
-          "configurationType": "write the word",
-          "selectedLetterIndex": 0
+    /**
+     * Validate grouped sets: remove words not in word bank, deduplicate across sets,
+     * and merge undersized sets into others to enforce the 3-word minimum.
+     */
+    private fun validateGroupedSets(
+        groupedSets: GroupedSetsResponse,
+        wordBank: Set<String>
+    ): GroupedSetsResponse {
+        val seen = mutableSetOf<String>()
+        val cleanedSets = groupedSets.sets.map { set ->
+            val validWords = set.words
+                .filter { it in wordBank }  // Only keep words in word bank
+                .filter { seen.add(it) }    // Remove duplicates across sets
+            set.copy(words = validWords)
         }
-      ]
-    }
-  ]
-}
 
-VALIDATION CHECKLIST:
-- [ ] All words used are from the available words list
-- [ ] selectedLetterIndex is ONLY used for "fill in the blanks" (0 to word.length-1)
-- [ ] selectedLetterIndex is 0 for "name the picture" and "write the word"
-- [ ] Words for "name the picture" MUST have images available
-- [ ] All strings are properly escaped
-- [ ] Response starts with { and ends with }
-- [ ] No markdown or extra text
-        """.trimIndent()
+        // Separate into valid sets (>= 3 words) and undersized sets
+        val validSets = cleanedSets.filter { it.words.size >= 3 }.toMutableList()
+        val orphanWords = cleanedSets.filter { it.words.size < 3 }.flatMap { it.words }
+
+        if (orphanWords.isNotEmpty() && validSets.isNotEmpty()) {
+            // Merge orphan words into the last valid set
+            val lastSet = validSets.last()
+            validSets[validSets.lastIndex] = lastSet.copy(words = lastSet.words + orphanWords)
+        } else if (validSets.isEmpty()) {
+            // All sets were undersized — combine all words into a single set
+            val allWords = cleanedSets.flatMap { it.words }
+            if (allWords.size >= 3) {
+                return GroupedSetsResponse(
+                    sets = listOf(
+                        SetGroupingResponse(
+                            title = "CVC Practice",
+                            description = "CVC word practice",
+                            words = allWords
+                        )
+                    )
+                )
+            }
+            // Not enough valid words at all — fall back to original (will error downstream)
+            return groupedSets
+        }
+
+        return GroupedSetsResponse(sets = validSets)
     }
 
     /**
-     * Parse JSON response and validate against constraints.
+     * Pass-through validation for final result (main validation is in parseStep3Response).
      */
-    private fun parseAndValidateResponse(
-        jsonText: String,
-        availableWords: List<com.example.app.data.entity.Word>
+    private fun validateFinalResult(
+        result: AiGenerationResult,
+        availableWords: List<Word>
     ): AiGenerationResult {
-        return try {
-            android.util.Log.d("GeminiRepository", "Starting JSON extraction from text of length: ${jsonText.length}")
+        return result
+    }
 
-            // Extract JSON from the response - handle various formats
-            val cleanJson = extractJson(jsonText)
-            if (cleanJson == null) {
-                android.util.Log.e("GeminiRepository", "Failed to extract JSON from response")
-                android.util.Log.e("GeminiRepository", "Original text:\n$jsonText")
-                return AiGenerationResult.Error(
-                    "Failed to extract JSON from AI response. The response format was unexpected. Please try again.",
-                    canRetry = true
-                )
-            }
+    // ========== Fallbacks ==========
 
-            android.util.Log.d("GeminiRepository", "Extracted JSON (${cleanJson.length} chars):")
-            android.util.Log.d("GeminiRepository", cleanJson)
+    /**
+     * Algorithmic grouping using CVC patterns when Step 2 fails.
+     */
+    private fun algorithmicGrouping(
+        analyses: List<CVCAnalysis>,
+        patterns: CVCPatterns
+    ): GroupedSetsResponse {
+        val sets = mutableListOf<SetGroupingResponse>()
+        val used = mutableSetOf<String>()
 
-            // Try to parse the JSON
-            val response: AiResponse? = try {
-                gson.fromJson(cleanJson, AiResponse::class.java)
-            } catch (e: Exception) {
-                android.util.Log.e("GeminiRepository", "JSON parse error: ${e.message}")
-                android.util.Log.e("GeminiRepository", "JSON content that failed to parse:\n$cleanJson")
-                null
-            }
-
-            if (response == null) {
-                android.util.Log.e("GeminiRepository", "Parsed response is null - JSON structure doesn't match expected format")
-                return AiGenerationResult.Error(
-                    "Failed to parse AI response. The JSON structure doesn't match the expected format. Please try again.",
-                    canRetry = true
-                )
-            }
-
-            android.util.Log.d("GeminiRepository", "JSON parsed successfully. Activity title: ${response.activity.title}")
-            android.util.Log.d("GeminiRepository", "Number of sets: ${response.sets.size}")
-
-            // Validate activity info
-            if (response.activity.title.isBlank() || response.activity.title.length > 30) {
-                android.util.Log.e("GeminiRepository", "Invalid activity title: '${response.activity.title}' (length: ${response.activity.title.length})")
-                return AiGenerationResult.Error(
-                    "Invalid activity title: must be 1-30 characters (got: ${response.activity.title.length})",
-                    canRetry = true
-                )
-            }
-
-            android.util.Log.d("GeminiRepository", "Activity title validated: ${response.activity.title}")
-
-            // Validate sets
-            if (response.sets.isEmpty()) {
-                android.util.Log.e("GeminiRepository", "No sets found in response")
-                return AiGenerationResult.Error(
-                    "At least one set is required",
-                    canRetry = true
-                )
-            }
-
-            android.util.Log.d("GeminiRepository", "Validating ${response.sets.size} sets...")
-            
-            // Create a map of word strings to Word objects for quick lookup
-            val wordMap = availableWords.associateBy { it.word }
-
-            val validatedSets = mutableListOf<AiGeneratedSet>()
-
-            for ((index, set) in response.sets.withIndex()) {
-                android.util.Log.d("GeminiRepository", "Validating set ${index + 1}: ${set.title}")
-
-                // Validate set title
-                if (set.title.isBlank() || set.title.length > 30) {
-                    android.util.Log.e("GeminiRepository", "Invalid set title: '${set.title}' (length: ${set.title.length})")
-                    return AiGenerationResult.Error(
-                        "Set ${index + 1}: Title must be 1-30 characters (got: ${set.title.length})",
-                        canRetry = true
+        // Priority 1: Word families
+        for ((rime, words) in patterns.wordFamilies) {
+            val groupWords = words.filter { it.word !in used }.take(10)
+            if (groupWords.size >= 3) {
+                sets.add(
+                    SetGroupingResponse(
+                        title = "-$rime Family",
+                        description = "Words ending in -$rime",
+                        words = groupWords.map { it.word }
                     )
-                }
+                )
+                used.addAll(groupWords.map { it.word })
+            }
+        }
 
-                // Validate minimum words
-                if (set.words.size < 3) {
-                    android.util.Log.e("GeminiRepository", "Set ${index + 1} has only ${set.words.size} words (min: 3)")
-                    return AiGenerationResult.Error(
-                        "Set ${index + 1}: Must have at least 3 words (got: ${set.words.size})",
-                        canRetry = true
-                    )
-                }
-
-                android.util.Log.d("GeminiRepository", "Set ${index + 1} has ${set.words.size} words")
-
-                val validatedWords = mutableListOf<AiWordConfig>()
-
-                for (wordConfig in set.words) {
-                    android.util.Log.d("GeminiRepository", "Validating word: ${wordConfig.word} (${wordConfig.configurationType})")
-
-                    // Validate word exists in word bank using wordMap
-                    val wordObj = wordMap[wordConfig.word]
-                    if (wordObj == null) {
-                        android.util.Log.e("GeminiRepository", "Word '${wordConfig.word}' not in available words: ${wordMap.keys}")
-                        return AiGenerationResult.Error(
-                            "Word '${wordConfig.word}' not found in word bank. Available words: ${wordMap.keys.joinToString(", ")}",
-                            canRetry = true
-                        )
-                    }
-
-                    // Validate configuration type
-                    val validTypes = listOf("fill in the blanks", "name the picture", "write the word")
-                    var configurationType = wordConfig.configurationType
-                    
-                    if (!validTypes.contains(configurationType)) {
-                        android.util.Log.e("GeminiRepository", "Invalid configuration type: '$configurationType'")
-                        return AiGenerationResult.Error(
-                            "Invalid configuration type: '$configurationType'. Must be one of: ${validTypes.joinToString(", ")}",
-                            canRetry = true
-                        )
-                    }
-
-                    // Validate that "name the picture" words have images
-                    if (configurationType == "name the picture") {
-                        if (wordObj.imagePath.isNullOrBlank()) {
-                            android.util.Log.w("GeminiRepository", "Word '${wordConfig.word}' assigned to 'name the picture' but has no image. Changing to 'write the word'")
-                            // Automatically change to "write the word" instead of failing
-                            configurationType = "write the word"
-                        }
-                    }
-
-                    // Validate letter index for fill in the blanks
-                    var selectedLetterIndex = wordConfig.selectedLetterIndex
-                    if (configurationType == "fill in the blanks") {
-                        if (selectedLetterIndex < 0 || selectedLetterIndex >= wordConfig.word.length) {
-                            android.util.Log.e("GeminiRepository", "Invalid letter index $selectedLetterIndex for word '${wordConfig.word}' (length: ${wordConfig.word.length})")
-                            return AiGenerationResult.Error(
-                                "Invalid letter index ($selectedLetterIndex) for word '${wordConfig.word}'. Must be 0-${wordConfig.word.length - 1}",
-                                canRetry = true
-                            )
-                        }
-                    } else {
-                        // For non-fill-in-the-blanks, force selectedLetterIndex to 0
-                        selectedLetterIndex = 0
-                    }
-
-                    validatedWords.add(
-                        AiWordConfig(
-                            word = wordConfig.word,
-                            configurationType = configurationType,
-                            selectedLetterIndex = selectedLetterIndex
+        // Priority 2: Same vowel groups (only if no word family sets found)
+        if (sets.isEmpty()) {
+            for ((vowel, words) in patterns.sameVowel) {
+                val groupWords = words.filter { it.word !in used }.take(10)
+                if (groupWords.size >= 3) {
+                    sets.add(
+                        SetGroupingResponse(
+                            title = "Short '$vowel' Words",
+                            description = "Words with the '$vowel' vowel sound",
+                            words = groupWords.map { it.word }
                         )
                     )
+                    used.addAll(groupWords.map { it.word })
                 }
-
-                validatedSets.add(
-                    AiGeneratedSet(
-                        title = set.title,
-                        description = set.description,
-                        words = validatedWords
-                    )
-                )
-
-                android.util.Log.d("GeminiRepository", "Set ${index + 1} validated successfully with ${validatedWords.size} words")
             }
+        }
 
-            android.util.Log.d("GeminiRepository", "All validation passed! Activity: '${response.activity.title}' with ${validatedSets.size} sets")
-
-            AiGenerationResult.Success(
-                AiGeneratedActivity(
-                    activity = AiActivityInfo(
-                        title = response.activity.title,
-                        description = response.activity.description
-                    ),
-                    sets = validatedSets
+        // Remaining words in a mixed set
+        val remaining = analyses.filter { it.word !in used }
+        if (remaining.size >= 3) {
+            sets.add(
+                SetGroupingResponse(
+                    title = "CVC Practice",
+                    description = "Mixed CVC word practice",
+                    words = remaining.map { it.word }
                 )
             )
-
-        } catch (e: JsonParseException) {
-            AiGenerationResult.Error("Invalid JSON format: ${e.message}", canRetry = true)
-        } catch (e: Exception) {
-            AiGenerationResult.Error("Validation error: ${e.message}", canRetry = true)
         }
+
+        // Ultimate fallback: everything in one set
+        if (sets.isEmpty()) {
+            sets.add(
+                SetGroupingResponse(
+                    title = "CVC Practice",
+                    description = "CVC word practice",
+                    words = analyses.map { it.word }
+                )
+            )
+        }
+
+        return GroupedSetsResponse(sets = sets)
     }
 
     /**
-     * Internal data class matching the expected AI response structure.
+     * Default configuration fallback when Step 3 fails.
+     * Assigns "write the word" to all words.
      */
+    private fun defaultConfigurations(
+        groupedSets: GroupedSetsResponse,
+        availableWords: List<Word>
+    ): AiGenerationResult {
+        val sets = groupedSets.sets.map { set ->
+            AiGeneratedSet(
+                title = set.title,
+                description = set.description,
+                words = set.words.map { word ->
+                    AiWordConfig(
+                        word = word,
+                        configurationType = "write the word",
+                        selectedLetterIndex = 0
+                    )
+                }
+            )
+        }
+
+        val activityTitle = if (sets.size == 1) sets[0].title.take(15) else "CVC Practice"
+
+        return AiGenerationResult.Success(
+            AiGeneratedActivity(
+                activity = AiActivityInfo(
+                    title = activityTitle,
+                    description = ""
+                ),
+                sets = sets
+            )
+        )
+    }
+
+    // ========== Error Handling ==========
+
+    private fun handleException(e: Exception, context: String): AiGenerationResult {
+        val msg = e.message ?: ""
+        return when {
+            msg.contains("blocked", ignoreCase = true) ||
+            msg.contains("safety", ignoreCase = true) ->
+                AiGenerationResult.Error(
+                    "The request couldn't be processed. Please rephrase your instruction.",
+                    canRetry = false
+                )
+            else -> {
+                Log.e(TAG, "$context failed: ${e.message}", e)
+                AiGenerationResult.Error("$context failed: ${e.message}", canRetry = true)
+            }
+        }
+    }
+
+    // ========== Internal Response Parsing Classes ==========
+
     private data class AiResponse(
-        val activity: ActivityInfo,
-        val sets: List<SetInfo>
+        val activity: ActivityInfo = ActivityInfo(),
+        val sets: List<SetInfo> = emptyList()
     )
 
     private data class ActivityInfo(
-        val title: String,
-        val description: String
+        val title: String = "",
+        val description: String = ""
     )
 
     private data class SetInfo(
-        val title: String,
-        val description: String,
-        val words: List<WordInfo>
+        val title: String = "",
+        val description: String = "",
+        val words: List<WordInfo> = emptyList()
     )
 
     private data class WordInfo(
-        val word: String,
-        val configurationType: String,
-        val selectedLetterIndex: Int
+        val word: String = "",
+        val configurationType: String = "",
+        val selectedLetterIndex: Int = 0
     )
 
-    companion object {
-        private const val BASE_URL = "https://openrouter.ai/"
+    // ========== CVC Word Analysis ==========
 
-        /**
-         * Extract valid JSON from text that might contain markdown, extra text, etc.
-         * Uses brace counting to find the outermost JSON object.
-         */
-        private fun extractJson(text: String): String? {
-            android.util.Log.d("GeminiRepository", "Raw response length: ${text.length}")
-            android.util.Log.d("GeminiRepository", "Raw response preview: ${text.take(500)}")
+    private data class CVCAnalysis(
+        val word: String,
+        val onset: Char,
+        val vowel: Char,
+        val coda: Char,
+        val rime: String,
+        val hasImage: Boolean
+    )
 
-            // First, try to remove markdown code blocks
-            var cleanedText = text
-                .replace(Regex("```json\\s*"), "")
-                .replace(Regex("```\\s*"), "")
-                .trim()
-
-            android.util.Log.d("GeminiRepository", "After markdown removal: ${cleanedText.take(500)}")
-
-            // Find the outermost JSON object using brace counting
-            var startIndex = -1
-            var braceCount = 0
-            var inString = false
-            var escapeNext = false
-
-            for (i in cleanedText.indices) {
-                val char = cleanedText[i]
-
-                if (escapeNext) {
-                    escapeNext = false
-                    continue
-                }
-
-                if (char == '\\') {
-                    escapeNext = true
-                    continue
-                }
-
-                if (char == '"' && !escapeNext) {
-                    inString = !inString
-                    continue
-                }
-
-                if (!inString) {
-                    when (char) {
-                        '{' -> {
-                            if (braceCount == 0) {
-                                startIndex = i
-                            }
-                            braceCount++
-                        }
-                        '}' -> {
-                            braceCount--
-                            if (braceCount == 0 && startIndex != -1) {
-                                // Found complete JSON object
-                                val json = cleanedText.substring(startIndex, i + 1)
-                                android.util.Log.d("GeminiRepository", "Extracted JSON: ${json.take(200)}...")
-                                return json
-                            }
-                        }
-                    }
-                }
+    private fun analyzeCVCWords(words: List<Word>): List<CVCAnalysis> {
+        val vowels = setOf('a', 'e', 'i', 'o', 'u')
+        return words.mapNotNull { w ->
+            val lower = w.word.lowercase()
+            if (lower.length == 3 && !vowels.contains(lower[0]) && vowels.contains(lower[1]) && !vowels.contains(lower[2])) {
+                CVCAnalysis(
+                    word = w.word,
+                    onset = lower[0],
+                    vowel = lower[1],
+                    coda = lower[2],
+                    rime = "${lower[1]}${lower[2]}",
+                    hasImage = !w.imagePath.isNullOrBlank()
+                )
+            } else {
+                // Non-CVC word - still include with basic decomposition
+                CVCAnalysis(
+                    word = w.word,
+                    onset = lower.getOrElse(0) { ' ' },
+                    vowel = lower.getOrElse(1) { ' ' },
+                    coda = lower.getOrElse(2) { ' ' },
+                    rime = lower.drop(1),
+                    hasImage = !w.imagePath.isNullOrBlank()
+                )
             }
-
-            // If brace counting failed, try simple approach as fallback
-            if (startIndex == -1) {
-                startIndex = cleanedText.indexOf('{')
-                val endIndex = cleanedText.lastIndexOf('}')
-                if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
-                    val json = cleanedText.substring(startIndex, endIndex + 1)
-                    android.util.Log.d("GeminiRepository", "Fallback JSON extraction: ${json.take(200)}...")
-                    return json
-                }
-            }
-
-            android.util.Log.e("GeminiRepository", "Failed to extract JSON from response")
-            return null
         }
+    }
+
+    private data class CVCPatterns(
+        val wordFamilies: Map<String, List<CVCAnalysis>>,
+        val sameVowel: Map<Char, List<CVCAnalysis>>,
+        val sameOnset: Map<Char, List<CVCAnalysis>>,
+        val sameCoda: Map<Char, List<CVCAnalysis>>
+    )
+
+    private fun detectCVCPatterns(analyses: List<CVCAnalysis>): CVCPatterns {
+        return CVCPatterns(
+            wordFamilies = analyses.groupBy { it.rime }.filter { it.value.size >= 2 },
+            sameVowel = analyses.groupBy { it.vowel }.filter { it.value.size >= 2 },
+            sameOnset = analyses.groupBy { it.onset }.filter { it.value.size >= 2 },
+            sameCoda = analyses.groupBy { it.coda }.filter { it.value.size >= 2 }
+        )
+    }
+
+    private fun buildWordAnalysisTable(analyses: List<CVCAnalysis>): String {
+        return analyses.joinToString("\n") { a ->
+            "- ${a.word}: onset='${a.onset}', vowel='${a.vowel}', coda='${a.coda}', rime='-${a.rime}', has image: ${if (a.hasImage) "yes" else "no"}"
+        }
+    }
+
+    private fun buildPatternsSummary(patterns: CVCPatterns): String {
+        val sb = StringBuilder()
+
+        if (patterns.wordFamilies.isNotEmpty()) {
+            sb.appendLine("Word Families (same rime):")
+            patterns.wordFamilies.forEach { (rime, words) ->
+                sb.appendLine("- \"-$rime\" family: ${words.joinToString(", ") { it.word }}")
+            }
+            sb.appendLine()
+        }
+
+        if (patterns.sameVowel.isNotEmpty()) {
+            sb.appendLine("Same Vowel:")
+            patterns.sameVowel.forEach { (vowel, words) ->
+                sb.appendLine("- Vowel '$vowel': ${words.joinToString(", ") { it.word }}")
+            }
+            sb.appendLine()
+        }
+
+        if (patterns.sameOnset.isNotEmpty()) {
+            sb.appendLine("Same Onset:")
+            patterns.sameOnset.forEach { (onset, words) ->
+                sb.appendLine("- Starting with '$onset': ${words.joinToString(", ") { it.word }}")
+            }
+            sb.appendLine()
+        }
+
+        if (patterns.sameCoda.isNotEmpty()) {
+            sb.appendLine("Same Coda:")
+            patterns.sameCoda.forEach { (coda, words) ->
+                sb.appendLine("- Ending with '$coda': ${words.joinToString(", ") { it.word }}")
+            }
+        }
+
+        return sb.toString().trimEnd()
     }
 }
