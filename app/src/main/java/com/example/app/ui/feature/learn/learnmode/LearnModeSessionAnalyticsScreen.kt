@@ -100,12 +100,12 @@ fun LearnModeSessionAnalyticsScreen(
                 alignment = Alignment.Center
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(30.dp))
 
             // Great Job text at the top
             Text(
                 text = "Great Job!",
-                fontSize = 28.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = PurpleColor,
                 textAlign = TextAlign.Center
@@ -150,7 +150,10 @@ fun LearnModeSessionAnalyticsScreen(
                     .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(2.dp, Color(0xFF3FA9F8)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3FA9F8))
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF3FA9F8)
+                )
             ) {
                 Text(
                     text = "Learn Again",

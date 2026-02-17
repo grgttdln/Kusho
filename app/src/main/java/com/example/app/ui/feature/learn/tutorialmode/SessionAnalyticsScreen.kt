@@ -92,12 +92,12 @@ fun SessionAnalyticsScreen(
                 alignment = Alignment.Center
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(30.dp))
 
             // Great Job text at the top
             Text(
                 text = "Great Job!",
-                fontSize = 28.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color(0xFFEDBB00),
                 textAlign = TextAlign.Center
@@ -137,15 +137,18 @@ fun SessionAnalyticsScreen(
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                OutlinedButton(
-                    onClick = handlePracticeAgain,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(2.dp, BlueButtonColor),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BlueButtonColor)
-                ) {
+            OutlinedButton(
+                onClick = handlePracticeAgain,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(2.dp, BlueButtonColor),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = BlueButtonColor
+                )
+            ) {
                     Text(
                         text = "Practice Again",
                         fontSize = 18.sp,
