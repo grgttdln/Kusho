@@ -475,17 +475,19 @@ class SetRepository(
         val rows = setDao.getSetsWithWordNames(userId)
         if (rows.isEmpty()) return@withContext emptyMap()
 
-        // Group into setId -> (title, set of word names)
-        val existingSets: Map<Long, Pair<String, Set<String>>> = rows
+        // Group into setId -> (title, list of word names)
+        // Note: Using List<String> instead of Set<String> to avoid collision with entity.Set
+        val existingSets = rows
             .groupBy { it.setId }
             .mapValues { (_, entries) ->
-                Pair(entries.first().setTitle, entries.map { it.wordName }.toSet())
+                Pair(entries.first().setTitle, entries.map { it.wordName })
             }
 
         val results = mutableMapOf<Int, OverlapResult>()
 
         generatedSets.forEachIndexed { genIndex, generatedWords ->
-            val generatedWordSet = generatedWords.map { it.lowercase() }.toSet()
+            val generatedWordList = generatedWords.map { word -> word.lowercase() }
+            val generatedWordSet = generatedWordList.toHashSet()
             val threshold = (generatedWordSet.size * 0.5).toInt().coerceAtLeast(1)
 
             var bestMatch: OverlapResult? = null
@@ -493,18 +495,18 @@ class SetRepository(
 
             for ((setId, pair) in existingSets) {
                 val (title, existingWords) = pair
-                val existingLower = existingWords.map { it.lowercase() }.toSet()
-                val overlap = generatedWordSet.intersect(existingLower)
+                val existingLowerSet = existingWords.map { word -> word.lowercase() }.toHashSet()
+                val overlap = generatedWordSet.filter { it in existingLowerSet }
 
                 if (overlap.size >= threshold && overlap.size > bestOverlapCount) {
                     bestOverlapCount = overlap.size
-                    val newWords = generatedWordSet - existingLower
+                    val newWords = generatedWordSet.filter { it !in existingLowerSet }
                     bestMatch = OverlapResult(
                         generatedSetIndex = genIndex,
                         matchedSetId = setId,
                         matchedSetTitle = title,
-                        overlappingWords = overlap.toList(),
-                        newWords = newWords.toList()
+                        overlappingWords = overlap,
+                        newWords = newWords
                     )
                 }
             }
