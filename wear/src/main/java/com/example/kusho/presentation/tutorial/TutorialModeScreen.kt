@@ -227,10 +227,8 @@ fun TutorialModeScreen() {
                         if (modelLoadError != null) {
                             // Show error if model failed to load
                             ErrorContent(errorMessage = modelLoadError!!)
-                        } else if (!isModelInitialized) {
-                            // Show loading while model loads
-                            LoadingContent()
                         } else {
+                            // Show wait screen immediately (model loads in background)
                             WaitScreenContent(
                                 onTap = {
                                     if (isModelInitialized && sensorManager != null && classifierResult is ClassifierLoadResult.Success) {
@@ -257,30 +255,6 @@ fun TutorialModeScreen() {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun LoadingContent() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(48.dp),
-            strokeWidth = 4.dp,
-            indicatorColor = AppColors.TutorialModeColor
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Loading...",
-            color = AppColors.TutorialModeColor,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center
-        )
     }
 }
 
@@ -438,12 +412,15 @@ private fun FeedbackContent(
             ),
         contentAlignment = Alignment.Center
     ) {
+        // Show correct or wrong mascot image based on result
         Image(
             painter = painterResource(
                 id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
             ),
             contentDescription = if (isCorrect) "Correct" else "Wrong",
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             contentScale = ContentScale.Fit
         )
     }
@@ -587,43 +564,43 @@ private fun GestureRecognitionContent(
                     )
                 }
             }
-            TutorialModeViewModel.State.RESULT -> {
-                // Show result - only display predicted letter if correct
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+            TutorialModeViewModel.State.SHOWING_PREDICTION -> {
+                // Show the predicted letter in white (like Learn Mode)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (uiState.isCorrect) {
-                        // Show the correct prediction
-                        Text(
-                            text = uiState.prediction ?: "",
-                            fontSize = 72.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AppColors.TutorialModeColor
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Correct!",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.Green,
-                            textAlign = TextAlign.Center
-                        )
-                    } else {
-                        // Don't show the incorrect prediction (model forced a classification)
-                        // Just show encouraging message
-                        Text(
-                            text = "😊",
-                            fontSize = 64.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Try again!",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = AppColors.TutorialModeColor,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    Text(
+                        text = uiState.prediction ?: "",
+                        color = Color.White,
+                        fontSize = 80.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            TutorialModeViewModel.State.RESULT -> {
+                // Show feedback image (correct/wrong) similar to Learn Mode
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) { viewModel.reset() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Show correct or wrong mascot image based on result
+                    Image(
+                        painter = painterResource(
+                            id = if (uiState.isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+                        ),
+                        contentDescription = if (uiState.isCorrect) "Correct" else "Wrong",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentScale = ContentScale.Fit
+                    )
                 }
             }
             TutorialModeViewModel.State.COMPLETE -> {

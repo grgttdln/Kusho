@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -501,21 +502,19 @@ private fun RecordingContent(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(
-                progress = uiState.recordingProgress,
-                modifier = Modifier.fillMaxSize(),
-                strokeWidth = 8.dp,
-                indicatorColor = Color.Green
-            )
-            Text(text = "✍️", fontSize = 52.sp)
-        }
+        CircularProgressIndicator(
+            progress = uiState.recordingProgress,
+            modifier = Modifier.fillMaxSize(),
+            strokeWidth = 8.dp,
+            indicatorColor = Color.Green
+        )
+        Image(
+            painter = painterResource(id = R.drawable.ic_kusho_hand),
+            contentDescription = "Air write now",
+            modifier = Modifier.size(85.dp),
+            contentScale = ContentScale.Fit
+        )
     }
-
 }
 
 @Composable
@@ -560,16 +559,23 @@ private fun ResultContent(
     val isCorrect = uiState.isAnswerCorrect == true
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.resetToIdle() },
         contentAlignment = Alignment.Center
     ) {
-        // Show correct or wrong image
+        // Show correct or wrong mascot image based on result
         Image(
             painter = painterResource(
                 id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
             ),
-            contentDescription = if (isCorrect) "Correct answer" else "Wrong answer",
-            modifier = Modifier.size(120.dp),
+            contentDescription = if (isCorrect) "Correct" else "Wrong",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             contentScale = ContentScale.Fit
         )
     }

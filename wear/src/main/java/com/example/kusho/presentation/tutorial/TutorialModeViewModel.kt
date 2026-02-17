@@ -44,6 +44,7 @@ class TutorialModeViewModel(
         COUNTDOWN,
         RECORDING,
         PROCESSING,
+        SHOWING_PREDICTION,
         RESULT,
         COMPLETE
     }
@@ -211,9 +212,24 @@ class TutorialModeViewModel(
                     return@launch
                 }
 
-                // === Phase 4: Check if correct ===
+                // === Phase 4: Show prediction ===
                 val predictedLetter = result.label  // Model always outputs uppercase
                 
+                // Show the predicted letter first
+                _uiState.update {
+                    it.copy(
+                        state = State.SHOWING_PREDICTION,
+                        prediction = predictedLetter,
+                        statusMessage = "$predictedLetter",
+                        errorMessage = null,
+                        recordingProgress = 0f
+                    )
+                }
+                
+                // Brief delay to show the prediction
+                delay(1000)
+                
+                // === Phase 5: Check if correct ===
                 // Determine the expected letter case based on letterCase parameter
                 val expectedLetter = when (letterCase.lowercase()) {
                     "small", "lowercase" -> targetLetter.lowercase()
@@ -234,15 +250,11 @@ class TutorialModeViewModel(
                 
                 Log.d(TAG, "Predicted: $predictedLetter, Expected: $expectedLetter (case: $letterCase), Similar: $isSimilarShape, Correct: $isCorrect")
                 
-                // First show the result with prediction
+                // Show the result state
                 _uiState.update {
                     it.copy(
                         state = State.RESULT,
-                        prediction = predictedLetter,
-                        isCorrect = isCorrect,
-                        statusMessage = "$predictedLetter",
-                        errorMessage = null,
-                        recordingProgress = 0f
+                        isCorrect = isCorrect
                     )
                 }
                 
