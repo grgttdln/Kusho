@@ -15,7 +15,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,6 +40,7 @@ import com.example.app.ui.components.activities.AddedChapterPill
 import com.example.app.ui.components.activities.ChapterCard
 import com.example.app.ui.components.common.AlreadyExistsDialog
 import kotlinx.coroutines.launch
+import android.util.Log
 
 @Composable
 fun AddNewActivityScreen(
@@ -40,15 +48,51 @@ fun AddNewActivityScreen(
     onNavigate: (Int) -> Unit,
     onBackClick: () -> Unit,
     onActivityCreated: () -> Unit,
+    prefillTitle: String = "",
+    prefillDescription: String = "",
+    prelinkedSetIds: List<Long> = emptyList(),
     modifier: Modifier = Modifier,
     viewModel: AddActivityViewModel = viewModel()
 ) {
+    // Initialize with pre-filled data from AI generation
+    // Use a key to force re-initialization when AI data changes
+    val initializationKey = remember(prefillTitle, prefillDescription, prelinkedSetIds) {
+        System.currentTimeMillis()
+    }
+    
+    // Debug log
+    Log.d("AddNewActivityScreen", "Received prelinkedSetIds: $prelinkedSetIds, prefillTitle: $prefillTitle")
+    
+    LaunchedEffect(initializationKey) {
+        Log.d("AddNewActivityScreen", "LaunchedEffect triggered with key: $initializationKey")
+        // Always reset form when entering with AI-generated data to ensure fresh state
+        if (prelinkedSetIds.isNotEmpty() || prefillTitle.isNotEmpty()) {
+            Log.d("AddNewActivityScreen", "Resetting form for AI-generated data")
+            viewModel.resetForm()
+        }
+        if (prefillTitle.isNotEmpty()) {
+            viewModel.setActivityTitle(prefillTitle)
+        }
+        if (prefillDescription.isNotEmpty()) {
+            viewModel.setActivityDescription(prefillDescription)
+        }
+        if (prelinkedSetIds.isNotEmpty()) {
+            Log.d("AddNewActivityScreen", "Calling addPrelinkedSets with: $prelinkedSetIds")
+            viewModel.addPrelinkedSets(prelinkedSetIds)
+        }
+    }
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     
     // Use local references to prevent unnecessary recompositions
     val activityTitle = uiState.activityTitle
     val addedChapters = uiState.selectedChapters
+    
+    // Debug log when chapters change
+    LaunchedEffect(addedChapters) {
+        Log.d("AddNewActivityScreen", "Current added chapters: ${addedChapters.map { it.title }}")
+    }
+    
     var showDuplicateError by remember { mutableStateOf(false) }
 
     Box(
@@ -120,13 +164,12 @@ fun AddNewActivityScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Lesson Title Input Field
+            // Activity Title Input Field
             OutlinedTextField(
                 value = activityTitle,
-                onValueChange = { viewModel.setActivityTitle(it) },
+                onValueChange = { if (it.length <= 15) viewModel.setActivityTitle(it) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
                     .padding(horizontal = 15.dp),
                 placeholder = {
                     Text(
@@ -150,7 +193,16 @@ fun AddNewActivityScreen(
                     fontSize = 16.sp,
                     color = Color(0xFF000000)
                 ),
-                singleLine = true
+                singleLine = true,
+                supportingText = {
+                    Text(
+                        text = "${activityTitle.length}/15",
+                        fontSize = 12.sp,
+                        color = Color(0xFF999999),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
+                    )
+                }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -277,7 +329,7 @@ fun AddNewActivityScreen(
                 coroutineScope.launch {
                     val success = viewModel.createActivity(userId)
                     if (success) {
-                        onNavigate(10) // Navigate to confirmation screen
+                        onActivityCreated() // Navigate to success screen via callback
                     }
                 }
             },

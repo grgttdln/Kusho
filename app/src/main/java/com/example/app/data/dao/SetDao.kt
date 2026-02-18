@@ -8,6 +8,20 @@ import com.example.app.data.entity.ActivitySet
 import com.example.app.data.entity.Set
 import kotlinx.coroutines.flow.Flow
 
+data class SetWordName(
+    val setId: Long,
+    val setTitle: String,
+    val wordName: String
+)
+
+data class SetWordDetail(
+    val wordName: String,
+    val configurationType: String,
+    val selectedLetterIndex: Int,
+    val imagePath: String?,
+    val wordHasImage: Boolean
+)
+
 @Dao
 interface SetDao {
 
@@ -123,4 +137,40 @@ interface SetDao {
      */
     @Query("SELECT EXISTS(SELECT 1 FROM sets WHERE userId = :userId AND LOWER(title) = LOWER(:title) AND id != :excludeSetId)")
     suspend fun setTitleExistsForUserExcluding(userId: Long, title: String, excludeSetId: Long): Boolean
+
+    /**
+     * Get all sets with their word names for a user.
+     * Returns flat rows: each row is one set-word pair.
+     * Group by setId in the caller to build set -> words map.
+     *
+     * @param userId The user's ID
+     * @return List of SetWordName rows (setId, setTitle, wordName)
+     */
+    @Query("""
+        SELECT s.id AS setId, s.title AS setTitle, w.word AS wordName
+        FROM sets s
+        INNER JOIN set_words sw ON sw.setId = s.id
+        INNER JOIN words w ON w.id = sw.wordId
+        WHERE s.userId = :userId
+    """)
+    suspend fun getSetsWithWordNames(userId: Long): List<SetWordName>
+
+    /**
+     * Get all words for a specific set with their configuration details.
+     * Joins set_words with words to get word name, config type, letter index, and image info.
+     *
+     * @param setId The ID of the set
+     * @return List of SetWordDetail rows with full word configuration
+     */
+    @Query("""
+        SELECT w.word AS wordName,
+               sw.configurationType,
+               sw.selectedLetterIndex,
+               sw.imagePath,
+               CASE WHEN w.imagePath IS NOT NULL THEN 1 ELSE 0 END AS wordHasImage
+        FROM set_words sw
+        INNER JOIN words w ON w.id = sw.wordId
+        WHERE sw.setId = :setId
+    """)
+    suspend fun getSetWordsWithDetails(setId: Long): List<SetWordDetail>
 }

@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Word
+import com.example.app.data.model.AiGenerationResult
+import com.example.app.data.repository.GeminiRepository
+import com.example.app.data.repository.GenerationPhase
 import com.example.app.data.repository.WordRepository
 import com.example.app.util.ImageStorageManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,12 +32,25 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private val wordRepository = WordRepository(database.wordDao())
     private val sessionManager = SessionManager.getInstance(application)
     private val imageStorageManager = ImageStorageManager(application)
+    private val activityDao = database.activityDao()
+    private val setDao = database.setDao()
+    private val geminiRepository = GeminiRepository()
+
+    // Cached existing set titles for regeneration support
+    private var cachedExistingSetTitles: List<String> = emptyList()
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
 
+    private val _generationPhase = MutableStateFlow<GenerationPhase>(GenerationPhase.Idle)
+    val generationPhase: StateFlow<GenerationPhase> = _generationPhase.asStateFlow()
+
     // Current user ID (null if not logged in)
     private var currentUserId: Long? = null
+
+    // Cached generation context for regeneration
+    private var lastGenerationPrompt: String = ""
+    private var lastSelectedWords: List<Word> = emptyList()
 
     init {
         // Observe the current user session
@@ -483,6 +499,226 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         val word = _uiState.value.wordInput.trim()
         return word.isNotBlank() && word.all { it.isLetter() } && !_uiState.value.isLoading
     }
+
+    /**
+     * Show the Activity Creation modal.
+     */
+    fun showActivityCreationModal() {
+        _uiState.update { it.copy(isActivityCreationModalVisible = true) }
+    }
+
+    /**
+     * Hide the Activity Creation modal and reset its state.
+     */
+    fun hideActivityCreationModal() {
+        _generationPhase.value = GenerationPhase.Idle
+        _uiState.update {
+            it.copy(
+                isActivityCreationModalVisible = false,
+                activityInput = "",
+                selectedActivityWordIds = emptySet(),
+                isActivityCreationLoading = false
+            )
+        }
+    }
+
+    /**
+     * Update the activity input text.
+     */
+    fun onActivityInputChanged(input: String) {
+        _uiState.update {
+            it.copy(activityInput = input)
+        }
+    }
+
+    /**
+     * Toggle word selection for activity creation.
+     */
+    fun onActivityWordSelectionChanged(wordId: Long, isSelected: Boolean) {
+        _uiState.update { state: LessonUiState ->
+            val currentSelection = state.selectedActivityWordIds
+            val newSelection = if (isSelected) {
+                currentSelection + wordId
+            } else {
+                currentSelection - wordId
+            }
+            state.copy(selectedActivityWordIds = newSelection)
+        }
+    }
+
+    /**
+     * Select all words for activity creation.
+     */
+    fun onSelectAllActivityWords() {
+        _uiState.update { state: LessonUiState ->
+            val allWordIds = state.words.map { it.id }.toSet()
+            // If all words are already selected, deselect all; otherwise select all
+            val newSelection = if (state.selectedActivityWordIds == allWordIds) {
+                emptySet()
+            } else {
+                allWordIds
+            }
+            state.copy(selectedActivityWordIds = newSelection)
+        }
+    }
+
+    /**
+     * Generate activity using AI with selected words.
+     * Stores the generated JSON result and signals completion via callback.
+     */
+    fun createActivity(onGenerationComplete: (String) -> Unit) {
+        val userId = currentUserId
+        if (userId == null || userId == 0L) {
+            _uiState.update { it.copy(activityError = "Please log in to generate activities") }
+            return
+        }
+
+        val activityDescription = _uiState.value.activityInput.trim()
+        val selectedWordIds = _uiState.value.selectedActivityWordIds
+
+        if (activityDescription.isBlank() || selectedWordIds.isEmpty()) {
+            _uiState.update { it.copy(activityError = "Please enter a description and select at least one word") }
+            return
+        }
+
+        val selectedWords = _uiState.value.words
+            .filter { selectedWordIds.contains(it.id) }
+
+        // Cache for regeneration
+        lastGenerationPrompt = activityDescription
+        lastSelectedWords = selectedWords
+
+        _uiState.update { it.copy(isActivityCreationLoading = true, activityError = null) }
+        _generationPhase.value = GenerationPhase.Filtering
+
+        viewModelScope.launch {
+            // Fetch existing titles for similarity detection
+            val existingActivityTitles = activityDao.getActivitiesByUserIdOnce(userId).map { it.title }
+            val existingSetTitles = setDao.getSetsWithWordNames(userId).map { it.setTitle }.distinct()
+            cachedExistingSetTitles = existingSetTitles
+
+            val result = geminiRepository.generateActivity(
+                activityDescription,
+                selectedWords,
+                existingActivityTitles = existingActivityTitles,
+                existingSetTitles = existingSetTitles
+            ) { phase ->
+                _generationPhase.value = phase
+            }
+
+            when (result) {
+                is AiGenerationResult.Success -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    val jsonResult = com.google.gson.Gson().toJson(result.data)
+                    _uiState.update {
+                        it.copy(
+                            isActivityCreationModalVisible = false,
+                            activityInput = "",
+                            selectedActivityWordIds = emptySet(),
+                            isActivityCreationLoading = false,
+                            generatedJsonResult = jsonResult
+                        )
+                    }
+                    onGenerationComplete(jsonResult)
+                }
+                is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    _uiState.update {
+                        it.copy(
+                            isActivityCreationLoading = false,
+                            activityError = result.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Regenerate a single set using the same GeminiRepository that did the original generation.
+     * Reuses cached filtered words from Step 1.
+     */
+    fun regenerateSet(
+        currentSetTitle: String,
+        currentSetDescription: String,
+        onResult: (String?) -> Unit
+    ) {
+        if (lastSelectedWords.isEmpty()) {
+            onResult(null)
+            return
+        }
+
+        viewModelScope.launch {
+            val result = geminiRepository.regenerateSet(
+                prompt = lastGenerationPrompt,
+                availableWords = lastSelectedWords,
+                currentSetTitle = currentSetTitle,
+                currentSetDescription = currentSetDescription,
+                existingSetTitles = cachedExistingSetTitles,
+                onPhaseChange = { phase ->
+                    _generationPhase.value = phase
+                }
+            )
+
+            when (result) {
+                is AiGenerationResult.Success -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    val gson = com.google.gson.Gson()
+                    onResult(gson.toJson(result.data))
+                }
+                is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    onResult(null)
+                }
+            }
+        }
+    }
+
+    /**
+     * Generate one additional set to append to the existing generated sets.
+     * Reuses the regenerateSet pipeline, passing all existing titles as avoidance context.
+     */
+    fun addMoreSet(
+        existingSetTitles: List<String>,
+        existingSetDescriptions: List<String>,
+        onResult: (String?) -> Unit
+    ) {
+        if (lastSelectedWords.isEmpty()) {
+            onResult(null)
+            return
+        }
+
+        // Combine existing titles into avoidance context for the AI
+        val avoidTitle = existingSetTitles.joinToString(", ").take(50)
+        val avoidDescription = existingSetDescriptions.joinToString("; ").take(100)
+
+        viewModelScope.launch {
+            val allTitlesToAvoid = (cachedExistingSetTitles + existingSetTitles).distinct()
+
+            val result = geminiRepository.regenerateSet(
+                prompt = lastGenerationPrompt,
+                availableWords = lastSelectedWords,
+                currentSetTitle = avoidTitle,
+                currentSetDescription = avoidDescription,
+                existingSetTitles = allTitlesToAvoid,
+                onPhaseChange = { phase ->
+                    _generationPhase.value = phase
+                }
+            )
+
+            when (result) {
+                is AiGenerationResult.Success -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    val gson = com.google.gson.Gson()
+                    onResult(gson.toJson(result.data))
+                }
+                is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    onResult(null)
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -505,6 +741,13 @@ data class LessonUiState(
     val editSelectedMediaUri: Uri? = null,
     val editInputError: String? = null,
     val editImageError: String? = null,
-    val isEditLoading: Boolean = false
+    val isEditLoading: Boolean = false,
+    // Activity creation modal state
+    val isActivityCreationModalVisible: Boolean = false,
+    val activityInput: String = "",
+    val selectedActivityWordIds: Set<Long> = emptySet(),
+    val isActivityCreationLoading: Boolean = false,
+    val activityError: String? = null,
+    val generatedJsonResult: String? = null
 )
 

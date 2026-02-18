@@ -259,14 +259,14 @@ fun YourActivitiesScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // Floating Add Activity Button
+        // Floating Action Button
         Button(
             onClick = { onNavigate(8) },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 96.dp)
-                .width(207.dp)
-                .height(75.dp),
+                .height(75.dp)
+                .width(180.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF3FA9F8)
             ),
@@ -281,8 +281,8 @@ fun YourActivitiesScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Add an Activity",
-                fontSize = 20.sp,
+                text = "Add Activity",
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.White
             )

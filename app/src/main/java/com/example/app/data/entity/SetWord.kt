@@ -13,7 +13,7 @@ import androidx.room.PrimaryKey
  * @property id Auto-generated primary key
  * @property setId Foreign key reference to the Set
  * @property wordId Foreign key reference to the Word
- * @property configurationType The type of configuration for this word (e.g., "fill in the blank", "identification", "air writing")
+ * @property configurationType The type of configuration for this word (e.g., "fill in the blanks", "name the picture", "write the word")
  * @property selectedLetterIndex The index of the selected letter for "Fill in the Blank" configuration (default: 0)
  * @property imagePath Optional image path for "Name the Picture" question type
  */
@@ -44,7 +44,7 @@ data class SetWord(
     val id: Long = 0,
     val setId: Long,
     val wordId: Long,
-    val configurationType: String, // "fill in the blank", "identification", "air writing"
+    val configurationType: String, // "fill in the blanks", "name the picture", "write the word"
     val selectedLetterIndex: Int = 0, // Index of selected letter for "Fill in the Blank"
     @ColumnInfo(name = "imagePath")
     val imagePath: String? = null // Optional image path for "Name the Picture" question type
