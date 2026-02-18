@@ -1,9 +1,11 @@
 package com.example.app.ui.feature.learn.generate
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +17,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -222,6 +226,13 @@ fun AISetReviewScreen(
                                 )
                             })
                         },
+                        onExistingWordRemove = { wordIndex ->
+                            onEditableSetsChange(editableSets.toMutableList().apply {
+                                this[currentSetIndex] = set.copy(
+                                    existingWords = set.existingWords.filterIndexed { i, _ -> i != wordIndex }
+                                )
+                            })
+                        },
                         onDiscardSet = onDiscardSet,
                         onRegenerateSet = {
                             isRegenerating = true
@@ -255,20 +266,31 @@ fun AISetReviewScreen(
                                             } else null
                                         }
 
-                                        onEditableSetsChange(editableSets.toMutableList().apply {
-                                            this[currentSetIndex] = EditableSet(
-                                                title = newSet.title,
-                                                description = newSet.description,
-                                                words = newSet.words.map { word ->
-                                                    EditableWord(
-                                                        word = word.word,
-                                                        configurationType = mapAiConfigTypeToUi(word.configurationType),
-                                                        selectedLetterIndex = word.selectedLetterIndex,
-                                                        hasImage = word.word in wordsWithImages
-                                                    )
-                                                },
-                                                titleSimilarityMatch = newTitleSimilarityMatch
+                                        val regeneratedWords = newSet.words.map { word ->
+                                            EditableWord(
+                                                word = word.word,
+                                                configurationType = mapAiConfigTypeToUi(word.configurationType),
+                                                selectedLetterIndex = word.selectedLetterIndex,
+                                                hasImage = word.word in wordsWithImages
                                             )
+                                        }
+
+                                        onEditableSetsChange(editableSets.toMutableList().apply {
+                                            val currentEditableSet = this[currentSetIndex]
+                                            if (currentEditableSet.mergeDecision == MergeDecision.MERGE) {
+                                                // Merged mode: only replace new words, preserve merge state
+                                                this[currentSetIndex] = currentEditableSet.copy(
+                                                    words = regeneratedWords
+                                                )
+                                            } else {
+                                                // Normal mode: replace entire set
+                                                this[currentSetIndex] = EditableSet(
+                                                    title = newSet.title,
+                                                    description = newSet.description,
+                                                    words = regeneratedWords,
+                                                    titleSimilarityMatch = newTitleSimilarityMatch
+                                                )
+                                            }
                                         })
                                     }
                                 } catch (e: Exception) {
@@ -376,7 +398,7 @@ fun AISetReviewScreen(
                                 editableSets.filter {
                                     it.titleSimilarityDecision != TitleSimilarityDecision.SKIP
                                 }.forEach { set ->
-                                    val selectedWords = set.words.map { word ->
+                                    val selectedNewWords = set.words.map { word ->
                                         SetRepository.SelectedWordConfig(
                                             wordName = word.word,
                                             configurationType = word.configurationType,
@@ -385,11 +407,21 @@ fun AISetReviewScreen(
                                     }
 
                                     val result = if (set.mergeDecision == MergeDecision.MERGE && set.overlapMatch != null) {
-                                        // Merge path: add only new words to existing set
-                                        setRepository.addWordsToExistingSet(
+                                        // Merge path: full sync of existing + new words
+                                        val selectedExistingWords = set.existingWords.map { word ->
+                                            SetRepository.SelectedWordConfig(
+                                                wordName = word.word,
+                                                configurationType = word.configurationType,
+                                                selectedLetterIndex = word.selectedLetterIndex
+                                            )
+                                        }
+                                        setRepository.updateExistingSetWithMerge(
                                             setId = set.overlapMatch.matchedSetId,
                                             userId = userId,
-                                            newWords = selectedWords
+                                            title = set.title,
+                                            description = set.description,
+                                            existingWords = selectedExistingWords,
+                                            newWords = selectedNewWords
                                         )
                                     } else {
                                         // Create path: save as new set (existing behavior)
@@ -397,7 +429,7 @@ fun AISetReviewScreen(
                                             title = set.title,
                                             description = set.description,
                                             userId = userId,
-                                            selectedWords = selectedWords
+                                            selectedWords = selectedNewWords
                                         )
                                     }
 
@@ -433,7 +465,8 @@ fun AISetReviewScreen(
                             val match = set.overlapMatch ?: return@SetReviewCard
                             val newWordNames = match.newWords.map { it.lowercase() }.toSet()
                             val newWordsOnly = set.words.filter { it.word.lowercase() in newWordNames }
-                            onEditableSetsChange(editableSets.toMutableList().apply {
+                            // Immediately show merge state with new words
+                            val updatedSets = editableSets.toMutableList().apply {
                                 this[currentSetIndex] = set.copy(
                                     title = match.matchedSetTitle,
                                     words = newWordsOnly,
@@ -441,23 +474,37 @@ fun AISetReviewScreen(
                                     preMergeTitle = set.title,
                                     preMergeWords = set.words
                                 )
-                            })
+                            }.toList()
+                            onEditableSetsChange(updatedSets)
+                            // Fetch existing set words from DB asynchronously
+                            coroutineScope.launch {
+                                val existingSetDetails = setRepository.getSetDetails(match.matchedSetId)
+                                if (existingSetDetails != null) {
+                                    val existingEditableWords = setRepository.getExistingSetWordsWithDetails(match.matchedSetId)
+                                    if (existingEditableWords != null) {
+                                        onEditableSetsChange(updatedSets.toMutableList().apply {
+                                            val current = this[currentSetIndex]
+                                            this[currentSetIndex] = current.copy(
+                                                description = existingSetDetails.set.description ?: current.description,
+                                                existingWords = existingEditableWords.map { w ->
+                                                    EditableWord(
+                                                        word = w.word,
+                                                        configurationType = mapAiConfigTypeToUi(w.configurationType),
+                                                        selectedLetterIndex = w.selectedLetterIndex,
+                                                        hasImage = w.hasImage
+                                                    )
+                                                },
+                                                existingDescription = existingSetDetails.set.description
+                                            )
+                                        })
+                                    }
+                                }
+                            }
                         },
                         onCreateAsNew = {
                             onEditableSetsChange(editableSets.toMutableList().apply {
                                 this[currentSetIndex] = set.copy(
                                     mergeDecision = MergeDecision.CREATE_NEW
-                                )
-                            })
-                        },
-                        onUndoDecision = {
-                            onEditableSetsChange(editableSets.toMutableList().apply {
-                                this[currentSetIndex] = set.copy(
-                                    title = set.preMergeTitle ?: set.title,
-                                    words = set.preMergeWords ?: set.words,
-                                    mergeDecision = MergeDecision.UNDECIDED,
-                                    preMergeTitle = null,
-                                    preMergeWords = null
                                 )
                             })
                         },
@@ -496,12 +543,6 @@ fun AISetReviewScreen(
             }
         }
 
-        // Bottom Navigation
-        BottomNavBar(
-            selectedTab = 3,
-            onTabSelected = { onNavigate(it) },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
     }
 }
 
@@ -510,6 +551,7 @@ private fun SetReviewCard(
     set: EditableSet,
     onSetChange: (EditableSet) -> Unit,
     onWordRemove: (Int) -> Unit,
+    onExistingWordRemove: (Int) -> Unit = {},
     isRegenerating: Boolean,
     isAddingMoreSet: Boolean = false,
     onRegenerateSet: () -> Unit,
@@ -521,7 +563,6 @@ private fun SetReviewCard(
     onProceedClick: () -> Unit = {},
     onMergeIntoExisting: () -> Unit = {},
     onCreateAsNew: () -> Unit = {},
-    onUndoDecision: () -> Unit = {},
     onDiscardSet: () -> Unit = {},
     onKeepTitle: () -> Unit = {},
     onSkipSet: () -> Unit = {},
@@ -612,7 +653,8 @@ private fun SetReviewCard(
                     }
                 }
                 MergeDecision.MERGE -> {
-                    Row(
+                    // Persistent green header bar
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
@@ -624,31 +666,29 @@ private fun SetReviewCard(
                                 color = Color(0xFFA5D6A7),
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Text(
-                                text = "Merging into \"${set.overlapMatch.matchedSetTitle}\"",
+                                text = "\u270F\uFE0F",
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = "Editing \"${set.overlapMatch.matchedSetTitle}\"",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF2E7D32)
                             )
-                            Text(
-                                text = "${set.words.size} new word${if (set.words.size != 1) "s" else ""} will be added",
-                                fontSize = 13.sp,
-                                color = Color(0xFF666666)
-                            )
                         }
-                        TextButton(onClick = onUndoDecision) {
-                            Text(
-                                text = "Undo",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF2E7D32)
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Changes will update this existing set",
+                            fontSize = 13.sp,
+                            color = Color(0xFF666666)
+                        )
                     }
                 }
                 MergeDecision.CREATE_NEW -> {
@@ -665,10 +705,9 @@ private fun SetReviewCard(
                                 shape = RoundedCornerShape(12.dp)
                             )
                             .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column {
                             Text(
                                 text = "Creating as new set",
                                 fontSize = 14.sp,
@@ -679,14 +718,6 @@ private fun SetReviewCard(
                                 text = "Similar to \"${set.overlapMatch.matchedSetTitle}\"",
                                 fontSize = 13.sp,
                                 color = Color(0xFF666666)
-                            )
-                        }
-                        TextButton(onClick = onUndoDecision) {
-                            Text(
-                                text = "Undo",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF3FA9F8)
                             )
                         }
                     }
@@ -906,85 +937,241 @@ private fun SetReviewCard(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Words Added Label with Regenerate Button
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Words Added",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF0B0B0B)
-            )
+        // === MERGED STATE: Two-section layout ===
+        if (set.mergeDecision == MergeDecision.MERGE && set.existingWords.isNotEmpty()) {
+            // Collapsible "Already in set" section
+            var existingSectionExpanded by remember { mutableStateOf(true) }
 
-            TextButton(
-                onClick = onRegenerateSet,
-                enabled = !isRegenerating,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = Color(0xFF3FA9F8)
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { existingSectionExpanded = !existingSectionExpanded }
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isRegenerating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = Color(0xFF3FA9F8),
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Regenerating...",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        imageVector = if (existingSectionExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                        contentDescription = if (existingSectionExpanded) "Collapse" else "Expand",
+                        modifier = Modifier.size(20.dp),
+                        tint = Color(0xFF666666)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Regenerate Set",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
+                        text = "Already in set (${set.existingWords.size} word${if (set.existingWords.size != 1) "s" else ""})",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF0B0B0B)
                     )
                 }
             }
-        }
 
-        // Words List
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            set.words.forEachIndexed { wordIndex, word ->
-                WordReviewItem(
-                    index = wordIndex + 1,
-                    word = word,
-                    onConfigurationChange = { newConfig ->
-                        onSetChange(
-                            set.copy(
-                                words = set.words.toMutableList().apply {
-                                    this[wordIndex] = word.copy(configurationType = newConfig)
-                                }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize()
+            ) {
+                if (existingSectionExpanded) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        set.existingWords.forEachIndexed { wordIndex, word ->
+                            WordReviewItem(
+                                index = wordIndex + 1,
+                                word = word,
+                                onConfigurationChange = { newConfig ->
+                                    onSetChange(
+                                        set.copy(
+                                            existingWords = set.existingWords.toMutableList().apply {
+                                                this[wordIndex] = word.copy(configurationType = newConfig)
+                                            }
+                                        )
+                                    )
+                                },
+                                onLetterSelected = { letterIndex ->
+                                    onSetChange(
+                                        set.copy(
+                                            existingWords = set.existingWords.toMutableList().apply {
+                                                this[wordIndex] = word.copy(selectedLetterIndex = letterIndex)
+                                            }
+                                        )
+                                    )
+                                },
+                                onRemove = { onExistingWordRemove(wordIndex) }
                             )
-                        )
-                    },
-                    onLetterSelected = { letterIndex ->
-                        onSetChange(
-                            set.copy(
-                                words = set.words.toMutableList().apply {
-                                    this[wordIndex] = word.copy(selectedLetterIndex = letterIndex)
-                                }
-                            )
-                        )
-                    },
-                    onRemove = { onWordRemove(wordIndex) }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // "Adding to set" section header with Regenerate
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Adding to set (${set.words.size} new word${if (set.words.size != 1) "s" else ""})",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color(0xFF0B0B0B)
                 )
+
+                TextButton(
+                    onClick = onRegenerateSet,
+                    enabled = !isRegenerating,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFF3FA9F8)
+                    )
+                ) {
+                    if (isRegenerating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color(0xFF3FA9F8),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Regenerating...",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Regenerate",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            // New words list (continuous numbering from existing)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val existingCount = set.existingWords.size
+                set.words.forEachIndexed { wordIndex, word ->
+                    WordReviewItem(
+                        index = existingCount + wordIndex + 1,
+                        word = word,
+                        onConfigurationChange = { newConfig ->
+                            onSetChange(
+                                set.copy(
+                                    words = set.words.toMutableList().apply {
+                                        this[wordIndex] = word.copy(configurationType = newConfig)
+                                    }
+                                )
+                            )
+                        },
+                        onLetterSelected = { letterIndex ->
+                            onSetChange(
+                                set.copy(
+                                    words = set.words.toMutableList().apply {
+                                        this[wordIndex] = word.copy(selectedLetterIndex = letterIndex)
+                                    }
+                                )
+                            )
+                        },
+                        onRemove = { onWordRemove(wordIndex) }
+                    )
+                }
+            }
+        } else {
+            // === NORMAL STATE: Single word list ===
+            // Words Added Label with Regenerate Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Words Added",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color(0xFF0B0B0B)
+                )
+
+                TextButton(
+                    onClick = onRegenerateSet,
+                    enabled = !isRegenerating,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFF3FA9F8)
+                    )
+                ) {
+                    if (isRegenerating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color(0xFF3FA9F8),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Regenerating...",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Regenerate Set",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            // Words List
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                set.words.forEachIndexed { wordIndex, word ->
+                    WordReviewItem(
+                        index = wordIndex + 1,
+                        word = word,
+                        onConfigurationChange = { newConfig ->
+                            onSetChange(
+                                set.copy(
+                                    words = set.words.toMutableList().apply {
+                                        this[wordIndex] = word.copy(configurationType = newConfig)
+                                    }
+                                )
+                            )
+                        },
+                        onLetterSelected = { letterIndex ->
+                            onSetChange(
+                                set.copy(
+                                    words = set.words.toMutableList().apply {
+                                        this[wordIndex] = word.copy(selectedLetterIndex = letterIndex)
+                                    }
+                                )
+                            )
+                        },
+                        onRemove = { onWordRemove(wordIndex) }
+                    )
+                }
             }
         }
 
@@ -1370,6 +1557,8 @@ data class EditableSet(
     val mergeDecision: MergeDecision = MergeDecision.UNDECIDED,
     val preMergeTitle: String? = null,
     val preMergeWords: List<EditableWord>? = null,
+    val existingWords: List<EditableWord> = emptyList(),
+    val existingDescription: String? = null,
     val titleSimilarityMatch: TitleSimilarityInfo? = null,
     val titleSimilarityDecision: TitleSimilarityDecision = TitleSimilarityDecision.UNDECIDED
 )

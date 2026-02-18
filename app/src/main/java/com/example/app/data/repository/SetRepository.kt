@@ -286,7 +286,8 @@ class SetRepository(
         val word: String,
         val configurationType: String,
         val selectedLetterIndex: Int = 0,
-        val imagePath: String? = null
+        val imagePath: String? = null,
+        val hasImage: Boolean = false
     )
 
     /**
@@ -516,6 +517,120 @@ class SetRepository(
         }
 
         results
+    }
+
+    /**
+     * Get the words of an existing set with full configuration details.
+     * Used to populate the "Already in set" section when merging.
+     *
+     * @param setId The ID of the set
+     * @return List of WordWithConfig containing word details, or null if set not found
+     */
+    suspend fun getExistingSetWordsWithDetails(setId: Long): List<WordWithConfig>? = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val details = setDao.getSetWordsWithDetails(setId)
+            if (details.isEmpty()) {
+                // Could be empty set or set not found - check if set exists
+                val set = setDao.getSetById(setId) ?: return@withContext null
+                emptyList()
+            } else {
+                details.map { detail ->
+                    WordWithConfig(
+                        word = detail.wordName,
+                        configurationType = detail.configurationType,
+                        selectedLetterIndex = detail.selectedLetterIndex,
+                        imagePath = detail.imagePath,
+                        hasImage = detail.wordHasImage
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG_REPO, "Error getting existing set words: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Full merge save: sync existing word changes + add new words + update metadata.
+     * All operations in a single transaction.
+     *
+     * @param setId The ID of the existing set to update
+     * @param userId The user ID
+     * @param title Updated set title
+     * @param description Updated set description
+     * @param existingWords The (possibly edited) existing words to sync
+     * @param newWords New words to add
+     * @return AddSetResult.Success with setId, or Error
+     */
+    suspend fun updateExistingSetWithMerge(
+        setId: Long,
+        userId: Long,
+        title: String,
+        description: String?,
+        existingWords: List<SelectedWordConfig>,
+        newWords: List<SelectedWordConfig>
+    ): AddSetResult = withContext(Dispatchers.IO) {
+        Log.d(TAG_REPO, "updateExistingSetWithMerge() for set $setId")
+
+        if (title.isBlank()) {
+            return@withContext AddSetResult.Error("Set title cannot be empty")
+        }
+
+        val allWords = existingWords + newWords
+        if (allWords.isEmpty()) {
+            return@withContext AddSetResult.Error("Set must contain at least one word")
+        }
+
+        // Check title uniqueness (excluding this set)
+        if (setDao.setTitleExistsForUserExcluding(userId, title.trim(), setId)) {
+            return@withContext AddSetResult.Error("A set with this title already exists")
+        }
+
+        val userWords = wordDao.getWordsByUserIdOnce(userId)
+        val wordMap = userWords.associateBy { it.word }
+        val (allExist, missing) = validateWordsExist(allWords, wordMap)
+
+        if (!allExist) {
+            return@withContext AddSetResult.Error(
+                "Some words were not found: ${missing.joinToString(", ")}"
+            )
+        }
+
+        return@withContext try {
+            database.withTransaction {
+                // Delete all existing set-word relationships and rebuild
+                setWordDao.deleteSetWords(setId)
+
+                val setWordsToInsert = allWords.map { selected ->
+                    val word = wordMap[selected.wordName]!!
+                    SetWord(
+                        setId = setId,
+                        wordId = word.id,
+                        configurationType = selected.configurationType,
+                        selectedLetterIndex = selected.selectedLetterIndex,
+                        imagePath = selected.imagePath
+                    )
+                }
+
+                if (setWordsToInsert.isNotEmpty()) {
+                    setWordDao.insertSetWords(setWordsToInsert)
+                }
+
+                setDao.updateSet(
+                    setId = setId,
+                    title = title.trim(),
+                    description = description?.trim(),
+                    itemCount = setWordsToInsert.size,
+                    updatedAt = System.currentTimeMillis()
+                )
+
+                Log.d(TAG_REPO, "Merged set $setId: ${existingWords.size} existing + ${newWords.size} new = ${setWordsToInsert.size} total")
+                setId
+            }.let { AddSetResult.Success(it) }
+        } catch (e: Exception) {
+            Log.e(TAG_REPO, "Failed to merge-update set: ${e.message}", e)
+            AddSetResult.Error("Failed to update set: ${e.message ?: "Unknown error"}")
+        }
     }
 
     /**

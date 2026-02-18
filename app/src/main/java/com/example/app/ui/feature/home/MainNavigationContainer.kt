@@ -818,8 +818,8 @@ fun MainNavigationContainer(
                     removeAt(currentAiSetIndex)
                 }
                 if (updatedSets.isEmpty()) {
-                    // No sets left — navigate back
-                    currentScreen = 6
+                    // No sets left — navigate back to LessonScreen
+                    currentScreen = 3
                 } else {
                     aiEditableSets = updatedSets
                     if (currentAiSetIndex >= updatedSets.size) {

@@ -14,6 +14,14 @@ data class SetWordName(
     val wordName: String
 )
 
+data class SetWordDetail(
+    val wordName: String,
+    val configurationType: String,
+    val selectedLetterIndex: Int,
+    val imagePath: String?,
+    val wordHasImage: Boolean
+)
+
 @Dao
 interface SetDao {
 
@@ -146,4 +154,23 @@ interface SetDao {
         WHERE s.userId = :userId
     """)
     suspend fun getSetsWithWordNames(userId: Long): List<SetWordName>
+
+    /**
+     * Get all words for a specific set with their configuration details.
+     * Joins set_words with words to get word name, config type, letter index, and image info.
+     *
+     * @param setId The ID of the set
+     * @return List of SetWordDetail rows with full word configuration
+     */
+    @Query("""
+        SELECT w.word AS wordName,
+               sw.configurationType,
+               sw.selectedLetterIndex,
+               sw.imagePath,
+               CASE WHEN w.imagePath IS NOT NULL THEN 1 ELSE 0 END AS wordHasImage
+        FROM set_words sw
+        INNER JOIN words w ON w.id = sw.wordId
+        WHERE sw.setId = :setId
+    """)
+    suspend fun getSetWordsWithDetails(setId: Long): List<SetWordDetail>
 }
