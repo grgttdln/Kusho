@@ -28,6 +28,7 @@ enum class ConnectionState {
     BLUETOOTH_OFF,           // Bluetooth is disabled
     NO_WATCH,               // Bluetooth on, but no watch paired at all
     WATCH_PAIRED_NO_APP,    // Watch paired, but Kusho app not installed/running
+    WATCH_NEEDS_HANDSHAKE,  // Kusho app found but pairing handshake not completed
     WATCH_CONNECTED         // Watch paired AND Kusho app running
 }
 
@@ -39,6 +40,15 @@ data class WatchDeviceInfo(
     val connectionState: ConnectionState = ConnectionState.BLUETOOTH_OFF,
     val batteryPercentage: Int? = null,
     val lastUpdated: Long = System.currentTimeMillis()
+)
+
+/**
+ * Represents an incoming pairing request from a watch
+ */
+data class PairingRequestEvent(
+    val nodeId: String = "",
+    val watchName: String = "Smartwatch",
+    val timestamp: Long = 0L
 )
 
 class WatchConnectionManager private constructor(private val context: Context) {
@@ -81,6 +91,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
     val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
 
+    // Pairing request from watch
+    private val _pairingRequest = MutableStateFlow<PairingRequestEvent?>(null)
+    val pairingRequest: StateFlow<PairingRequestEvent?> = _pairingRequest.asStateFlow()
+
     companion object {
         @Volatile
         private var INSTANCE: WatchConnectionManager? = null
@@ -103,6 +117,12 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
         private const val MESSAGE_PATH_PING = "/kusho/ping"
         private const val MESSAGE_PATH_PONG = "/kusho/pong"
+
+        // Pairing handshake message paths
+        private const val MESSAGE_PATH_PAIRING_REQUEST = "/pairing_request"
+        private const val MESSAGE_PATH_PAIRING_ACCEPTED = "/pairing_accepted"
+        private const val MESSAGE_PATH_PAIRING_DECLINED = "/pairing_declined"
+        private const val PREFS_PAIRING = "kusho_pairing"
 
         // Learn Mode message paths
         private const val MESSAGE_PATH_LEARN_MODE_SKIP = "/learn_mode_skip"
@@ -151,7 +171,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                     when (state) {
                         BluetoothAdapter.STATE_OFF -> {
-                            // Bluetooth turned off - immediately update to disconnected
+                            // Bluetooth turned off - clear pairing so handshake is required on reconnect
+                            this@WatchConnectionManager.context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+                                .edit().remove("paired_watch_node_id").apply()
+                            Log.d(TAG, "🔵 Bluetooth OFF — cleared paired_watch_node_id")
                             _deviceInfo.value = WatchDeviceInfo(
                                 isConnected = false,
                                 connectionState = ConnectionState.BLUETOOTH_OFF
@@ -250,18 +273,34 @@ class WatchConnectionManager private constructor(private val context: Context) {
             
             when {
                 watchNodeWithApp != null -> {
-                    // CASE 3: Watch paired AND Kusho app installed/running
                     val deviceName = getDeviceName(watchNodeWithApp.displayName)
-                    _deviceInfo.value = WatchDeviceInfo(
-                        name = deviceName,
-                        nodeId = watchNodeWithApp.id,
-                        isConnected = true,
-                        connectionState = ConnectionState.WATCH_CONNECTED,
-                        batteryPercentage = 0, // Will be updated by battery request
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                    requestBatteryStatus(watchNodeWithApp)
-                    return true
+                    val pairedNodeId = getPairedWatchNodeId()
+                    
+                    if (pairedNodeId != null && watchNodeWithApp.id == pairedNodeId) {
+                        // CASE 3a: Kusho app found AND matches paired node — fully connected
+                        _deviceInfo.value = WatchDeviceInfo(
+                            name = deviceName,
+                            nodeId = watchNodeWithApp.id,
+                            isConnected = true,
+                            connectionState = ConnectionState.WATCH_CONNECTED,
+                            batteryPercentage = _deviceInfo.value.batteryPercentage, // preserve existing
+                            lastUpdated = System.currentTimeMillis()
+                        )
+                        requestBatteryStatus(watchNodeWithApp)
+                        return true
+                    } else {
+                        // CASE 3b: Kusho app found but node not paired — needs handshake
+                        Log.d(TAG, "⏳ Watch ${watchNodeWithApp.id} has Kusho but is not paired (saved: $pairedNodeId)")
+                        _deviceInfo.value = WatchDeviceInfo(
+                            name = deviceName,
+                            nodeId = watchNodeWithApp.id,
+                            isConnected = false,
+                            connectionState = ConnectionState.WATCH_NEEDS_HANDSHAKE,
+                            batteryPercentage = null, // do NOT leak battery
+                            lastUpdated = System.currentTimeMillis()
+                        )
+                        return false
+                    }
                 }
                 
                 allNodes.isNotEmpty() -> {
@@ -371,7 +410,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * @param maskedIndex Index of the masked letter (for fill-in-the-blank)
      * @param configurationType The configuration type (e.g., "Fill in the Blank")
      */
-    fun sendLearnModeWordData(word: String, maskedIndex: Int, configurationType: String) {
+    fun sendLearnModeWordData(word: String, maskedIndex: Int, configurationType: String, dominantHand: String = "RIGHT") {
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
@@ -381,6 +420,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     put("word", word)
                     put("maskedIndex", maskedIndex)
                     put("configurationType", configurationType)
+                    put("dominantHand", dominantHand)
                 }.toString()
 
                 nodes.forEach { node ->
@@ -390,7 +430,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                         jsonPayload.toByteArray()
                     ).await()
                 }
-                Log.d(TAG, "✅ Word data sent to watch: $word (masked: $maskedIndex, type: $configurationType)")
+                Log.d(TAG, "✅ Word data sent to watch: $word (masked: $maskedIndex, type: $configurationType, hand: $dominantHand)")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to send word data to watch", e)
             }
@@ -549,10 +589,12 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 
                 Log.d(TAG, "🔋 Phone requesting battery - isConnected: ${currentDevice.isConnected}, state: ${currentDevice.connectionState}, nodeId: ${currentDevice.nodeId}")
                 
-                // Only request if watch is fully connected with app
+                // Only request if watch is fully connected with app AND paired
+                val pairedNodeId = getPairedWatchNodeId()
                 if (currentDevice.isConnected && 
                     currentDevice.connectionState == ConnectionState.WATCH_CONNECTED &&
-                    currentDevice.nodeId.isNotEmpty()) {
+                    currentDevice.nodeId.isNotEmpty() &&
+                    pairedNodeId != null && currentDevice.nodeId == pairedNodeId) {
                     
                     // Send immediate battery request (with retry)
                     repeat(3) { attempt ->
@@ -582,8 +624,45 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * Handle incoming messages from watch
      */
     private fun handleIncomingMessage(messageEvent: MessageEvent) {
-        Log.d(TAG, "📥 Processing message: ${messageEvent.path}")
+        Log.d(TAG, "📥 Processing message: ${messageEvent.path} from ${messageEvent.sourceNodeId}")
+        
+        // Data lockdown: sensor, gesture, and battery data must come from the paired watch node
+        val lockedDownPaths = setOf(
+            MESSAGE_PATH_LEARN_MODE_SKIP,
+            MESSAGE_PATH_LETTER_INPUT,
+            MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED,
+            MESSAGE_PATH_TUTORIAL_MODE_SKIP,
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
+            MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED,
+            MESSAGE_PATH_BATTERY_STATUS
+        )
+        
+        if (messageEvent.path in lockedDownPaths) {
+            val pairedNodeId = getPairedWatchNodeId()
+            if (pairedNodeId == null || messageEvent.sourceNodeId != pairedNodeId) {
+                Log.w(TAG, "⚠️ DATA LOCKDOWN: Ignoring ${messageEvent.path} from node ${messageEvent.sourceNodeId} (paired: $pairedNodeId)")
+                return
+            }
+        }
+        
         when (messageEvent.path) {
+            MESSAGE_PATH_PAIRING_REQUEST -> {
+                Log.d(TAG, "🤝 Pairing request received from watch: ${messageEvent.sourceNodeId}")
+                try {
+                    val json = org.json.JSONObject(String(messageEvent.data))
+                    val watchName = json.optString("watchName", "Smartwatch")
+                    _pairingRequest.value = PairingRequestEvent(
+                        nodeId = messageEvent.sourceNodeId,
+                        watchName = watchName,
+                        timestamp = System.currentTimeMillis()
+                    )
+                } catch (e: Exception) {
+                    _pairingRequest.value = PairingRequestEvent(
+                        nodeId = messageEvent.sourceNodeId,
+                        timestamp = System.currentTimeMillis()
+                    )
+                }
+            }
             MESSAGE_PATH_PING -> {
                 // Watch is checking if Kusho app is running - respond with PONG
                 Log.d(TAG, "🏓 Received PING from watch, sending PONG response")
@@ -678,6 +757,83 @@ class WatchConnectionManager private constructor(private val context: Context) {
             displayName.contains("Watch", ignoreCase = true) -> displayName
             else -> "Smartwatch" // Default name for non-Galaxy watches
         }
+    }
+    
+    /**
+     * Accept a pairing request from a watch.
+     * Saves the watch Node ID locally and sends /pairing_accepted back.
+     */
+    fun acceptPairing(nodeId: String) {
+        // Save the paired watch node ID
+        val prefs = context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+        prefs.edit().putString("paired_watch_node_id", nodeId).apply()
+        Log.d(TAG, "✅ Saved paired watch node ID: $nodeId")
+        
+        // Send acceptance message back to watch
+        scope.launch {
+            try {
+                messageClient.sendMessage(
+                    nodeId,
+                    MESSAGE_PATH_PAIRING_ACCEPTED,
+                    "accepted".toByteArray()
+                ).await()
+                Log.d(TAG, "✅ Pairing acceptance sent to watch $nodeId")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send pairing acceptance", e)
+            }
+        }
+        
+        // Clear the request and immediately promote to WATCH_CONNECTED
+        _pairingRequest.value = null
+        _deviceInfo.value = _deviceInfo.value.copy(
+            isConnected = true,
+            connectionState = ConnectionState.WATCH_CONNECTED
+        )
+        
+        // Trigger connection check + battery request now that pairing is saved
+        scope.launch {
+            checkConnection()
+        }
+    }
+    
+    /**
+     * Decline a pairing request from a watch.
+     * Sends /pairing_declined back to the requesting node.
+     */
+    fun declinePairing(nodeId: String) {
+        scope.launch {
+            try {
+                messageClient.sendMessage(
+                    nodeId,
+                    MESSAGE_PATH_PAIRING_DECLINED,
+                    "declined".toByteArray()
+                ).await()
+                Log.d(TAG, "❌ Pairing declined for watch $nodeId")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send pairing decline", e)
+            }
+        }
+        
+        // Remove saved pairing so device is truly unpaired
+        context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+            .edit().remove("paired_watch_node_id").apply()
+        Log.d(TAG, "🗑️ Cleared paired_watch_node_id from SharedPreferences")
+        
+        // Clear the request, reset battery, and move to WATCH_NEEDS_HANDSHAKE
+        _pairingRequest.value = null
+        _deviceInfo.value = _deviceInfo.value.copy(
+            batteryPercentage = null,
+            isConnected = false,
+            connectionState = ConnectionState.WATCH_NEEDS_HANDSHAKE
+        )
+    }
+    
+    /**
+     * Get the saved paired watch node ID (or null if not paired via handshake yet)
+     */
+    fun getPairedWatchNodeId(): String? {
+        return context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
+            .getString("paired_watch_node_id", null)
     }
     
     /**
@@ -795,8 +951,9 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * @param letterCase "uppercase" or "lowercase"
      * @param currentIndex Current letter index (1-based)
      * @param totalLetters Total number of letters in session
+     * @param dominantHand "LEFT" or "RIGHT" for model selection
      */
-    fun sendTutorialModeLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int) {
+    fun sendTutorialModeLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int, dominantHand: String = "RIGHT") {
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
@@ -806,6 +963,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     put("letterCase", letterCase)
                     put("currentIndex", currentIndex)
                     put("totalLetters", totalLetters)
+                    put("dominantHand", dominantHand)
                 }.toString()
 
                 nodes.forEach { node ->
@@ -815,7 +973,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                         jsonPayload.toByteArray()
                     ).await()
                 }
-                Log.d(TAG, "✅ Letter data sent to watch: $letter ($letterCase) [$currentIndex/$totalLetters]")
+                Log.d(TAG, "✅ Letter data sent to watch: $letter ($letterCase) [$currentIndex/$totalLetters] hand=$dominantHand")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to send letter data to watch", e)
             }

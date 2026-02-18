@@ -13,6 +13,7 @@ import com.example.app.data.repository.StudentTeacherRepository
 import com.example.app.data.repository.WordRepository
 import com.example.app.service.WatchConnectionManager
 import com.example.app.service.WatchDeviceInfo
+import com.example.app.service.PairingRequestEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -162,6 +163,23 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun requestDeviceInfo() {
         watchConnectionManager.requestDeviceInfo()
+    }
+    
+    // Expose pairing request from watch for UI to observe
+    val pairingRequest: StateFlow<PairingRequestEvent?> = watchConnectionManager.pairingRequest
+    
+    /**
+     * Accept a pairing request from watch
+     */
+    fun acceptPairingRequest(nodeId: String) {
+        watchConnectionManager.acceptPairing(nodeId)
+    }
+    
+    /**
+     * Decline a pairing request from watch
+     */
+    fun declinePairingRequest(nodeId: String) {
+        watchConnectionManager.declinePairing(nodeId)
     }
     
     /**

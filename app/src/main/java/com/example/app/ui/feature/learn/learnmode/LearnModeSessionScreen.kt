@@ -125,6 +125,7 @@ fun LearnModeSessionScreen(
     sessionKey: Int = 0,
     studentId: String = "",
     studentName: String = "",
+    dominantHand: String = "RIGHT",
     modifier: Modifier = Modifier,
     onSkip: () -> Unit = {},
     onAudioClick: () -> Unit = {},
@@ -354,7 +355,8 @@ fun LearnModeSessionScreen(
             watchConnectionManager.sendLearnModeWordData(
                 word = currentWord.word,
                 maskedIndex = currentWord.selectedLetterIndex,
-                configurationType = currentWord.configurationType
+                configurationType = currentWord.configurationType,
+                dominantHand = dominantHand
             )
 
             // Speak random phrase based on question type
@@ -437,7 +439,8 @@ fun LearnModeSessionScreen(
                                     watchConnectionManager.sendLearnModeWordData(
                                         word = currentWord.word,
                                         maskedIndex = currentWord.selectedLetterIndex,
-                                        configurationType = currentWord.configurationType
+                                        configurationType = currentWord.configurationType,
+                                        dominantHand = dominantHand
                                     )
                                 }
                             }
@@ -496,7 +499,8 @@ fun LearnModeSessionScreen(
                                     watchConnectionManager.sendLearnModeWordData(
                                         word = currentWord.word,
                                         maskedIndex = currentWord.selectedLetterIndex,
-                                        configurationType = currentWord.configurationType
+                                        configurationType = currentWord.configurationType,
+                                        dominantHand = dominantHand
                                     )
                                 }
                             }

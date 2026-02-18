@@ -23,5 +23,7 @@ data class Student(
 
     val gradeLevel: String,
 
-    val birthday: String
+    val birthday: String,
+
+    val dominantHand: String = "RIGHT"
 )

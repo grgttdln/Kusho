@@ -32,6 +32,7 @@ class WearMessageListenerService : WearableListenerService() {
         private const val MESSAGE_PATH_REQUEST_DEVICE_INFO = "/request_device_info"
         private const val MESSAGE_PATH_BATTERY_STATUS = "/battery_status"
         private const val MESSAGE_PATH_DEVICE_INFO = "/device_info"
+        private const val MESSAGE_PATH_PAIRING_ACCEPTED = "/pairing_accepted"
 
         // Learn Mode message paths
         private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
@@ -51,6 +52,14 @@ class WearMessageListenerService : WearableListenerService() {
         Log.d(TAG, "📨 Message received: ${messageEvent.path}")
         
         when (messageEvent.path) {
+            MESSAGE_PATH_PAIRING_ACCEPTED -> {
+                Log.d(TAG, "✅ Pairing accepted by phone! Saving paired status.")
+                val prefs = applicationContext.getSharedPreferences("kusho_prefs", android.content.Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putBoolean("is_paired", true)
+                    .putBoolean("is_skipped", false)
+                    .apply()
+            }
             MESSAGE_PATH_REQUEST_BATTERY -> {
                 Log.d(TAG, "🔋 Battery request received from phone")
                 sendBatteryStatusToPhone()
@@ -92,7 +101,7 @@ class WearMessageListenerService : WearableListenerService() {
 
     /**
      * Handle incoming word data for fill-in-the-blanks
-     * Expected JSON format: {"word": "APPLE", "maskedIndex": 2, "configurationType": "Fill in the Blank"}
+     * Expected JSON format: {"word": "APPLE", "maskedIndex": 2, "configurationType": "Fill in the Blank", "dominantHand": "RIGHT"}
      */
     private fun handleWordData(data: ByteArray) {
         try {
@@ -102,11 +111,12 @@ class WearMessageListenerService : WearableListenerService() {
             val word = json.optString("word", "")
             val maskedIndex = json.optInt("maskedIndex", -1)
             val configurationType = json.optString("configurationType", "")
+            val dominantHand = json.optString("dominantHand", "RIGHT")
 
-            Log.d(TAG, "📚 Parsed word data: word=$word, maskedIndex=$maskedIndex, type=$configurationType")
+            Log.d(TAG, "📚 Parsed word data: word=$word, maskedIndex=$maskedIndex, type=$configurationType, hand=$dominantHand")
 
             if (word.isNotEmpty()) {
-                LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType)
+                LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType, dominantHand)
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error parsing word data", e)
@@ -155,7 +165,7 @@ class WearMessageListenerService : WearableListenerService() {
 
     /**
      * Handle incoming letter data for air writing practice
-     * Expected JSON format: {"letter": "A", "letterCase": "uppercase", "currentIndex": 1, "totalLetters": 5}
+     * Expected JSON format: {"letter": "A", "letterCase": "uppercase", "currentIndex": 1, "totalLetters": 5, "dominantHand": "RIGHT"}
      */
     private fun handleLetterData(data: ByteArray) {
         try {
@@ -166,11 +176,12 @@ class WearMessageListenerService : WearableListenerService() {
             val letterCase = json.optString("letterCase", "")
             val currentIndex = json.optInt("currentIndex", 0)
             val totalLetters = json.optInt("totalLetters", 0)
+            val dominantHand = json.optString("dominantHand", "RIGHT")
 
-            Log.d(TAG, "📝 Parsed letter data: letter=$letter, case=$letterCase, index=$currentIndex/$totalLetters")
+            Log.d(TAG, "📝 Parsed letter data: letter=$letter, case=$letterCase, index=$currentIndex/$totalLetters, hand=$dominantHand")
 
             if (letter.isNotEmpty()) {
-                TutorialModeStateHolder.updateLetterData(letter, letterCase, currentIndex, totalLetters)
+                TutorialModeStateHolder.updateLetterData(letter, letterCase, currentIndex, totalLetters, dominantHand)
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error parsing letter data", e)

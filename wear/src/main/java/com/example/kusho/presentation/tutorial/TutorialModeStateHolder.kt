@@ -23,6 +23,7 @@ object TutorialModeStateHolder {
         val letterCase: String = "", // "uppercase" or "lowercase"
         val currentIndex: Int = 0,
         val totalLetters: Int = 0,
+        val dominantHand: String = "RIGHT", // "LEFT" or "RIGHT"
         val timestamp: Long = 0L // Used to detect new data
     )
 
@@ -58,15 +59,16 @@ object TutorialModeStateHolder {
     /**
      * Called by WearMessageListenerService when letter data is received
      */
-    fun updateLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int) {
+    fun updateLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int, dominantHand: String = "RIGHT") {
         runOnMainThread {
             try {
-                Log.d(TAG, "📝 Updating letter data: $letter ($letterCase), index: $currentIndex/$totalLetters")
+                Log.d(TAG, "📝 Updating letter data: $letter ($letterCase), index: $currentIndex/$totalLetters, hand: $dominantHand")
                 _letterData.value = LetterData(
                     letter = letter,
                     letterCase = letterCase,
                     currentIndex = currentIndex,
                     totalLetters = totalLetters,
+                    dominantHand = dominantHand,
                     timestamp = System.currentTimeMillis()
                 )
             } catch (e: Exception) {

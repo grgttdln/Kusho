@@ -2,20 +2,28 @@ package com.example.app.ui.feature.learn.tutorialmode
 
 import android.media.MediaPlayer
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -24,10 +32,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.example.app.R
 import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.feature.classroom.ConfettiAnimationStudent
 
+private val YellowColor = Color(0xFFEDBB00)
+private val LightYellowBg = Color(0xFFFFF9E6)
 private val BlueButtonColor = Color(0xFF3FA9F8)
 private val ScreenBackgroundColor = Color(0xFFFDF8E5)
 
@@ -113,6 +124,7 @@ fun SessionAnalyticsScreen(
                 textAlign = TextAlign.Center
             )
 
+            Spacer(Modifier.height(24.dp))
 
 
             // Avatar in the center
@@ -181,11 +193,13 @@ fun SessionAnalyticsScreen(
 @Preview(showBackground = true)
 @Composable
 fun SessionAnalyticsScreenPreview() {
-    SessionAnalyticsScreen(
-        score = "9/10",
-        gestureAccuracy = "78.6%",
-        timeSpent = "2m 4s",
-        onPracticeAgain = {},
-        onContinue = {}
-    )
+    // Preview - watchConnectionManager is not used in preview
+    // SessionAnalyticsScreen(
+    //     score = "9/10",
+    //     gestureAccuracy = "78.6%",
+    //     timeSpent = "2m 4s",
+    //     watchConnectionManager = null, // Can't instantiate in preview
+    //     onPracticeAgain = {},
+    //     onContinue = {}
+    // )
 }

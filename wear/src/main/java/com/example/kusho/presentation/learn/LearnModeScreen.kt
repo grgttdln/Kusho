@@ -48,6 +48,7 @@ import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import com.example.kusho.R
 import com.example.kusho.ml.ClassifierLoadResult
+import com.example.kusho.ml.ModelConfig
 import com.example.kusho.ml.ModelLoader
 import com.example.kusho.presentation.components.CircularModeBorder
 import com.example.kusho.presentation.service.PhoneCommunicationManager
@@ -348,11 +349,18 @@ private fun FillInTheBlankContent(
         }
     }
 
-    // Initialize dependencies
-    LaunchedEffect(Unit) {
-        sensorManager = MotionSensorManager(context)
+    // Determine letter case from word content
+    val letterCase = if (wordData.word.firstOrNull()?.isUpperCase() == true) "uppercase" else "lowercase"
+
+    // Initialize dependencies and load hand+case-specific model
+    LaunchedEffect(letterCase, wordData.dominantHand) {
+        sensorManager = sensorManager ?: MotionSensorManager(context)
+        // Close old model if switching
+        (classifierResult as? ClassifierLoadResult.Success)?.classifier?.close()
         classifierResult = try {
-            ModelLoader.loadDefault(context)
+            val modelConfig = ModelConfig.getModelForSession(letterCase, wordData.dominantHand)
+            android.util.Log.d("LearnModeScreen", "Loading model: ${modelConfig.fileName}")
+            ModelLoader.load(context, modelConfig)
         } catch (e: Exception) {
             ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
         }
@@ -647,11 +655,18 @@ private fun WriteTheWordContent(
         }
     }
 
-    // Initialize dependencies
-    LaunchedEffect(Unit) {
-        sensorManager = MotionSensorManager(context)
+    // Determine letter case from word content
+    val letterCase = if (wordData.word.firstOrNull()?.isUpperCase() == true) "uppercase" else "lowercase"
+
+    // Initialize dependencies and load hand+case-specific model
+    LaunchedEffect(letterCase, wordData.dominantHand) {
+        sensorManager = sensorManager ?: MotionSensorManager(context)
+        // Close old model if switching
+        (classifierResult as? ClassifierLoadResult.Success)?.classifier?.close()
         classifierResult = try {
-            ModelLoader.loadDefault(context)
+            val modelConfig = ModelConfig.getModelForSession(letterCase, wordData.dominantHand)
+            android.util.Log.d("LearnModeScreen", "Loading model: ${modelConfig.fileName}")
+            ModelLoader.load(context, modelConfig)
         } catch (e: Exception) {
             ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
         }
@@ -961,11 +976,18 @@ private fun NameThePictureContent(
         }
     }
 
-    // Initialize dependencies
-    LaunchedEffect(Unit) {
-        sensorManager = MotionSensorManager(context)
+    // Determine letter case from word content
+    val letterCase = if (wordData.word.firstOrNull()?.isUpperCase() == true) "uppercase" else "lowercase"
+
+    // Initialize dependencies and load hand+case-specific model
+    LaunchedEffect(letterCase, wordData.dominantHand) {
+        sensorManager = sensorManager ?: MotionSensorManager(context)
+        // Close old model if switching
+        (classifierResult as? ClassifierLoadResult.Success)?.classifier?.close()
         classifierResult = try {
-            ModelLoader.loadDefault(context)
+            val modelConfig = ModelConfig.getModelForSession(letterCase, wordData.dominantHand)
+            android.util.Log.d("LearnModeScreen", "Loading model: ${modelConfig.fileName}")
+            ModelLoader.load(context, modelConfig)
         } catch (e: Exception) {
             ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
         }

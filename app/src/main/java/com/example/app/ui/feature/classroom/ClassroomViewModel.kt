@@ -31,7 +31,8 @@ data class RosterStudent(
     val studentId: Long,
     val fullName: String,
     val pfpPath: String?,
-    val enrollmentId: Long
+    val enrollmentId: Long,
+    val dominantHand: String = "RIGHT"
 )
 
 /**
@@ -100,6 +101,7 @@ data class StudentDetailsUiState(
     val pfpPath: String? = null,
     val gradeLevel: String = "",
     val birthday: String = "",
+    val dominantHand: String = "RIGHT",
     val totalPracticeMinutes: Int = 0,
     val sessionsCompleted: Int = 0,
     val vowelsProgress: Float = 0.0f,
@@ -191,7 +193,7 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                 if (user != null) {
                     database.studentDao().getStudentsForTeacherFlow(user.id).collect { studentsForTeacher ->
                         val roster = studentsForTeacher.map {
-                            RosterStudent(studentId = it.studentId, fullName = it.fullName, pfpPath = it.pfpPath, enrollmentId = 0L)
+                            RosterStudent(studentId = it.studentId, fullName = it.fullName, pfpPath = it.pfpPath, enrollmentId = 0L, dominantHand = it.dominantHand)
                         }
                         _allStudents.value = roster
                     }
@@ -203,7 +205,8 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                                 studentId = it.studentId,
                                 fullName = it.fullName,
                                 pfpPath = it.pfpPath,
-                                enrollmentId = 0L
+                                enrollmentId = 0L,
+                                dominantHand = it.dominantHand
                             )
                         }
                         _allStudents.value = roster
@@ -219,7 +222,7 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     fun loadStudentDirectory() {
         viewModelScope.launch {
             database.studentDao().getAllStudentsFlow().collect { students ->
-                val list = students.map { RosterStudent(studentId = it.studentId, fullName = it.fullName, pfpPath = it.pfpPath, enrollmentId = 0L) }
+                val list = students.map { RosterStudent(studentId = it.studentId, fullName = it.fullName, pfpPath = it.pfpPath, enrollmentId = 0L, dominantHand = it.dominantHand) }
                 _studentDirectory.value = list
             }
         }
@@ -298,6 +301,7 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                     pfpPath = student.pfpPath,
                     gradeLevel = student.gradeLevel,
                     birthday = student.birthday,
+                    dominantHand = student.dominantHand,
                     isLoading = false
                 )
 
@@ -585,6 +589,30 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
+     * Update a student's dominant hand.
+     *
+     * @param studentId The student ID
+     * @param dominantHand "LEFT" or "RIGHT"
+     * @param onSuccess Callback on success
+     * @param onError Callback on error
+     */
+    fun updateStudentDominantHand(
+        studentId: Long,
+        dominantHand: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                database.studentDao().updateStudentDominantHand(studentId, dominantHand)
+                onSuccess()
+            } catch (e: Exception) {
+                onError("Failed to update dominant hand: ${e.message}")
+            }
+        }
+    }
+
+    /**
      * Add a student without enrolling in a class.
      * Kept for screens that create students independently.
      */
@@ -592,12 +620,13 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
         fullName: String,
         gradeLevel: String,
         pfpPath: String?,
+        dominantHand: String = "RIGHT",
         onSuccess: (Long) -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
             when (val studentResult =
-                studentRepository.addStudent(fullName, gradeLevel, "", pfpPath)) {
+                studentRepository.addStudent(fullName, gradeLevel, "", pfpPath, dominantHand)) {
                 is StudentRepository.StudentOperationResult.Success -> onSuccess(studentResult.studentId)
                 is StudentRepository.StudentOperationResult.Error -> onError(studentResult.message)
             }
@@ -612,11 +641,12 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
         gradeLevel: String,
         pfpPath: String?,
         teacherIds: List<Long>,
+        dominantHand: String = "RIGHT",
         onSuccess: (Long) -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
-            when (val studentResult = studentRepository.addStudent(fullName, gradeLevel, "", pfpPath)) {
+            when (val studentResult = studentRepository.addStudent(fullName, gradeLevel, "", pfpPath, dominantHand)) {
                 is StudentRepository.StudentOperationResult.Success -> {
                     val studentId = studentResult.studentId
                     val linkResult = studentTeacherRepository.linkStudentToTeachers(studentId, teacherIds)

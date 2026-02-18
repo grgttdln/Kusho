@@ -31,35 +31,43 @@ class PairingViewModel(private val context: Context) : ViewModel() {
     val pairingState: StateFlow<PairingState> = _pairingState.asStateFlow()
     
     private val _receivedPong = MutableStateFlow(false)
+    private val _pairingAccepted = MutableStateFlow(false)
+    private val _pairingDeclined = MutableStateFlow(false)
     
     private val messageListener = MessageClient.OnMessageReceivedListener { messageEvent ->
-        if (messageEvent.path == MESSAGE_PATH_PONG) {
-            Log.d(TAG, "🏓 ============================================")
-            Log.d(TAG, "🏓 PONG RECEIVED from mobile app!")
-            Log.d(TAG, "🏓 Source: ${messageEvent.sourceNodeId}")
-            Log.d(TAG, "🏓 Mobile app is running and responding")
-            Log.d(TAG, "🏓 ============================================")
-            _receivedPong.value = true
+        when (messageEvent.path) {
+            MESSAGE_PATH_PONG -> {
+                Log.d(TAG, "🏓 PONG RECEIVED from mobile app! Source: ${messageEvent.sourceNodeId}")
+                _receivedPong.value = true
+            }
+            MESSAGE_PATH_PAIRING_ACCEPTED -> {
+                Log.d(TAG, "✅ Pairing ACCEPTED by phone! Source: ${messageEvent.sourceNodeId}")
+                _pairingAccepted.value = true
+            }
+            MESSAGE_PATH_PAIRING_DECLINED -> {
+                Log.d(TAG, "❌ Pairing DECLINED by phone. Source: ${messageEvent.sourceNodeId}")
+                _pairingDeclined.value = true
+            }
         }
     }
     
     companion object {
         private const val TAG = "PairingViewModel"
-        private const val MESSAGE_PATH_PAIRING_HANDSHAKE = "/pairing_handshake"
+        private const val MESSAGE_PATH_PAIRING_REQUEST = "/pairing_request"
+        private const val MESSAGE_PATH_PAIRING_ACCEPTED = "/pairing_accepted"
+        private const val MESSAGE_PATH_PAIRING_DECLINED = "/pairing_declined"
         private const val MESSAGE_PATH_PING = "/kusho/ping"
         private const val MESSAGE_PATH_PONG = "/kusho/pong"
-        private const val POLLING_INTERVAL_MS = 2000L // Check every 2 seconds
-        private const val SUCCESS_DISPLAY_DURATION_MS = 3000L // Show success for 3 seconds
         private const val PING_TIMEOUT_MS = 3000L // Wait 3 seconds for pong response
+        private const val ACCEPTANCE_TIMEOUT_MS = 30000L // Wait 30 seconds for phone user to accept
+        private const val SUCCESS_DISPLAY_DURATION_MS = 3000L // Show success for 3 seconds
         private const val MAX_RETRY_ATTEMPTS = 2 // Max attempts before showing skip option
     }
     
-    private var isMonitoring = false
     private var retryAttempts = 0
     
     init {
         Log.d(TAG, "🎬 PairingViewModel initialized")
-        Log.d(TAG, "📱 Watch will ping connected phones to verify Kusho app is running")
         messageClient.addListener(messageListener)
         
         // Check if we should show MaxRetriesReached immediately (from connection loss)
@@ -75,193 +83,124 @@ class PairingViewModel(private val context: Context) : ViewModel() {
     }
     
     /**
-     * Start monitoring for phone connection
+     * User-initiated connection attempt.
+     * Called when "Connect to Phone" button is tapped on the watch.
+     * Flow: Bluetooth check → Node discovery → PING/PONG → Send pairing request → Wait for acceptance
      */
-    fun startMonitoring() {
-        if (isMonitoring) return
-        isMonitoring = true
-        
-        Log.d(TAG, "🚀 Starting connection monitoring...")
-        Log.d(TAG, "📋 Monitoring config:")
-        Log.d(TAG, "  - Polling interval: ${POLLING_INTERVAL_MS}ms")
-        Log.d(TAG, "  - Strategy: Check for ANY connected phone nodes")
-        
+    fun connectToPhone() {
         viewModelScope.launch {
-            while (isMonitoring) {
-                checkConnection()
-                delay(POLLING_INTERVAL_MS)
-            }
-        }
-    }
-    
-    /**
-     * Stop monitoring for phone connection
-     */
-    fun stopMonitoring() {
-        isMonitoring = false
-    }
-    
-    /**
-     * Check if phone is connected with two-layer detection
-     */
-    private suspend fun checkConnection() {
-        try {
-            Log.d(TAG, "🔍 Starting connection check...")
+            _pairingState.value = PairingState.Checking
             
-            // Check if Bluetooth is enabled
-            if (!isBluetoothEnabled()) {
-                Log.w(TAG, "❌ Bluetooth is disabled")
-                _pairingState.value = PairingState.BluetoothOff
-                return
-            }
-            
-            Log.d(TAG, "✅ Bluetooth is enabled")
-            
-            // If currently showing prompt or error, set to checking
-            if (_pairingState.value is PairingState.Prompt || 
-                _pairingState.value is PairingState.Error ||
-                _pairingState.value is PairingState.BluetoothOff) {
-                _pairingState.value = PairingState.Checking
-                Log.d(TAG, "⏳ State changed to Checking")
-            }
-            
-            // LAYER 1: Check physical Bluetooth connection
-            Log.d(TAG, "🔍 Layer 1: Checking Bluetooth connection...")
-            val connectedNodes = nodeClient.connectedNodes.await()
-            
-            Log.d(TAG, "📊 Connection query result:")
-            Log.d(TAG, "  - Connected nodes: ${connectedNodes.size}")
-            connectedNodes.forEachIndexed { index, node ->
-                Log.d(TAG, "  - Node $index: ${node.displayName} (ID: ${node.id}, nearby: ${node.isNearby})")
-            }
-            
-            // Filter for nearby (actively connected) nodes only
-            val nearbyNodes = connectedNodes.filter { it.isNearby }
-            Log.d(TAG, "  - Nearby (active) nodes: ${nearbyNodes.size}")
-            
-            if (nearbyNodes.isEmpty()) {
-                // No phone connected via Bluetooth
-                Log.w(TAG, "❌ LAYER 1 FAILED: No phone connected via Bluetooth")
-                retryAttempts++
-                
-                if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
-                    Log.w(TAG, "⚠️ Max retry attempts reached - showing skip option")
-                    _pairingState.value = PairingState.MaxRetriesReached(retryAttempts)
-                    stopMonitoring()
-                } else if (_pairingState.value is PairingState.Checking) {
-                    _pairingState.value = PairingState.Prompt
-                    Log.d(TAG, "↩️ State changed back to Prompt - No Bluetooth connection")
+            try {
+                // Step 1: Check Bluetooth
+                if (!isBluetoothEnabled()) {
+                    _pairingState.value = PairingState.BluetoothOff
+                    return@launch
                 }
-                return
-            }
-            
-            // LAYER 2: Phone found via Bluetooth, verify Kusho app is running
-            val phoneNode = nearbyNodes.first()
-            Log.d(TAG, "✅ Layer 1 PASSED: Phone connected via Bluetooth (${phoneNode.displayName})")
-            Log.d(TAG, "🔍 Layer 2: Verifying Kusho mobile app is running...")
-            
-            _receivedPong.value = false
-            messageClient.sendMessage(phoneNode.id, MESSAGE_PATH_PING, "ping".toByteArray()).await()
-            Log.d(TAG, "📤 PING sent to ${phoneNode.displayName}")
-            
-            // Wait for PONG response with timeout
-            Log.d(TAG, "⏱️ Waiting for PONG response (timeout: ${PING_TIMEOUT_MS}ms)...")
-            val startTime = System.currentTimeMillis()
-            var elapsedTime = 0L
-            while (!_receivedPong.value && System.currentTimeMillis() - startTime < PING_TIMEOUT_MS) {
-                delay(100)
-                elapsedTime = System.currentTimeMillis() - startTime
-            }
-            
-            if (_receivedPong.value) {
-                // Kusho app is running on phone
-                Log.d(TAG, "✅ ============================================")
-                Log.d(TAG, "✅ LAYER 2 PASSED: Kusho app responding")
-                Log.d(TAG, "✅ Response time: ${elapsedTime}ms")
-                Log.d(TAG, "✅ 🟢 BOTH LAYERS PASSED: Fully connected")
-                Log.d(TAG, "✅ ============================================")
-                retryAttempts = 0 // Reset retry counter on success
-                handleSuccessfulConnection(phoneNode)
-            } else {
-                // No response - Kusho app not running
-                retryAttempts++
-                Log.w(TAG, "❌ ============================================")
-                Log.w(TAG, "❌ LAYER 2 FAILED: Kusho app not responding")
-                Log.w(TAG, "❌ Timeout after ${PING_TIMEOUT_MS}ms")
-                Log.w(TAG, "❌ 📱 Bluetooth: ✅ Connected | Kusho App: ❌ Not running")
-                Log.w(TAG, "❌ Retry attempt: $retryAttempts / $MAX_RETRY_ATTEMPTS")
-                Log.w(TAG, "❌ ============================================")
                 
-                if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
-                    // Max retries reached, show skip option
-                    Log.w(TAG, "⚠️ Max retry attempts reached - showing skip option")
-                    _pairingState.value = PairingState.MaxRetriesReached(retryAttempts)
-                    stopMonitoring()
-                } else if (_pairingState.value is PairingState.Checking) {
-                    _pairingState.value = PairingState.Prompt
-                    Log.d(TAG, "↩️ State changed back to Prompt - Please open Kusho app on phone")
-                }
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            Log.d(TAG, "⚠️ Connection check cancelled (monitoring stopped)")
-            // Don't update state on cancellation - this is expected when stopping monitoring
-            throw e  // Re-throw to properly cancel the coroutine
-        } catch (e: com.google.android.gms.common.api.ApiException) {
-            // Handle TARGET_NODE_NOT_CONNECTED (4000) - node disconnected while sending message
-            when (e.statusCode) {
-                4000 -> {
-                    Log.w(TAG, "❌ TARGET_NODE_NOT_CONNECTED: Phone disconnected during message send")
+                // Step 2: Find nearby phone nodes
+                val connectedNodes = nodeClient.connectedNodes.await()
+                val nearbyNodes = connectedNodes.filter { it.isNearby }
+                Log.d(TAG, "📊 Connected nodes: ${connectedNodes.size}, Nearby: ${nearbyNodes.size}")
+                
+                if (nearbyNodes.isEmpty()) {
                     retryAttempts++
                     if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
-                        Log.w(TAG, "⚠️ Max retry attempts reached - showing skip option")
                         _pairingState.value = PairingState.MaxRetriesReached(retryAttempts)
-                        stopMonitoring()
-                    } else if (_pairingState.value is PairingState.Checking) {
-                        _pairingState.value = PairingState.Prompt
-                        Log.d(TAG, "↩️ State changed back to Prompt - Phone disconnected")
+                    } else {
+                        _pairingState.value = PairingState.Error("No phone found nearby")
+                    }
+                    return@launch
+                }
+                
+                val phoneNode = nearbyNodes.first()
+                Log.d(TAG, "✅ Phone found: ${phoneNode.displayName} (${phoneNode.id})")
+                
+                // Step 3: Verify Kusho app is running via PING/PONG
+                _receivedPong.value = false
+                messageClient.sendMessage(phoneNode.id, MESSAGE_PATH_PING, "ping".toByteArray()).await()
+                
+                val pingStart = System.currentTimeMillis()
+                while (!_receivedPong.value && System.currentTimeMillis() - pingStart < PING_TIMEOUT_MS) {
+                    delay(100)
+                }
+                
+                if (!_receivedPong.value) {
+                    retryAttempts++
+                    if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+                        _pairingState.value = PairingState.MaxRetriesReached(retryAttempts)
+                    } else {
+                        _pairingState.value = PairingState.Error("Open Kusho app on phone")
+                    }
+                    return@launch
+                }
+                
+                Log.d(TAG, "✅ Kusho app responding on phone")
+                
+                // Step 4: Send pairing request to phone
+                Log.d(TAG, "📤 Sending pairing request to ${phoneNode.displayName} (${phoneNode.id})")
+                _pairingAccepted.value = false
+                _pairingDeclined.value = false
+                
+                val requestPayload = org.json.JSONObject().apply {
+                    put("watchName", android.os.Build.MODEL ?: "Smartwatch")
+                }.toString()
+                
+                messageClient.sendMessage(
+                    phoneNode.id,
+                    MESSAGE_PATH_PAIRING_REQUEST,
+                    requestPayload.toByteArray()
+                ).await()
+                
+                _pairingState.value = PairingState.WaitingForAcceptance
+                Log.d(TAG, "⏳ Waiting for phone user to accept/decline...")
+                
+                // Step 5: Wait for acceptance, decline, or timeout
+                val requestStart = System.currentTimeMillis()
+                while (!_pairingAccepted.value && !_pairingDeclined.value &&
+                       System.currentTimeMillis() - requestStart < ACCEPTANCE_TIMEOUT_MS) {
+                    delay(200)
+                }
+                
+                when {
+                    _pairingAccepted.value -> {
+                        Log.d(TAG, "✅ Pairing accepted! Saving paired status.")
+                        retryAttempts = 0
+                        _pairingState.value = PairingState.Success
+                        savePairedStatus(phoneNode.id)
+                        delay(SUCCESS_DISPLAY_DURATION_MS)
+                    }
+                    _pairingDeclined.value -> {
+                        Log.d(TAG, "❌ Pairing declined by phone user.")
+                        _pairingState.value = PairingState.Declined
+                    }
+                    else -> {
+                        Log.w(TAG, "⏱️ Pairing request timed out after ${ACCEPTANCE_TIMEOUT_MS}ms")
+                        retryAttempts++
+                        _pairingState.value = PairingState.Error("No response from phone")
                     }
                 }
-                else -> {
-                    Log.e(TAG, "💥 ApiException during pairing: ${e.statusCode}", e)
-                    _pairingState.value = PairingState.Error("Connection error: ${e.statusCode}")
+                
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: com.google.android.gms.common.api.ApiException) {
+                when (e.statusCode) {
+                    4000 -> {
+                        retryAttempts++
+                        if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+                            _pairingState.value = PairingState.MaxRetriesReached(retryAttempts)
+                        } else {
+                            _pairingState.value = PairingState.Error("Phone disconnected")
+                        }
+                    }
+                    else -> {
+                        _pairingState.value = PairingState.Error("Connection error: ${e.statusCode}")
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "💥 Error during pairing", e)
+                _pairingState.value = PairingState.Error("Failed to connect: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "💥 Error checking connection", e)
-            _pairingState.value = PairingState.Error("Failed to connect: ${e.message}")
-        }
-    }
-    
-    /**
-     * Handle successful connection to phone
-     */
-    private suspend fun handleSuccessfulConnection(phoneNode: Node) {
-        try {
-            Log.d(TAG, "🤝 Handling successful connection...")
-            Log.d(TAG, "📨 Sending handshake to: ${phoneNode.displayName} (${phoneNode.id})")
-            
-            messageClient.sendMessage(
-                phoneNode.id,
-                MESSAGE_PATH_PAIRING_HANDSHAKE,
-                "watch_paired".toByteArray()
-            ).await()
-            
-            Log.d(TAG, "✅ Pairing handshake sent successfully!")
-            
-            // Show success state
-            _pairingState.value = PairingState.Success
-            Log.d(TAG, "🎉 State changed to Success")
-            
-            // Save paired status
-            savePairedStatus()
-            
-            // Keep success state for a few seconds before allowing navigation
-            Log.d(TAG, "⏱️ Displaying success for ${SUCCESS_DISPLAY_DURATION_MS}ms")
-            delay(SUCCESS_DISPLAY_DURATION_MS)
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "💥 Error during handshake", e)
-            _pairingState.value = PairingState.Error("Pairing failed: ${e.message}")
         }
     }
     
@@ -277,13 +216,14 @@ class PairingViewModel(private val context: Context) : ViewModel() {
     /**
      * Save paired status to SharedPreferences
      */
-    private fun savePairedStatus() {
+    private fun savePairedStatus(phoneNodeId: String) {
         val prefs = context.getSharedPreferences("kusho_prefs", Context.MODE_PRIVATE)
         prefs.edit()
             .putBoolean("is_paired", true)
             .putBoolean("is_skipped", false)
+            .putString("paired_phone_node_id", phoneNodeId)
             .apply()
-        Log.d(TAG, "✅ Paired status saved")
+        Log.d(TAG, "✅ Paired status saved with phone node ID: $phoneNodeId")
     }
     
     /**
@@ -307,30 +247,25 @@ class PairingViewModel(private val context: Context) : ViewModel() {
     }
     
     /**
-     * Retry connection check - reset retry counter and start fresh
+     * Retry connection - called from error or declined states
      */
     fun retry() {
-        Log.d(TAG, "🔄 Retry requested by user - resetting counter")
+        Log.d(TAG, "🔄 Retry requested by user")
         retryAttempts = 0
-        viewModelScope.launch {
-            _pairingState.value = PairingState.Checking
-            checkConnection()
-        }
+        connectToPhone()
     }
     
     /**
-     * Restart monitoring - used when user tries again after max retries
+     * Restart pairing - used when user tries again after max retries
      */
     fun restartMonitoring() {
-        Log.d(TAG, "🔄 Restarting monitoring - resetting retry counter")
+        Log.d(TAG, "🔄 Restarting pairing - resetting retry counter")
         retryAttempts = 0
-        _pairingState.value = PairingState.Checking
-        startMonitoring()
+        connectToPhone()
     }
     
     override fun onCleared() {
         super.onCleared()
-        stopMonitoring()
         messageClient.removeListener(messageListener)
     }
 }

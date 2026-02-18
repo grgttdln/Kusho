@@ -99,4 +99,14 @@ interface StudentDao {
      */
     @Query("UPDATE students SET pfpPath = :pfpPath WHERE studentId = :studentId")
     suspend fun updateStudentPfp(studentId: Long, pfpPath: String?): Int
+
+    /**
+     * Update student's dominant hand.
+     *
+     * @param studentId The student ID
+     * @param dominantHand "LEFT" or "RIGHT"
+     * @return Number of rows updated
+     */
+    @Query("UPDATE students SET dominantHand = :dominantHand WHERE studentId = :studentId")
+    suspend fun updateStudentDominantHand(studentId: Long, dominantHand: String): Int
 }
