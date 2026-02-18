@@ -52,7 +52,8 @@ private data class StudentFormData(
     val firstName: String = "",
     val lastName: String = "",
     val profileImageUri: Uri? = null,
-    val profileImagePath: String? = null
+    val profileImagePath: String? = null,
+    val dominantHand: String = "" // "LEFT" or "RIGHT" — empty means not yet selected
 )
 
 @Composable
@@ -91,7 +92,7 @@ fun AddStudentScreen(
     }
 
     // Check if at least one student has valid data
-    val isFormValid = students.any { it.firstName.isNotBlank() && it.lastName.isNotBlank() }
+    val isFormValid = students.any { it.firstName.isNotBlank() && it.lastName.isNotBlank() && it.dominantHand.isNotBlank() }
     var isAdding by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -144,6 +145,7 @@ fun AddStudentScreen(
                         firstName = studentData.firstName,
                         lastName = studentData.lastName,
                         profileImageUri = studentData.profileImageUri,
+                        dominantHand = studentData.dominantHand,
                         onFirstNameChange = { newFirstName ->
                             students = students.toMutableList().apply {
                                 this[index] = this[index].copy(firstName = newFirstName)
@@ -152,6 +154,11 @@ fun AddStudentScreen(
                         onLastNameChange = { newLastName ->
                             students = students.toMutableList().apply {
                                 this[index] = this[index].copy(lastName = newLastName)
+                            }
+                        },
+                        onDominantHandChange = { hand ->
+                            students = students.toMutableList().apply {
+                                this[index] = this[index].copy(dominantHand = hand)
                             }
                         },
                         onImageClick = {
@@ -194,7 +201,7 @@ fun AddStudentScreen(
                     
                     // Get valid students only
                     val validStudents = students.filter { 
-                        it.firstName.isNotBlank() && it.lastName.isNotBlank() 
+                        it.firstName.isNotBlank() && it.lastName.isNotBlank() && it.dominantHand.isNotBlank()
                     }
                     
                     // Check for duplicates
@@ -226,6 +233,7 @@ fun AddStudentScreen(
                             gradeLevel = "",
                             pfpPath = student.profileImagePath,
                             teacherIds = teacherIds,
+                            dominantHand = student.dominantHand,
                             onSuccess = { _: Long ->
                                 addedCount++
                                 lastAddedName = fullName
@@ -267,8 +275,10 @@ private fun StudentCard(
     firstName: String,
     lastName: String,
     profileImageUri: Uri?,
+    dominantHand: String,
     onFirstNameChange: (String) -> Unit,
     onLastNameChange: (String) -> Unit,
+    onDominantHandChange: (String) -> Unit,
     onImageClick: () -> Unit,
     onRemoveImage: () -> Unit
 ) {
@@ -419,6 +429,66 @@ private fun StudentCard(
                         ),
                         singleLine = true,
                         textStyle = LocalTextStyle.current.copy(fontSize = 14.sp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Dominant Hand Selection
+            Text(
+                text = "DOMINANT HAND",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF9E9E9E),
+                letterSpacing = 1.sp
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Left Hand Button
+                OutlinedButton(
+                    onClick = { onDominantHandChange("LEFT") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (dominantHand == "LEFT") Color(0xFF3FA9F8) else Color.White,
+                        contentColor = if (dominantHand == "LEFT") Color.White else Color(0xFF3FA9F8)
+                    ),
+                    border = BorderStroke(
+                        width = 1.5.dp,
+                        color = if (dominantHand == "LEFT") Color(0xFF3FA9F8) else Color(0xFFE0E0E0)
+                    )
+                ) {
+                    Text(
+                        text = "Left",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                // Right Hand Button
+                OutlinedButton(
+                    onClick = { onDominantHandChange("RIGHT") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (dominantHand == "RIGHT") Color(0xFF3FA9F8) else Color.White,
+                        contentColor = if (dominantHand == "RIGHT") Color.White else Color(0xFF3FA9F8)
+                    ),
+                    border = BorderStroke(
+                        width = 1.5.dp,
+                        color = if (dominantHand == "RIGHT") Color(0xFF3FA9F8) else Color(0xFFE0E0E0)
+                    )
+                ) {
+                    Text(
+                        text = "Right",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
                     )
                 }
             }

@@ -105,11 +105,12 @@ fun TutorialModeScreen() {
         }
     }
     
-    // Load appropriate model when letterCase changes
-    LaunchedEffect(letterData.letterCase) {
-        if (letterData.letterCase.isNotEmpty() && letterData.letterCase != currentModelCase) {
+    // Load appropriate model when letterCase or dominantHand changes
+    LaunchedEffect(letterData.letterCase, letterData.dominantHand) {
+        val modelKey = "${letterData.letterCase}_${letterData.dominantHand}"
+        if (letterData.letterCase.isNotEmpty() && modelKey != currentModelCase) {
             try {
-                Log.d("TutorialMode", "🔄 Loading model for case: ${letterData.letterCase}")
+                Log.d("TutorialMode", "🔄 Loading model for case: ${letterData.letterCase}, hand: ${letterData.dominantHand}")
                 
                 // CRITICAL: Close the old model before loading a new one to prevent memory leak
                 val oldClassifier = (classifierResult as? ClassifierLoadResult.Success)?.classifier
@@ -118,14 +119,14 @@ fun TutorialModeScreen() {
                     oldClassifier.close()
                 }
                 
-                val modelConfig = ModelConfig.getTutorialModeModel(letterData.letterCase)
+                val modelConfig = ModelConfig.getModelForSession(letterData.letterCase, letterData.dominantHand)
                 val loadResult = ModelLoader.load(context, modelConfig)
                 classifierResult = loadResult
                 
                 when (loadResult) {
                     is ClassifierLoadResult.Success -> {
                         isModelInitialized = true
-                        currentModelCase = letterData.letterCase
+                        currentModelCase = modelKey
                         modelLoadError = null
                         Log.d("TutorialMode", "✅ Model loaded: ${modelConfig.displayName}")
                     }

@@ -40,29 +40,55 @@ data class ModelConfig(
                 ),
                 description = "Complete uppercase and lowercase alphabet recognition model"
             ),
+            // Right-hand models
             ModelConfig(
                 fileName = "tcn_multihead_model_CAPITAL_right.tflite",
-                displayName = "Uppercase Alphabet Model",
+                displayName = "Uppercase Right Hand Model",
                 windowSize = 295,
                 channels = 6,
                 labels = listOf(
                     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
                     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
                 ),
-                description = "Specialized model for uppercase letters",
+                description = "Specialized model for uppercase letters (right hand)",
                 indexOffset = 26  // Model outputs 52 classes, uppercase is at indices 26-51
             ),
             ModelConfig(
                 fileName = "tcn_multihead_model_small_right.tflite",
-                displayName = "Lowercase Alphabet Model",
+                displayName = "Lowercase Right Hand Model",
                 windowSize = 295,
                 channels = 6,
                 labels = listOf(
                     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
                     "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
                 ),
-                description = "Specialized model for lowercase letters"
+                description = "Specialized model for lowercase letters (right hand)"
                 // No offset needed - this model outputs indices 0-25 for a-z
+            ),
+            // Left-hand models
+            ModelConfig(
+                fileName = "tcn_multihead_model_CAPITAL_left.tflite",
+                displayName = "Uppercase Left Hand Model",
+                windowSize = 295,
+                channels = 6,
+                labels = listOf(
+                    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+                    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+                ),
+                description = "Specialized model for uppercase letters (left hand)",
+                indexOffset = 26
+            ),
+            ModelConfig(
+                fileName = "tcn_multihead_model_small_left.tflite",
+                displayName = "Lowercase Left Hand Model",
+                windowSize = 295,
+                channels = 6,
+                labels = listOf(
+                    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+                    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+                ),
+                description = "Specialized model for lowercase letters (left hand)"
+                // No offset needed
             )
         )
 
@@ -72,14 +98,26 @@ data class ModelConfig(
         fun getDefault(): ModelConfig = MODELS.first()
 
         /**
-         * Get model for Tutorial Mode based on letter case
+         * Get model for a session based on letter case and dominant hand.
+         * @param letterCase "uppercase"/"capital" or "lowercase"/"small"
+         * @param dominantHand "LEFT" or "RIGHT"
+         */
+        fun getModelForSession(letterCase: String, dominantHand: String): ModelConfig {
+            val hand = if (dominantHand.uppercase() == "LEFT") "left" else "right"
+            val casePart = when (letterCase.lowercase()) {
+                "capital", "uppercase" -> "CAPITAL"
+                "small", "lowercase" -> "small"
+                else -> return getDefault()
+            }
+            val targetFileName = "tcn_multihead_model_${casePart}_${hand}.tflite"
+            return MODELS.find { it.fileName == targetFileName } ?: getDefault()
+        }
+
+        /**
+         * Get model for Tutorial Mode based on letter case (legacy — defaults to right hand)
          */
         fun getTutorialModeModel(letterCase: String): ModelConfig {
-            return when (letterCase.lowercase()) {
-                "capital", "uppercase" -> MODELS.find { it.fileName == "tcn_multihead_model_CAPITAL_right.tflite" } ?: getDefault()
-                "small", "lowercase" -> MODELS.find { it.fileName == "tcn_multihead_model_small_right.tflite" } ?: getDefault()
-                else -> getDefault()
-            }
+            return getModelForSession(letterCase, "RIGHT")
         }
 
         /**

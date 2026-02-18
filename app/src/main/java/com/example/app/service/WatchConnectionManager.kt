@@ -410,7 +410,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * @param maskedIndex Index of the masked letter (for fill-in-the-blank)
      * @param configurationType The configuration type (e.g., "Fill in the Blank")
      */
-    fun sendLearnModeWordData(word: String, maskedIndex: Int, configurationType: String) {
+    fun sendLearnModeWordData(word: String, maskedIndex: Int, configurationType: String, dominantHand: String = "RIGHT") {
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
@@ -420,6 +420,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     put("word", word)
                     put("maskedIndex", maskedIndex)
                     put("configurationType", configurationType)
+                    put("dominantHand", dominantHand)
                 }.toString()
 
                 nodes.forEach { node ->
@@ -429,7 +430,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                         jsonPayload.toByteArray()
                     ).await()
                 }
-                Log.d(TAG, "✅ Word data sent to watch: $word (masked: $maskedIndex, type: $configurationType)")
+                Log.d(TAG, "✅ Word data sent to watch: $word (masked: $maskedIndex, type: $configurationType, hand: $dominantHand)")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to send word data to watch", e)
             }
@@ -950,8 +951,9 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * @param letterCase "uppercase" or "lowercase"
      * @param currentIndex Current letter index (1-based)
      * @param totalLetters Total number of letters in session
+     * @param dominantHand "LEFT" or "RIGHT" for model selection
      */
-    fun sendTutorialModeLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int) {
+    fun sendTutorialModeLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int, dominantHand: String = "RIGHT") {
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
@@ -961,6 +963,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     put("letterCase", letterCase)
                     put("currentIndex", currentIndex)
                     put("totalLetters", totalLetters)
+                    put("dominantHand", dominantHand)
                 }.toString()
 
                 nodes.forEach { node ->
@@ -970,7 +973,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                         jsonPayload.toByteArray()
                     ).await()
                 }
-                Log.d(TAG, "✅ Letter data sent to watch: $letter ($letterCase) [$currentIndex/$totalLetters]")
+                Log.d(TAG, "✅ Letter data sent to watch: $letter ($letterCase) [$currentIndex/$totalLetters] hand=$dominantHand")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to send letter data to watch", e)
             }

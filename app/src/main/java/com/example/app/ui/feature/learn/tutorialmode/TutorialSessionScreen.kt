@@ -66,6 +66,7 @@ fun TutorialSessionScreen(
     letterType: String = "capital",
     studentName: String = "",
     studentId: Long = 0L,
+    dominantHand: String = "RIGHT",
     onEndSession: () -> Unit,
     modifier: Modifier = Modifier,
     initialStep: Int = 1,
@@ -261,7 +262,8 @@ fun TutorialSessionScreen(
                 letter = currentLetter,
                 letterCase = letterType,
                 currentIndex = currentStep,
-                totalLetters = calculatedTotalSteps
+                totalLetters = calculatedTotalSteps,
+                dominantHand = dominantHand
             )
 
             // Play pre-recorded voice prompt for the current letter
@@ -364,7 +366,8 @@ fun TutorialSessionScreen(
                             letter = currentLetter,
                             letterCase = letterType,
                             currentIndex = currentStep,
-                            totalLetters = calculatedTotalSteps
+                            totalLetters = calculatedTotalSteps,
+                            dominantHand = dominantHand
                         )
                     }
                 }
