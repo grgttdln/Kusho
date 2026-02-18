@@ -65,12 +65,13 @@ fun LearnAnnotationDetailsScreen(
                 wordDao.getWordById(setWord.wordId)?.let { word ->
                     wordMap[setWord.id] = word
                     
-                    // Load annotation for this word in this set
+                    // Load annotation for this word in this set and activity
                     val annotation = annotationDao.getAnnotation(
                         studentId = studentId,
                         setId = setId,
                         itemId = index,
-                        sessionMode = LearnerProfileAnnotation.MODE_LEARN
+                        sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                        activityId = activityId
                     )
                     annotationMap[setWord.id] = annotation
                 }

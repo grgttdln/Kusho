@@ -30,34 +30,34 @@ interface LearnerProfileAnnotationDao {
     suspend fun update(annotation: LearnerProfileAnnotation)
 
     /**
-     * Get a specific annotation by studentId, setId, itemId, and sessionMode
+     * Get a specific annotation by studentId, setId, itemId, sessionMode, and activityId
      */
     @Query("""
-        SELECT * FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId AND itemId = :itemId AND sessionMode = :sessionMode
+        SELECT * FROM learner_profile_annotations
+        WHERE studentId = :studentId AND setId = :setId AND itemId = :itemId AND sessionMode = :sessionMode AND activityId = :activityId
         LIMIT 1
     """)
-    suspend fun getAnnotation(studentId: String, setId: Long, itemId: Int, sessionMode: String = "LEARN"): LearnerProfileAnnotation?
+    suspend fun getAnnotation(studentId: String, setId: Long, itemId: Int, sessionMode: String = "LEARN", activityId: Long = 0L): LearnerProfileAnnotation?
 
     /**
-     * Get all annotations for a specific student in a specific set and mode
+     * Get all annotations for a specific student in a specific set, mode, and activity
      */
     @Query("""
-        SELECT * FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode
+        SELECT * FROM learner_profile_annotations
+        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode AND activityId = :activityId
         ORDER BY itemId ASC
     """)
-    suspend fun getAnnotationsForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN"): List<LearnerProfileAnnotation>
+    suspend fun getAnnotationsForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN", activityId: Long = 0L): List<LearnerProfileAnnotation>
 
     /**
-     * Get all annotations for a specific student in a specific set as Flow with mode filter
+     * Get all annotations for a specific student in a specific set as Flow with mode and activity filter
      */
     @Query("""
-        SELECT * FROM learner_profile_annotations 
-        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode
+        SELECT * FROM learner_profile_annotations
+        WHERE studentId = :studentId AND setId = :setId AND sessionMode = :sessionMode AND activityId = :activityId
         ORDER BY itemId ASC
     """)
-    fun observeAnnotationsForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN"): Flow<List<LearnerProfileAnnotation>>
+    fun observeAnnotationsForStudentInSet(studentId: String, setId: Long, sessionMode: String = "LEARN", activityId: Long = 0L): Flow<List<LearnerProfileAnnotation>>
 
     /**
      * Get all annotations for a specific student
