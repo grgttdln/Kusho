@@ -29,13 +29,16 @@ import com.example.app.ui.feature.learn.set.AddSetScreen
 import com.example.app.ui.feature.learn.set.EditSetScreen
 import com.example.app.ui.feature.learn.set.SelectWordsScreen
 import com.example.app.ui.feature.learn.ConfirmationScreen
+import com.example.app.ui.feature.learn.ActivityCreationSuccessScreen
 import com.example.app.ui.feature.learn.learnmode.LearnModeActivitySelectionScreen
 import com.example.app.ui.feature.learn.generate.GenerateActivityScreen
 import com.example.app.ui.feature.learn.generate.AISetReviewScreen
 import com.example.app.ui.feature.learn.generate.EditableSet
 import com.example.app.ui.feature.learn.generate.EditableWord
+import com.example.app.ui.feature.learn.generate.TitleSimilarityInfo
 import com.example.app.ui.feature.learn.generate.mapAiConfigTypeToUi
 import com.example.app.data.model.AiGeneratedActivity
+import com.example.app.ui.components.common.SimilarTitleDialog
 import com.google.gson.Gson
 import com.example.app.ui.feature.learn.LessonViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -95,12 +98,20 @@ fun MainNavigationContainer(
     // --- AI GENERATION STATE ---
     val lessonViewModel: LessonViewModel = viewModel()
     var aiCreatedSetIds by remember { mutableStateOf(listOf<Long>()) }
+    var aiPreviouslySavedSetIds by remember { mutableStateOf(listOf<Long>()) }
     var aiActivityTitle by remember { mutableStateOf("") }
     var aiActivityDescription by remember { mutableStateOf("") }
     var aiGeneratedJsonResult by remember { mutableStateOf("") }
     var aiEditableSets by remember { mutableStateOf(listOf<EditableSet>()) }
     var currentAiSetIndex by remember { mutableIntStateOf(0) }
     var aiWordsToAdd by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
+
+    // --- TITLE SIMILARITY STATE ---
+    var showActivityTitleSimilarityDialog by remember { mutableStateOf(false) }
+    var activityTitleSimilarityExistingTitle by remember { mutableStateOf("") }
+    var activityTitleSimilarityExistingId by remember { mutableStateOf(0L) }
+    var activityTitleSimilarityReason by remember { mutableStateOf("") }
+    var existingSetTitleMap by remember { mutableStateOf(mapOf<String, Long>()) }
 
     // --- REPOSITORY & CONTEXT HELPERS ---
     val context = LocalContext.current
@@ -110,6 +121,25 @@ fun MainNavigationContainer(
     val database = remember { AppDatabase.getInstance(context) }
     val setRepository = remember { SetRepository(database) }
     val coroutineScope = rememberCoroutineScope()
+
+    // Activity title similarity dialog (shown when AI reports similar activity title)
+    SimilarTitleDialog(
+        isVisible = showActivityTitleSimilarityDialog,
+        existingTitle = activityTitleSimilarityExistingTitle,
+        reason = activityTitleSimilarityReason,
+        onViewExisting = {
+            showActivityTitleSimilarityDialog = false
+            // Navigate to the existing activity's sets screen
+            selectedActivityId = activityTitleSimilarityExistingId
+            selectedActivityTitle = activityTitleSimilarityExistingTitle
+            currentScreen = 16
+        },
+        onDismiss = {
+            showActivityTitleSimilarityDialog = false
+            // Let user proceed to review the generated sets even though title is similar
+            currentScreen = 48
+        }
+    )
 
     when (currentScreen) {
         0 -> DashboardScreen(
@@ -169,7 +199,28 @@ fun MainNavigationContainer(
                             .map { it.word }
                             .toSet()
 
+                        // Build existingSetTitleMap for title similarity resolution
+                        val setDao = database.setDao()
+                        val setWordRows = setDao.getSetsWithWordNames(userId)
+                        existingSetTitleMap = setWordRows
+                            .groupBy { it.setTitle }
+                            .mapValues { (_, rows) -> rows.first().setId }
+
                         val parsedSets = activity?.sets?.map { set ->
+                            // Resolve set-level title similarity
+                            val titleSimMatch = set.titleSimilarity?.let { sim ->
+                                val matchKey = existingSetTitleMap.keys.firstOrNull {
+                                    it.equals(sim.similarToExisting, ignoreCase = true)
+                                }
+                                if (matchKey != null) {
+                                    TitleSimilarityInfo(
+                                        existingTitle = matchKey,
+                                        existingId = existingSetTitleMap[matchKey] ?: 0L,
+                                        reason = sim.reason
+                                    )
+                                } else null
+                            }
+
                             EditableSet(
                                 title = set.title,
                                 description = set.description,
@@ -180,7 +231,8 @@ fun MainNavigationContainer(
                                         selectedLetterIndex = word.selectedLetterIndex,
                                         hasImage = word.word in wordsWithImages
                                     )
-                                }
+                                },
+                                titleSimilarityMatch = titleSimMatch
                             )
                         } ?: emptyList()
 
@@ -204,6 +256,28 @@ fun MainNavigationContainer(
                             android.util.Log.e("MainNavigation", "Overlap detection failed", e)
                             aiEditableSets = parsedSets
                         }
+
+                        // Check activity title similarity
+                        val activitySim = activity?.activity?.titleSimilarity
+                        if (activitySim != null) {
+                            val activityDao = database.activityDao()
+                            val existingActivities = activityDao.getActivitiesByUserIdOnce(userId)
+                            val matchingActivity = existingActivities.firstOrNull {
+                                it.title.equals(activitySim.similarToExisting, ignoreCase = true)
+                            }
+                            if (matchingActivity != null) {
+                                // Show dialog, DON'T navigate to screen 48
+                                activityTitleSimilarityExistingTitle = matchingActivity.title
+                                activityTitleSimilarityExistingId = matchingActivity.id
+                                activityTitleSimilarityReason = activitySim.reason
+                                showActivityTitleSimilarityDialog = true
+                                currentAiSetIndex = 0
+                                return@launch
+                            } else {
+                                android.util.Log.d("MainNavigation", "AI reported similarity to '${activitySim.similarToExisting}' but no match found in DB")
+                            }
+                        }
+
                         currentAiSetIndex = 0
                         currentScreen = 48
                     } catch (e: Exception) {
@@ -722,6 +796,7 @@ fun MainNavigationContainer(
                 aiActivityTitle = activityTitle
                 aiActivityDescription = activityDescription
                 aiCreatedSetIds = setIds
+                aiPreviouslySavedSetIds = setIds
 
                 // Navigate directly to activity creation
                 currentScreen = 49
@@ -734,6 +809,9 @@ fun MainNavigationContainer(
             onCurrentSetIndexChange = { currentAiSetIndex = it },
             onRegenerateSet = { setTitle, setDescription, onResult ->
                 lessonViewModel.regenerateSet(setTitle, setDescription, onResult)
+            },
+            onAddMoreSet = { existingTitles, existingDescriptions, onResult ->
+                lessonViewModel.addMoreSet(existingTitles, existingDescriptions, onResult)
             },
             onDiscardSet = {
                 val updatedSets = aiEditableSets.toMutableList().apply {
@@ -755,6 +833,9 @@ fun MainNavigationContainer(
                 currentScreen = 50
             },
             additionalWords = aiWordsToAdd,
+            existingSetTitleMap = existingSetTitleMap,
+            previouslySavedSetIds = aiPreviouslySavedSetIds,
+            onPreviouslySavedSetIdsCleaned = { aiPreviouslySavedSetIds = emptyList() },
             modifier = modifier
         )
         50 -> {
@@ -781,13 +862,22 @@ fun MainNavigationContainer(
             onNavigate = { currentScreen = it },
             onBackClick = { currentScreen = 48 },
             onActivityCreated = {
-                // Reset AI state
+                // Navigate to success screen, don't reset state yet
+                currentScreen = 51
+            },
+            modifier = modifier
+        )
+        // --- ACTIVITY CREATION SUCCESS SCREEN ---
+        51 -> ActivityCreationSuccessScreen(
+            onYayClick = {
+                // Reset AI state and navigate to Your Activities
                 aiCreatedSetIds = emptyList()
+                aiPreviouslySavedSetIds = emptyList()
                 aiActivityTitle = ""
                 aiActivityDescription = ""
                 aiEditableSets = emptyList()
                 currentAiSetIndex = 0
-                currentScreen = 10
+                currentScreen = 6
             },
             modifier = modifier
         )

@@ -1,5 +1,6 @@
 package com.example.app.ui.components.common
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -161,6 +162,132 @@ fun AlreadyExistsDialog(
         buttonText = "OK",
         onDismiss = onDismiss
     )
+}
+
+/**
+ * Dialog shown when the AI-generated activity title is similar to an existing one.
+ * Offers "View Existing Activity" and "OK" buttons.
+ */
+@Composable
+fun SimilarTitleDialog(
+    isVisible: Boolean,
+    existingTitle: String,
+    reason: String,
+    onViewExisting: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (!isVisible) return
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .wrapContentHeight(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            // Main card content (positioned below the mascot)
+            Column(
+                modifier = Modifier
+                    .padding(top = 80.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White)
+            ) {
+                // Orange header section (distinct from blue error dialog)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(70.dp)
+                        .background(Color(0xFFFF9800))
+                )
+
+                // White content section
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp)
+                        .padding(top = 24.dp, bottom = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Similar Activity Exists!",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0B0B0B),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "An activity similar to this already exists: \"$existingTitle\". $reason",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF666666),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // View Existing Activity button
+                    Button(
+                        onClick = onViewExisting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF9800)
+                        )
+                    ) {
+                        Text(
+                            text = "View Existing Activity",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // OK / Dismiss button
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(1.5.dp, Color(0xFFFF9800))
+                    ) {
+                        Text(
+                            text = "OK",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+                }
+            }
+
+            // Mascot image sitting on top (overlapping the container)
+            Image(
+                painter = painterResource(id = R.drawable.dis_remove),
+                contentDescription = "Warning",
+                modifier = Modifier
+                    .size(160.dp)
+                    .offset(y = 0.dp),
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
 }
 
 @Preview(showBackground = true)

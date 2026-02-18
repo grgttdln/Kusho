@@ -23,5 +23,15 @@ data class GroupedSetsResponse(
 data class SetGroupingResponse(
     val title: String = "",
     val description: String = "",
-    val words: List<String> = emptyList()
+    val words: List<String> = emptyList(),
+    val titleSimilarity: TitleSimilarityResponse? = null
+)
+
+/**
+ * AI-reported title similarity for Gson parsing.
+ */
+data class TitleSimilarityResponse(
+    val similarTo: String = "",
+    val reason: String = "",
+    val alternateTitle: String = ""
 )

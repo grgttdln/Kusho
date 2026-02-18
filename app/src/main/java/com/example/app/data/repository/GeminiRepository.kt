@@ -11,6 +11,8 @@ import com.example.app.data.model.AiWordConfig
 import com.example.app.data.model.FilteredWordsResponse
 import com.example.app.data.model.GroupedSetsResponse
 import com.example.app.data.model.SetGroupingResponse
+import com.example.app.data.model.TitleSimilarity
+import com.example.app.data.model.TitleSimilarityResponse
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.BlockThreshold
 import com.google.ai.client.generativeai.type.HarmCategory
@@ -92,6 +94,8 @@ class GeminiRepository {
     suspend fun generateActivity(
         prompt: String,
         availableWords: List<Word>,
+        existingActivityTitles: List<String> = emptyList(),
+        existingSetTitles: List<String> = emptyList(),
         onPhaseChange: suspend (GenerationPhase) -> Unit = {}
     ): AiGenerationResult = withContext(Dispatchers.IO) {
         try {
@@ -129,7 +133,7 @@ class GeminiRepository {
             // === Step 2: Group into Sets ===
             onPhaseChange(GenerationPhase.Grouping)
             val groupedSets = retryStep(MAX_RETRIES, "Step 2: Group") {
-                stepGroupIntoSets(prompt, cachedFilteredWords!!, filteredAnalysisTable, filteredPatternsSummary)
+                stepGroupIntoSets(prompt, cachedFilteredWords!!, filteredAnalysisTable, filteredPatternsSummary, existingSetTitles)
             }
 
             val setsToUse: GroupedSetsResponse
@@ -143,7 +147,7 @@ class GeminiRepository {
             // === Step 3: Assign Configurations ===
             onPhaseChange(GenerationPhase.Configuring)
             val result = retryStep(MAX_RETRIES, "Step 3: Configure") {
-                stepAssignConfigurations(setsToUse, filteredWordObjs, filteredAnalyses)
+                stepAssignConfigurations(setsToUse, filteredWordObjs, filteredAnalyses, existingActivityTitles, existingSetTitles)
             }
 
             if (result == null) {
@@ -175,6 +179,7 @@ class GeminiRepository {
         availableWords: List<Word>,
         currentSetTitle: String,
         currentSetDescription: String,
+        existingSetTitles: List<String> = emptyList(),
         onPhaseChange: suspend (GenerationPhase) -> Unit = {},
         maxRetries: Int = MAX_RETRIES
     ): AiGenerationResult = withContext(Dispatchers.IO) {
@@ -192,7 +197,7 @@ class GeminiRepository {
             val groupedSets = retryStep(maxRetries, "Regen Step 2") {
                 stepRegroupSet(
                     prompt, wordsToUse, analysisTable, patternsSummary,
-                    currentSetTitle, currentSetDescription
+                    currentSetTitle, currentSetDescription, existingSetTitles
                 )
             }
 
@@ -209,7 +214,7 @@ class GeminiRepository {
             // Step 3: Configure
             onPhaseChange(GenerationPhase.Configuring)
             val result = retryStep(maxRetries, "Regen Step 3") {
-                stepAssignConfigurations(validatedSets, wordObjs, analyses)
+                stepAssignConfigurations(validatedSets, wordObjs, analyses, emptyList(), existingSetTitles)
             }
 
             if (result == null) {
@@ -270,8 +275,21 @@ Respond with a JSON object containing:
         prompt: String,
         filteredWords: List<String>,
         analysisTable: String,
-        patternsSummary: String
+        patternsSummary: String,
+        existingSetTitles: List<String> = emptyList()
     ): GroupedSetsResponse {
+        val existingSetTitlesSection = if (existingSetTitles.isNotEmpty()) {
+            """
+
+EXISTING SET TITLES:
+${existingSetTitles.joinToString("\n") { "- $it" }}
+
+CRITICAL: Generated set titles MUST NOT be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.
+
+If a generated set title is semantically similar to an existing one (even if not identical), include a "titleSimilarity" field in that set's JSON object with "similarTo" (the existing title it resembles), "reason" (one-sentence explanation), and "alternateTitle" (a different 15-char-max title that avoids the similarity).
+"""
+        } else ""
+
         val systemInstruction = """
 You are a reading teacher's assistant. Group these CVC words into coherent educational sets.
 
@@ -289,11 +307,11 @@ RULES:
 3. Every word in a set MUST belong to the set's theme - no filler words
 4. Maximum 10 words per set
 5. Create 1-5 sets to coherently group the words
-6. Set titles: max 15 characters (e.g. "-at Family", "Short 'a'")
+6. Set titles: max 15 characters. Be creative — vary your naming style, don't always use the same pattern. Examples: "-at Rhyme Time", "Cat Bat Hat!", "A Sound Fun", "Vowel 'e' Mix", "B Words Go!"
 7. A smaller, coherent set is always better than a larger, mixed one — but never fewer than 3 words
-
+$existingSetTitlesSection
 Respond with a JSON object containing:
-- "sets": array of objects, each with "title" (string), "description" (string), "words" (array of strings, minimum 3)
+- "sets": array of objects, each with "title" (string), "description" (string), "words" (array of strings, minimum 3), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings)
         """.trimIndent()
 
         val userPrompt = """
@@ -327,8 +345,21 @@ Group these words into coherent educational sets.
         analysisTable: String,
         patternsSummary: String,
         oldSetTitle: String,
-        oldSetDescription: String
+        oldSetDescription: String,
+        existingSetTitles: List<String> = emptyList()
     ): GroupedSetsResponse {
+        val existingSetTitlesSection = if (existingSetTitles.isNotEmpty()) {
+            """
+
+EXISTING SET TITLES:
+${existingSetTitles.joinToString("\n") { "- $it" }}
+
+CRITICAL: The generated set title MUST NOT be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.
+
+If the generated set title is semantically similar to an existing one (even if not identical), include a "titleSimilarity" field with "similarTo" (the existing title it resembles), "reason" (one-sentence explanation), and "alternateTitle" (a different 15-char-max title that avoids the similarity).
+"""
+        } else ""
+
         val systemInstruction = """
 You are a reading teacher's assistant. Create a SINGLE new educational set from these CVC words.
 
@@ -352,11 +383,11 @@ RULES:
 2. ONLY use words from the provided list
 3. Every word must belong to the set's theme
 4. Maximum 10 words
-5. Set title: max 15 characters, short and concise (e.g. "-at Family", "Short 'a'"). Do NOT include the teacher's full request in the title.
+5. Set title: max 15 characters. Be creative and unique — don't reuse common patterns like "Short X Words" or "X Family". Examples: "-at Rhyme Time", "Cat Bat Hat!", "Vowel 'e' Mix", "B Words Go!". Do NOT include the teacher's full request in the title.
 6. Return ONLY ONE set
-
+$existingSetTitlesSection
 Respond with a JSON object containing:
-- "sets": array with exactly ONE object having "title", "description", and "words" (minimum 3) fields
+- "sets": array with exactly ONE object having "title", "description", "words" (minimum 3), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings) fields
         """.trimIndent()
 
         val userPrompt = """
@@ -389,12 +420,33 @@ Create one new set aligned with the teacher's request (but different from "$oldS
     private suspend fun stepAssignConfigurations(
         groupedSets: GroupedSetsResponse,
         availableWords: List<Word>,
-        analyses: List<CVCAnalysis>
+        analyses: List<CVCAnalysis>,
+        existingActivityTitles: List<String> = emptyList(),
+        existingSetTitles: List<String> = emptyList()
     ): AiGenerationResult {
         val wordsWithImages = availableWords.filter { !it.imagePath.isNullOrBlank() }.map { it.word }
         val wordsWithoutImages = availableWords.filter { it.imagePath.isNullOrBlank() }.map { it.word }
         val setsDescription = groupedSets.sets.joinToString("\n") { set ->
             "Set \"${set.title}\" (${set.description}): ${set.words.joinToString(", ")}"
+        }
+
+        val existingTitlesSection = buildString {
+            if (existingActivityTitles.isNotEmpty()) {
+                appendLine()
+                appendLine("EXISTING ACTIVITY TITLES (avoid generating an activity title semantically similar to these):")
+                existingActivityTitles.forEach { appendLine("- $it") }
+            }
+            if (existingSetTitles.isNotEmpty()) {
+                appendLine()
+                appendLine("EXISTING SET TITLES (avoid generating set titles semantically similar to these):")
+                existingSetTitles.forEach { appendLine("- $it") }
+            }
+            if (existingActivityTitles.isNotEmpty() || existingSetTitles.isNotEmpty()) {
+                appendLine()
+                appendLine("CRITICAL: Neither the activity title nor any set title may be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.")
+                appendLine()
+                appendLine("If a generated title (activity or set) is semantically similar to an existing one (even if not identical), include a \"titleSimilarity\" field in that object with \"similarTo\" (the existing title), \"reason\" (one-sentence explanation), and \"alternateTitle\" (a different 15-char-max title that avoids the similarity).")
+            }
         }
 
         val systemInstruction = """
@@ -421,14 +473,15 @@ RULES:
 2. For "fill in the blanks": selectedLetterIndex must be 0, 1, or 2
 3. For "name the picture" and "write the word": always use selectedLetterIndex: 0
 4. NEVER use "name the picture" for words without images
-5. Activity title: STRICTLY max 15 characters (count carefully!). The title MUST describe the theme of the sets — derive it from the common phonics pattern, word family, or grouping theme (e.g. "-at Words", "Short A Fun", "B Starts"). Do NOT use generic titles like "CVC Practice" or "Word Practice". The title should let a teacher immediately understand what the activity covers.
-6. Set titles: max 15 characters, short and concise (e.g. "-at Family", "Short 'a'"). Preserve the set titles from the input unless they exceed the limit.
-
+5. Activity title: STRICTLY max 15 characters (count carefully!). Be creative — derive the title from the phonics pattern but vary your naming style. Examples: "-at Blast!", "A Sound Fun", "B Word Buzz", "Rhyme & Write". Do NOT use generic titles like "CVC Practice" or "Word Practice".
+6. Set titles: max 15 characters. Keep the set titles from the input unless they exceed the limit or are too generic.
+$existingTitlesSection
 Respond with a JSON object containing:
-- "activity": object with "title" (string, STRICTLY max 15 chars)
+- "activity": object with "title" (string, STRICTLY max 15 chars), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings)
 - "sets": array of objects, each with:
   - "title" (string)
   - "description" (string)
+  - "titleSimilarity" (optional object with "similarTo", "reason", and "alternateTitle" strings)
   - "words": array of objects with "word" (string), "configurationType" (string), "selectedLetterIndex" (integer) — minimum 3 words per set
         """.trimIndent()
 
@@ -452,7 +505,7 @@ Assign appropriate configuration types and letter indices to each word based on 
 
         Log.d(TAG, "Step 3 response: $json")
         val aiResponse = gson.fromJson(json, AiResponse::class.java)
-        return parseStep3Response(aiResponse, availableWords)
+        return parseStep3Response(aiResponse, availableWords, existingActivityTitles, existingSetTitles)
     }
 
     // ========== Retry Logic ==========
@@ -489,13 +542,75 @@ Assign appropriate configuration types and letter indices to each word based on 
     // ========== Validation ==========
 
     /**
+     * Ensures a title is unique against existing titles and already-used titles (case-insensitive).
+     * Tries alternateTitle first, then appends suffixes. Respects 15-character max limit.
+     */
+    private fun ensureUniqueTitle(
+        title: String,
+        alternateTitle: String,
+        existingTitles: Set<String>,
+        usedTitles: MutableSet<String>
+    ): String {
+        val allTaken = (existingTitles + usedTitles).map { it.lowercase() }.toSet()
+
+        // If title is already unique, use it
+        if (title.lowercase() !in allTaken) {
+            usedTitles.add(title)
+            return title
+        }
+
+        // Try AI-provided alternate title
+        if (alternateTitle.isNotBlank() && alternateTitle.length <= 15 &&
+            alternateTitle.lowercase() !in allTaken
+        ) {
+            usedTitles.add(alternateTitle)
+            return alternateTitle
+        }
+
+        // Suffix fallback — truncate at word boundary to avoid broken words
+        val suffixes = listOf(" II", " III", " IV", " V")
+        for (suffix in suffixes) {
+            val base = if (title.length + suffix.length <= 15) {
+                title
+            } else {
+                val maxBase = 15 - suffix.length
+                val truncated = title.take(maxBase)
+                val lastSpace = truncated.lastIndexOf(' ')
+                if (lastSpace > 3) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
+            }
+            val candidate = base + suffix
+            if (candidate.length <= 15 && candidate.lowercase() !in allTaken) {
+                usedTitles.add(candidate)
+                return candidate
+            }
+        }
+
+        // Last resort: truncate at word boundary and add number
+        val num = existingTitles.size + usedTitles.size + 1
+        val numSuffix = " $num"
+        val maxBase = 15 - numSuffix.length
+        val truncated = title.take(maxBase)
+        val lastSpace = truncated.lastIndexOf(' ')
+        val base = if (lastSpace > 3) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
+        val candidate = (base + numSuffix).take(15)
+        usedTitles.add(candidate)
+        return candidate
+    }
+
+    /**
      * Parse and validate Step 3 response into AiGenerationResult.
      */
     private fun parseStep3Response(
         response: AiResponse,
-        availableWords: List<Word>
+        availableWords: List<Word>,
+        existingActivityTitles: List<String> = emptyList(),
+        existingSetTitles: List<String> = emptyList()
     ): AiGenerationResult {
         val wordMap = availableWords.associateBy { it.word }
+
+        // Dedup tracking sets
+        val usedActivityTitles = mutableSetOf<String>()
+        val usedSetTitles = mutableSetOf<String>()
 
         // Auto-correct activity title (enforce 15-char limit)
         val activityTitle = when {
@@ -506,6 +621,26 @@ Assign appropriate configuration types and letter indices to each word based on 
                 if (lastSpace > 5) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
             }
             else -> response.activity.title
+        }
+
+        // Dedup activity title against existing activity titles
+        val dedupedActivityTitle = ensureUniqueTitle(
+            activityTitle,
+            response.activity.titleSimilarity?.alternateTitle ?: "",
+            existingActivityTitles.toSet(),
+            usedActivityTitles
+        )
+
+        // Extract activity-level title similarity
+        val activityTitleSimilarity = response.activity.titleSimilarity?.let { sim ->
+            if (sim.similarTo.isNotBlank()) {
+                TitleSimilarity(
+                    generatedTitle = dedupedActivityTitle,
+                    similarToExisting = sim.similarTo,
+                    reason = sim.reason,
+                    alternateTitle = sim.alternateTitle
+                )
+            } else null
         }
 
         if (response.sets.isEmpty()) {
@@ -526,6 +661,14 @@ Assign appropriate configuration types and letter indices to each word based on 
                 }
                 else -> set.title
             }
+
+            // Dedup set title against existing set titles and other generated sets
+            val dedupedSetTitle = ensureUniqueTitle(
+                setTitle,
+                set.titleSimilarity?.alternateTitle ?: "",
+                existingSetTitles.toSet(),
+                usedSetTitles
+            )
 
             val validatedWords = mutableListOf<AiWordConfig>()
 
@@ -572,16 +715,29 @@ Assign appropriate configuration types and letter indices to each word based on 
 
             // If set has < 3 valid words, collect them as orphans to merge later
             if (validatedWords.size < 3) {
-                Log.w(TAG, "Set '${setTitle}' has only ${validatedWords.size} valid words, merging into another set")
+                Log.w(TAG, "Set '${dedupedSetTitle}' has only ${validatedWords.size} valid words, merging into another set")
                 orphanWords.addAll(validatedWords)
                 continue
             }
 
+            // Extract set-level title similarity
+            val setTitleSimilarity = set.titleSimilarity?.let { sim ->
+                if (sim.similarTo.isNotBlank()) {
+                    TitleSimilarity(
+                        generatedTitle = dedupedSetTitle,
+                        similarToExisting = sim.similarTo,
+                        reason = sim.reason,
+                        alternateTitle = sim.alternateTitle
+                    )
+                } else null
+            }
+
             validatedSets.add(
                 AiGeneratedSet(
-                    title = setTitle,
+                    title = dedupedSetTitle,
                     description = set.description,
-                    words = validatedWords
+                    words = validatedWords,
+                    titleSimilarity = setTitleSimilarity
                 )
             )
         }
@@ -592,9 +748,7 @@ Assign appropriate configuration types and letter indices to each word based on 
             val existingWordNames = lastSet.words.map { it.word }.toSet()
             val uniqueOrphans = orphanWords.filter { it.word !in existingWordNames }
             if (uniqueOrphans.isNotEmpty()) {
-                validatedSets[validatedSets.lastIndex] = AiGeneratedSet(
-                    title = lastSet.title,
-                    description = lastSet.description,
+                validatedSets[validatedSets.lastIndex] = lastSet.copy(
                     words = lastSet.words + uniqueOrphans
                 )
             }
@@ -619,8 +773,9 @@ Assign appropriate configuration types and letter indices to each word based on 
         return AiGenerationResult.Success(
             AiGeneratedActivity(
                 activity = AiActivityInfo(
-                    title = activityTitle,
-                    description = ""
+                    title = dedupedActivityTitle,
+                    description = "",
+                    titleSimilarity = activityTitleSimilarity
                 ),
                 sets = validatedSets
             )
@@ -814,13 +969,15 @@ Assign appropriate configuration types and letter indices to each word based on 
 
     private data class ActivityInfo(
         val title: String = "",
-        val description: String = ""
+        val description: String = "",
+        val titleSimilarity: TitleSimilarityResponse? = null
     )
 
     private data class SetInfo(
         val title: String = "",
         val description: String = "",
-        val words: List<WordInfo> = emptyList()
+        val words: List<WordInfo> = emptyList(),
+        val titleSimilarity: TitleSimilarityResponse? = null
     )
 
     private data class WordInfo(

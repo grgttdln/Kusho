@@ -32,7 +32,12 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private val wordRepository = WordRepository(database.wordDao())
     private val sessionManager = SessionManager.getInstance(application)
     private val imageStorageManager = ImageStorageManager(application)
+    private val activityDao = database.activityDao()
+    private val setDao = database.setDao()
     private val geminiRepository = GeminiRepository()
+
+    // Cached existing set titles for regeneration support
+    private var cachedExistingSetTitles: List<String> = emptyList()
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -587,9 +592,16 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         _generationPhase.value = GenerationPhase.Filtering
 
         viewModelScope.launch {
+            // Fetch existing titles for similarity detection
+            val existingActivityTitles = activityDao.getActivitiesByUserIdOnce(userId).map { it.title }
+            val existingSetTitles = setDao.getSetsWithWordNames(userId).map { it.setTitle }.distinct()
+            cachedExistingSetTitles = existingSetTitles
+
             val result = geminiRepository.generateActivity(
                 activityDescription,
-                selectedWords
+                selectedWords,
+                existingActivityTitles = existingActivityTitles,
+                existingSetTitles = existingSetTitles
             ) { phase ->
                 _generationPhase.value = phase
             }
@@ -642,6 +654,53 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 availableWords = lastSelectedWords,
                 currentSetTitle = currentSetTitle,
                 currentSetDescription = currentSetDescription,
+                existingSetTitles = cachedExistingSetTitles,
+                onPhaseChange = { phase ->
+                    _generationPhase.value = phase
+                }
+            )
+
+            when (result) {
+                is AiGenerationResult.Success -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    val gson = com.google.gson.Gson()
+                    onResult(gson.toJson(result.data))
+                }
+                is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    onResult(null)
+                }
+            }
+        }
+    }
+
+    /**
+     * Generate one additional set to append to the existing generated sets.
+     * Reuses the regenerateSet pipeline, passing all existing titles as avoidance context.
+     */
+    fun addMoreSet(
+        existingSetTitles: List<String>,
+        existingSetDescriptions: List<String>,
+        onResult: (String?) -> Unit
+    ) {
+        if (lastSelectedWords.isEmpty()) {
+            onResult(null)
+            return
+        }
+
+        // Combine existing titles into avoidance context for the AI
+        val avoidTitle = existingSetTitles.joinToString(", ").take(50)
+        val avoidDescription = existingSetDescriptions.joinToString("; ").take(100)
+
+        viewModelScope.launch {
+            val allTitlesToAvoid = (cachedExistingSetTitles + existingSetTitles).distinct()
+
+            val result = geminiRepository.regenerateSet(
+                prompt = lastGenerationPrompt,
+                availableWords = lastSelectedWords,
+                currentSetTitle = avoidTitle,
+                currentSetDescription = avoidDescription,
+                existingSetTitles = allTitlesToAvoid,
                 onPhaseChange = { phase ->
                     _generationPhase.value = phase
                 }

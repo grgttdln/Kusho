@@ -202,26 +202,34 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /**
-     * Add pre-linked sets by their IDs (used for AI-generated activities)
+     * Add pre-linked sets by their IDs (used for AI-generated activities).
+     * Suspend function — caller should await completion before rendering UI.
      */
-    fun addPrelinkedSets(setIds: List<Long>) {
-        viewModelScope.launch {
-            setIds.forEach { setId ->
-                val setDetails = setRepository.getSetDetails(setId)
-                setDetails?.let { details ->
-                    val chapterInfo = ChapterInfo(
-                        setId = setId,
-                        title = details.set.title,
-                        itemCount = details.words.size
-                    )
-                    _uiState.update { state ->
-                        if (state.selectedChapters.none { it.setId == setId }) {
-                            state.copy(selectedChapters = state.selectedChapters + chapterInfo)
-                        } else {
-                            state
-                        }
+    suspend fun addPrelinkedSets(setIds: List<Long>) {
+        android.util.Log.d("AddActivityViewModel", "Adding prelinked sets: $setIds")
+        setIds.forEach { setId ->
+            android.util.Log.d("AddActivityViewModel", "Fetching set details for ID: $setId")
+            val setDetails = setRepository.getSetDetails(setId)
+            android.util.Log.d("AddActivityViewModel", "Set details for $setId: $setDetails")
+            setDetails?.let { details ->
+                val chapterInfo = ChapterInfo(
+                    setId = setId,
+                    title = details.set.title,
+                    itemCount = details.words.size
+                )
+                android.util.Log.d("AddActivityViewModel", "Adding chapter: $chapterInfo")
+                _uiState.update { state ->
+                    if (state.selectedChapters.none { it.setId == setId }) {
+                        val newState = state.copy(selectedChapters = state.selectedChapters + chapterInfo)
+                        android.util.Log.d("AddActivityViewModel", "Updated chapters: ${newState.selectedChapters}")
+                        newState
+                    } else {
+                        android.util.Log.d("AddActivityViewModel", "Set $setId already exists, skipping")
+                        state
                     }
                 }
+            } ?: run {
+                android.util.Log.w("AddActivityViewModel", "Set details not found for ID: $setId")
             }
         }
     }

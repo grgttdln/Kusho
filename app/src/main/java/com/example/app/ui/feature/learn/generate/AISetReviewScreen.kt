@@ -58,9 +58,13 @@ fun AISetReviewScreen(
     currentSetIndex: Int,
     onCurrentSetIndexChange: (Int) -> Unit,
     onRegenerateSet: (currentSetTitle: String, currentSetDescription: String, onResult: (String?) -> Unit) -> Unit = { _, _, _ -> },
+    onAddMoreSet: (existingTitles: List<String>, existingDescriptions: List<String>, onResult: (String?) -> Unit) -> Unit = { _, _, _ -> },
     onDiscardSet: () -> Unit = {},
     onAddWordsClick: (existingWords: List<String>) -> Unit = {},
     additionalWords: List<SetRepository.SelectedWordConfig> = emptyList(),
+    existingSetTitleMap: Map<String, Long> = emptyMap(),
+    previouslySavedSetIds: List<Long> = emptyList(),
+    onPreviouslySavedSetIdsCleaned: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -108,6 +112,8 @@ fun AISetReviewScreen(
     // Loading states
     var isSaving by remember { mutableStateOf(false) }
     var isRegenerating by remember { mutableStateOf(false) }
+    var isAddingMoreSet by remember { mutableStateOf(false) }
+    var addMoreSetError by remember { mutableStateOf<String?>(null) }
     var regenerationError by remember { mutableStateOf<String?>(null) }
 
     Box(
@@ -203,6 +209,7 @@ fun AISetReviewScreen(
                     SetReviewCard(
                         set = set,
                         isRegenerating = isRegenerating,
+                        isAddingMoreSet = isAddingMoreSet,
                         onSetChange = { updatedSet ->
                             onEditableSetsChange(editableSets.toMutableList().apply {
                                 this[currentSetIndex] = updatedSet
@@ -234,6 +241,20 @@ fun AISetReviewScreen(
                                         .map { it.word }
                                         .toSet()
                                     newActivity?.sets?.firstOrNull()?.let { newSet ->
+                                        // Resolve title similarity from the regenerated set
+                                        val newTitleSimilarityMatch = newSet.titleSimilarity?.let { sim ->
+                                            val matchKey = existingSetTitleMap.keys.firstOrNull {
+                                                it.equals(sim.similarToExisting, ignoreCase = true)
+                                            }
+                                            if (matchKey != null) {
+                                                TitleSimilarityInfo(
+                                                    existingTitle = matchKey,
+                                                    existingId = existingSetTitleMap[matchKey] ?: 0L,
+                                                    reason = sim.reason
+                                                )
+                                            } else null
+                                        }
+
                                         onEditableSetsChange(editableSets.toMutableList().apply {
                                             this[currentSetIndex] = EditableSet(
                                                 title = newSet.title,
@@ -245,7 +266,8 @@ fun AISetReviewScreen(
                                                         selectedLetterIndex = word.selectedLetterIndex,
                                                         hasImage = word.word in wordsWithImages
                                                     )
-                                                }
+                                                },
+                                                titleSimilarityMatch = newTitleSimilarityMatch
                                             )
                                         })
                                     }
@@ -259,21 +281,101 @@ fun AISetReviewScreen(
                         },
                         showBottomButtons = currentSetIndex == totalSets - 1,
                         isSaving = isSaving,
-                        onAddMoreSetClick = { 
-                            // TODO: Add logic to generate an additional set
+                        hasUndecidedSets = editableSets.any {
+                            (it.overlapMatch != null && it.mergeDecision == MergeDecision.UNDECIDED) ||
+                            (it.titleSimilarityMatch != null && it.titleSimilarityDecision == TitleSimilarityDecision.UNDECIDED)
+                        },
+                        onAddMoreSetClick = {
+                            isAddingMoreSet = true
+                            addMoreSetError = null
+                            val titles = editableSets.map { it.title }
+                            val descriptions = editableSets.map { it.description }
+                            onAddMoreSet(titles, descriptions) { newJson ->
+                                isAddingMoreSet = false
+                                if (newJson == null) {
+                                    addMoreSetError = "Failed to generate set. Please try again."
+                                    return@onAddMoreSet
+                                }
+                                try {
+                                    val newActivity = Gson().fromJson(newJson, AiGeneratedActivity::class.java)
+                                    val wordsWithImages = editableSets
+                                        .flatMap { it.words }
+                                        .filter { it.hasImage }
+                                        .map { it.word }
+                                        .toSet()
+                                    newActivity?.sets?.firstOrNull()?.let { newSet ->
+                                        // Resolve title similarity
+                                        val newTitleSimilarityMatch = newSet.titleSimilarity?.let { sim ->
+                                            val matchKey = existingSetTitleMap.keys.firstOrNull {
+                                                it.equals(sim.similarToExisting, ignoreCase = true)
+                                            }
+                                            if (matchKey != null) {
+                                                TitleSimilarityInfo(
+                                                    existingTitle = matchKey,
+                                                    existingId = existingSetTitleMap[matchKey] ?: 0L,
+                                                    reason = sim.reason
+                                                )
+                                            } else null
+                                        }
+
+                                        val newEditableSet = EditableSet(
+                                            title = newSet.title,
+                                            description = newSet.description,
+                                            words = newSet.words.map { word ->
+                                                EditableWord(
+                                                    word = word.word,
+                                                    configurationType = mapAiConfigTypeToUi(word.configurationType),
+                                                    selectedLetterIndex = word.selectedLetterIndex,
+                                                    hasImage = word.word in wordsWithImages
+                                                )
+                                            },
+                                            titleSimilarityMatch = newTitleSimilarityMatch
+                                        )
+
+                                        // Run overlap detection on the new set, then append
+                                        coroutineScope.launch {
+                                            var finalSet = newEditableSet
+                                            try {
+                                                val newSetWords = listOf(newEditableSet.words.map { it.word })
+                                                val overlaps = setRepository.findOverlappingSets(userId, newSetWords)
+                                                val match = overlaps[0]
+                                                if (match != null) {
+                                                    finalSet = newEditableSet.copy(overlapMatch = match)
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("AISetReview", "Overlap detection failed for new set", e)
+                                            }
+                                            onEditableSetsChange(editableSets + finalSet)
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    addMoreSetError = "Failed to parse generated set"
+                                }
+                            }
                         },
                         onProceedClick = {
-                            // Block save if any set still has an undecided overlap
-                            val hasUndecided = editableSets.any {
-                                it.overlapMatch != null && it.mergeDecision == MergeDecision.UNDECIDED
-                            }
-                            if (hasUndecided) return@SetReviewCard
-
                             isSaving = true
                             coroutineScope.launch {
-                                val savedSetIds = mutableListOf<Long>()
+                                // Delete previously saved sets from a prior Proceed
+                                // (user went back, edited, and is re-saving)
+                                if (previouslySavedSetIds.isNotEmpty()) {
+                                    previouslySavedSetIds.forEach { oldSetId ->
+                                        try {
+                                            setRepository.deleteSet(oldSetId)
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("AISetReview", "Failed to delete old set $oldSetId", e)
+                                        }
+                                    }
+                                    onPreviouslySavedSetIdsCleaned()
+                                }
 
-                                editableSets.forEach { set ->
+                                val savedSetIds = mutableListOf<Long>()
+                                val errors = mutableListOf<String>()
+
+                                // Filter out sets that were skipped via title similarity
+                                editableSets.filter {
+                                    it.titleSimilarityDecision != TitleSimilarityDecision.SKIP
+                                }.forEach { set ->
                                     val selectedWords = set.words.map { word ->
                                         SetRepository.SelectedWordConfig(
                                             wordName = word.word,
@@ -304,12 +406,19 @@ fun AISetReviewScreen(
                                             savedSetIds.add(result.setId)
                                         }
                                         is SetRepository.AddSetResult.Error -> {
-                                            android.util.Log.e("AISetReviewScreen", "Failed to save set: ${result.message}")
+                                            android.util.Log.e("AISetReviewScreen", "Failed to save set '${set.title}': ${result.message}")
+                                            errors.add("\"${set.title}\": ${result.message}")
                                         }
                                     }
                                 }
 
                                 isSaving = false
+
+                                if (savedSetIds.isEmpty()) {
+                                    // All sets failed to save — don't navigate, show error
+                                    regenerationError = "Failed to save sets: ${errors.joinToString("; ")}"
+                                    return@launch
+                                }
 
                                 generatedActivity?.let { activity ->
                                     onFinish(
@@ -351,6 +460,24 @@ fun AISetReviewScreen(
                                     preMergeWords = null
                                 )
                             })
+                        },
+                        onKeepTitle = {
+                            onEditableSetsChange(editableSets.toMutableList().apply {
+                                this[currentSetIndex] = set.copy(
+                                    titleSimilarityDecision = TitleSimilarityDecision.KEEP
+                                )
+                            })
+                        },
+                        onSkipSet = {
+                            // Same as discard — remove the set
+                            onDiscardSet()
+                        },
+                        onUndoTitleDecision = {
+                            onEditableSetsChange(editableSets.toMutableList().apply {
+                                this[currentSetIndex] = set.copy(
+                                    titleSimilarityDecision = TitleSimilarityDecision.UNDECIDED
+                                )
+                            })
                         }
                     )
                     
@@ -384,16 +511,21 @@ private fun SetReviewCard(
     onSetChange: (EditableSet) -> Unit,
     onWordRemove: (Int) -> Unit,
     isRegenerating: Boolean,
+    isAddingMoreSet: Boolean = false,
     onRegenerateSet: () -> Unit,
     onAddWordsClick: () -> Unit,
     showBottomButtons: Boolean = false,
     isSaving: Boolean = false,
+    hasUndecidedSets: Boolean = false,
     onAddMoreSetClick: () -> Unit = {},
     onProceedClick: () -> Unit = {},
     onMergeIntoExisting: () -> Unit = {},
     onCreateAsNew: () -> Unit = {},
     onUndoDecision: () -> Unit = {},
     onDiscardSet: () -> Unit = {},
+    onKeepTitle: () -> Unit = {},
+    onSkipSet: () -> Unit = {},
+    onUndoTitleDecision: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showDiscardDialog by remember { mutableStateOf(false) }
@@ -558,6 +690,116 @@ private fun SetReviewCard(
                             )
                         }
                     }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Title similarity banner (orange-themed, distinct from blue overlap banner)
+        if (set.titleSimilarityMatch != null) {
+            when (set.titleSimilarityDecision) {
+                TitleSimilarityDecision.UNDECIDED -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = Color(0xFFFFF3E0),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = Color(0xFFFFCC80),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Similar title: \"${set.titleSimilarityMatch.existingTitle}\"",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFE65100)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = set.titleSimilarityMatch.reason,
+                            fontSize = 13.sp,
+                            color = Color(0xFF666666)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = onKeepTitle,
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFF9800)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Keep Title",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = onSkipSet,
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, Color(0xFFFF9800)),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Skip Set",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFFF9800)
+                                )
+                            }
+                        }
+                    }
+                }
+                TitleSimilarityDecision.KEEP -> {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = Color(0xFFE8F5E9),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = Color(0xFFA5D6A7),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Keeping as new set",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF2E7D32),
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = onUndoTitleDecision) {
+                            Text(
+                                text = "Undo",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF2E7D32)
+                            )
+                        }
+                    }
+                }
+                TitleSimilarityDecision.SKIP -> {
+                    // This state shouldn't be visible since the set is removed,
+                    // but handle gracefully
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -817,21 +1059,31 @@ private fun SetReviewCard(
                 // Add More Set Button (outline style)
                 Button(
                     onClick = onAddMoreSetClick,
+                    enabled = !isAddingMoreSet && !isSaving,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White
+                        containerColor = Color.White,
+                        disabledContainerColor = Color.White
                     ),
-                    border = BorderStroke(1.5.dp, Color(0xFF3FA9F8))
+                    border = BorderStroke(1.5.dp, if (isAddingMoreSet || isSaving) Color(0xFFB0BEC5) else Color(0xFF3FA9F8))
                 ) {
-                    Text(
-                        text = "Add More Set",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF3FA9F8)
-                    )
+                    if (isAddingMoreSet) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color(0xFF3FA9F8),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = "Add More Set",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSaving) Color(0xFFB0BEC5) else Color(0xFF3FA9F8)
+                        )
+                    }
                 }
 
                 // Proceed Button (filled style) - saves all sets and finishes
@@ -842,9 +1094,10 @@ private fun SetReviewCard(
                         .fillMaxHeight(),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3FA9F8)
+                        containerColor = Color(0xFF3FA9F8),
+                        disabledContainerColor = Color(0xFFB0BEC5)
                     ),
-                    enabled = !isSaving
+                    enabled = !isSaving && !hasUndecidedSets
                 ) {
                     if (isSaving) {
                         CircularProgressIndicator(
@@ -861,6 +1114,18 @@ private fun SetReviewCard(
                         )
                     }
                 }
+            }
+
+            // Warning message when proceed is blocked by undecided banners
+            if (hasUndecidedSets) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Resolve all overlap and similarity decisions before proceeding",
+                    fontSize = 13.sp,
+                    color = Color(0xFFE65100),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
@@ -1082,6 +1347,20 @@ enum class MergeDecision {
     CREATE_NEW   // User chose to create as new set
 }
 
+// Title similarity decision state
+enum class TitleSimilarityDecision {
+    UNDECIDED,   // Banner visible, user hasn't chosen
+    KEEP,        // User chose to keep the title as new set
+    SKIP         // User chose to skip/discard the set
+}
+
+// Info about a matched existing title
+data class TitleSimilarityInfo(
+    val existingTitle: String,
+    val existingId: Long,
+    val reason: String
+)
+
 // Data classes for UI state
 data class EditableSet(
     val title: String,
@@ -1090,7 +1369,9 @@ data class EditableSet(
     val overlapMatch: SetRepository.OverlapResult? = null,
     val mergeDecision: MergeDecision = MergeDecision.UNDECIDED,
     val preMergeTitle: String? = null,
-    val preMergeWords: List<EditableWord>? = null
+    val preMergeWords: List<EditableWord>? = null,
+    val titleSimilarityMatch: TitleSimilarityInfo? = null,
+    val titleSimilarityDecision: TitleSimilarityDecision = TitleSimilarityDecision.UNDECIDED
 )
 
 data class EditableWord(

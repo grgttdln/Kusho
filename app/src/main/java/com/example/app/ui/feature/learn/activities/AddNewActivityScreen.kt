@@ -40,6 +40,7 @@ import com.example.app.ui.components.activities.AddedChapterPill
 import com.example.app.ui.components.activities.ChapterCard
 import com.example.app.ui.components.common.AlreadyExistsDialog
 import kotlinx.coroutines.launch
+import android.util.Log
 
 @Composable
 fun AddNewActivityScreen(
@@ -54,7 +55,21 @@ fun AddNewActivityScreen(
     viewModel: AddActivityViewModel = viewModel()
 ) {
     // Initialize with pre-filled data from AI generation
-    LaunchedEffect(prefillTitle, prefillDescription, prelinkedSetIds) {
+    // Use a key to force re-initialization when AI data changes
+    val initializationKey = remember(prefillTitle, prefillDescription, prelinkedSetIds) {
+        System.currentTimeMillis()
+    }
+    
+    // Debug log
+    Log.d("AddNewActivityScreen", "Received prelinkedSetIds: $prelinkedSetIds, prefillTitle: $prefillTitle")
+    
+    LaunchedEffect(initializationKey) {
+        Log.d("AddNewActivityScreen", "LaunchedEffect triggered with key: $initializationKey")
+        // Always reset form when entering with AI-generated data to ensure fresh state
+        if (prelinkedSetIds.isNotEmpty() || prefillTitle.isNotEmpty()) {
+            Log.d("AddNewActivityScreen", "Resetting form for AI-generated data")
+            viewModel.resetForm()
+        }
         if (prefillTitle.isNotEmpty()) {
             viewModel.setActivityTitle(prefillTitle)
         }
@@ -62,6 +77,7 @@ fun AddNewActivityScreen(
             viewModel.setActivityDescription(prefillDescription)
         }
         if (prelinkedSetIds.isNotEmpty()) {
+            Log.d("AddNewActivityScreen", "Calling addPrelinkedSets with: $prelinkedSetIds")
             viewModel.addPrelinkedSets(prelinkedSetIds)
         }
     }
@@ -71,6 +87,12 @@ fun AddNewActivityScreen(
     // Use local references to prevent unnecessary recompositions
     val activityTitle = uiState.activityTitle
     val addedChapters = uiState.selectedChapters
+    
+    // Debug log when chapters change
+    LaunchedEffect(addedChapters) {
+        Log.d("AddNewActivityScreen", "Current added chapters: ${addedChapters.map { it.title }}")
+    }
+    
     var showDuplicateError by remember { mutableStateOf(false) }
 
     Box(
@@ -307,7 +329,7 @@ fun AddNewActivityScreen(
                 coroutineScope.launch {
                     val success = viewModel.createActivity(userId)
                     if (success) {
-                        onNavigate(10) // Navigate to confirmation screen
+                        onActivityCreated() // Navigate to success screen via callback
                     }
                 }
             },
