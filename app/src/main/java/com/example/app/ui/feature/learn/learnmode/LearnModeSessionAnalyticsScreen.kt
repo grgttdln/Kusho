@@ -3,6 +3,7 @@ package com.example.app.ui.feature.learn.learnmode
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -32,9 +33,11 @@ import androidx.compose.ui.unit.sp
 import android.media.MediaPlayer
 import com.example.app.R
 import com.example.app.service.WatchConnectionManager
+import com.example.app.ui.feature.classroom.ConfettiAnimationStudent
 
 private val PurpleColor = Color(0xFFAE8EFB)
 private val LightPurpleBg = Color(0xFFE7DDFE)
+private val ScreenBackgroundColor = Color(0xFFF3EEFE)
 
 @Composable
 fun LearnModeSessionAnalyticsScreen(
@@ -76,37 +79,35 @@ fun LearnModeSessionAnalyticsScreen(
         onContinue()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(top = 10.dp, bottom = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_kusho),
-            contentDescription = "Kusho Logo",
-            modifier = Modifier
-                .height(54.dp)
-                .fillMaxWidth()
-                .padding(horizontal = 30.dp)
-                .offset(x = 10.dp),
-            contentScale = ContentScale.Fit,
-            alignment = Alignment.Center
-        )
+    Box(modifier = modifier.fillMaxSize().background(ScreenBackgroundColor)) {
+        ConfettiAnimationStudent()
 
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .fillMaxSize()
+                .padding(top = 10.dp, bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_kusho),
+                contentDescription = "Kusho Logo",
+                modifier = Modifier
+                    .height(54.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 30.dp)
+                    .offset(x = 10.dp),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.Center
+            )
+
+            Spacer(Modifier.height(30.dp))
+
+            // Great Job text at the top
             Text(
                 text = "Great Job!",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = PurpleColor,
                 textAlign = TextAlign.Center
             )
 
@@ -115,55 +116,26 @@ fun LearnModeSessionAnalyticsScreen(
             Text(
                 text = "Learn Mode Completed!",
                 fontSize = 18.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color.Black,
+                fontWeight = FontWeight.Bold,
+                color = PurpleColor,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(Modifier.height(24.dp))
-
-            Image(
-                painter = painterResource(id = R.drawable.dis_champion),
-                contentDescription = "Champion",
-                modifier = Modifier.size(300.dp),
-                contentScale = ContentScale.Fit
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = LightPurpleBg),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            // Avatar in the center
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 20.dp, horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    StatItemPurple(
-                        value = score,
-                        label = "Score",
-                        progress = 0.9f
-                    )
-
-                    StatItemPurple(
-                        value = gestureAccuracy,
-                        label = "Gesture Accuracy",
-                        progress = 0.786f
-                    )
-
-                    StatItemPurple(
-                        value = timeSpent,
-                        label = "Time Spent",
-                        progress = 1f
-                    )
-                }
+                Image(
+                    painter = painterResource(id = R.drawable.dis_champion),
+                    contentDescription = "Champion",
+                    modifier = Modifier.size(400.dp),
+                    contentScale = ContentScale.Fit
+                )
             }
-        }
 
         Column(
             modifier = Modifier
@@ -178,7 +150,10 @@ fun LearnModeSessionAnalyticsScreen(
                     .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(2.dp, Color(0xFF3FA9F8)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3FA9F8))
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF3FA9F8)
+                )
             ) {
                 Text(
                     text = "Learn Again",
@@ -206,6 +181,7 @@ fun LearnModeSessionAnalyticsScreen(
             }
         }
     }
+}
 }
 
 @Composable
