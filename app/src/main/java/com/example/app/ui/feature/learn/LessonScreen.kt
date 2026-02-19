@@ -78,7 +78,7 @@ fun LessonScreen(
             NavigationTile(
                 title = "Word Bank",
                 backgroundColor = Color(0xFF5DB7FF),
-                imageRes = R.drawable.ic_tutorial,
+                imageRes = R.drawable.ic_wordbank,
                 onClick = onNavigateToWordBank
             )
 
@@ -87,7 +87,7 @@ fun LessonScreen(
             NavigationTile(
                 title = "Your Activities",
                 backgroundColor = Color(0xFF5DB7FF),
-                imageRes = R.drawable.ic_learn,
+                imageRes = R.drawable.ic_activity_set,
                 onClick = onNavigateToActivities
             )
 
@@ -96,7 +96,7 @@ fun LessonScreen(
             NavigationTile(
                 title = "Your Sets",
                 backgroundColor = Color(0xFF5DB7FF),
-                imageRes = R.drawable.ic_tutorial,
+                imageRes = R.drawable.ic_activities,
                 onClick = onNavigateToSets
             )
         }
