@@ -14,7 +14,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "learner_profile_annotations",
     indices = [
-        Index(value = ["studentId", "setId", "itemId", "sessionMode"], unique = true),
+        Index(value = ["studentId", "setId", "itemId", "sessionMode", "activityId"], unique = true),
         Index(value = ["studentId"]),
         Index(value = ["setId"]),
         Index(value = ["sessionMode"])
@@ -32,6 +32,9 @@ data class LearnerProfileAnnotation(
 
     /** The item/word ID within the set (index in the set's word list) */
     val itemId: Int,
+
+    /** The activity ID this annotation belongs to (0 for tutorials) */
+    val activityId: Long = 0L,
 
     /** Session mode: "LEARN" for Learn Mode, "TUTORIAL" for Tutorial Mode */
     val sessionMode: String = "LEARN",
@@ -85,6 +88,7 @@ data class LearnerProfileAnnotation(
             setId: Long,
             itemId: Int,
             sessionMode: String = MODE_LEARN,
+            activityId: Long = 0L,
             levelOfProgress: String?,
             strengthsObserved: List<String>,
             strengthsNote: String,
@@ -95,6 +99,7 @@ data class LearnerProfileAnnotation(
                 studentId = studentId,
                 setId = setId,
                 itemId = itemId,
+                activityId = activityId,
                 sessionMode = sessionMode,
                 levelOfProgress = levelOfProgress,
                 strengthsObserved = strengthsObserved.joinToString(","),

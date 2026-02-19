@@ -228,6 +228,95 @@ class GeminiRepository {
         }
     }
 
+    // ========== Annotation Summary ==========
+
+    /**
+     * Generate an AI summary from a list of teacher annotations for a set/category.
+     *
+     * @param annotations All annotations for a given (studentId, setId, sessionMode)
+     * @param sessionMode "LEARN" or "TUTORIAL"
+     * @return Generated summary text, or null if generation fails
+     */
+    suspend fun generateAnnotationSummary(
+        annotations: List<com.example.app.data.entity.LearnerProfileAnnotation>,
+        sessionMode: String,
+        itemNames: Map<Int, String> = emptyMap()
+    ): String? = withContext(Dispatchers.IO) {
+        if (annotations.isEmpty()) return@withContext null
+
+        try {
+            val isTutorial = sessionMode == com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL
+            val itemLabel = if (isTutorial) "Letter" else "Word"
+
+            val formattedAnnotations = annotations.joinToString("\n") { annotation ->
+                buildString {
+                    val name = itemNames[annotation.itemId]
+                    if (name != null) {
+                        append("- $itemLabel $name:")
+                    } else {
+                        append("- $itemLabel ${annotation.itemId + 1}:")
+                    }
+                    annotation.levelOfProgress?.let { append(" Level: $it.") }
+                    val strengths = annotation.getStrengthsList()
+                    if (strengths.isNotEmpty()) append(" Strengths: ${strengths.joinToString(", ")}.")
+                    if (annotation.strengthsNote.isNotBlank()) append(" Strengths note: ${annotation.strengthsNote}.")
+                    val challenges = annotation.getChallengesList()
+                    if (challenges.isNotEmpty()) append(" Challenges: ${challenges.joinToString(", ")}.")
+                    if (annotation.challengesNote.isNotBlank()) append(" Challenges note: ${annotation.challengesNote}.")
+                }
+            }
+
+            val modeLabel = if (isTutorial) "tutorial" else "learn"
+
+            val systemInstruction = """
+You are an educational assessment assistant for young learners (ages 4-8) learning to read and write letters.
+Based on the teacher's annotations, generate a concise 2-4 sentence summary.
+
+The summary should:
+- Reference specific ${itemLabel.lowercase()}s by name when discussing strengths or challenges
+- Highlight overall strengths and areas for improvement
+- Note specific patterns across items
+- Provide one actionable recommendation for the teacher
+
+Respond with ONLY the summary text, no JSON, no markdown formatting.
+            """.trimIndent()
+
+            val userPrompt = """
+Here are the teacher's annotations for a student's $modeLabel session:
+
+$formattedAnnotations
+
+Generate a concise 2-4 sentence summary. Reference specific ${itemLabel.lowercase()}s by name.
+            """.trimIndent()
+
+            val model = GenerativeModel(
+                modelName = MODEL_NAME,
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.3f
+                    topP = 0.95f
+                    maxOutputTokens = 256
+                },
+                safetySettings = safetySettings,
+                systemInstruction = content { text(systemInstruction) }
+            )
+
+            val response = model.generateContent(userPrompt)
+            val summary = response.text?.trim()
+
+            if (summary.isNullOrBlank()) {
+                Log.w(TAG, "Annotation summary generation returned empty")
+                return@withContext null
+            }
+
+            Log.d(TAG, "Annotation summary generated: $summary")
+            summary
+        } catch (e: Exception) {
+            Log.e(TAG, "Annotation summary generation failed: ${e.message}", e)
+            null
+        }
+    }
+
     // ========== Step Functions ==========
 
     /**

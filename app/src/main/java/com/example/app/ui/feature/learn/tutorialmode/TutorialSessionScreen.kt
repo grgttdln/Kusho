@@ -147,7 +147,10 @@ fun TutorialSessionScreen(
     // Get database instance for annotation persistence
     val database = remember { AppDatabase.getInstance(context) }
     val annotationDao = remember { database.learnerProfileAnnotationDao() }
-    
+    val annotationSummaryDao = remember { database.annotationSummaryDao() }
+    val tutorialCompletionDao = remember { database.tutorialCompletionDao() }
+    val geminiRepository = remember { com.example.app.data.repository.GeminiRepository() }
+
     // Generate a unique setId based on tutorial session (title + letterType)
     // This ensures annotations are saved per tutorial section
     // Using negative IDs to avoid collision with actual database setIds
@@ -158,6 +161,23 @@ fun TutorialSessionScreen(
             title.equals("Consonants", ignoreCase = true) && letterType.equals("capital", ignoreCase = true) -> -3L
             title.equals("Consonants", ignoreCase = true) && letterType.equals("small", ignoreCase = true) -> -4L
             else -> -(kotlin.math.abs("$title-$letterType".hashCode().toLong()) % 1000 + 5)
+        }
+    }
+
+    // Save completion record and end session
+    val completeTutorialAndEnd: () -> Unit = {
+        coroutineScope.launch {
+            if (studentId > 0L) {
+                withContext(Dispatchers.IO) {
+                    tutorialCompletionDao.insertIfNotExists(
+                        com.example.app.data.entity.TutorialCompletion(
+                            studentId = studentId,
+                            tutorialSetId = tutorialSetId
+                        )
+                    )
+                }
+            }
+            onEndSession()
         }
     }
 
@@ -353,7 +373,7 @@ fun TutorialSessionScreen(
                         if (currentStep < maxSteps) {
                             currentStep++
                         } else {
-                            onEndSession()
+                            completeTutorialAndEnd()
                         }
                     }
                 }
@@ -379,7 +399,7 @@ fun TutorialSessionScreen(
                     if (currentStep < maxSteps) {
                         currentStep++
                     } else {
-                        onEndSession()
+                        completeTutorialAndEnd()
                     }
                 } else {
                     // On incorrect, notify watch to retry and resend letter data
@@ -441,6 +461,33 @@ fun TutorialSessionScreen(
                                 challengesNote = challengesNote
                             )
                             annotationDao.insertOrUpdate(annotation)
+
+                            // Generate AI summary for this tutorial's annotations
+                            try {
+                                val allAnnotations = annotationDao.getAnnotationsForStudentInSet(
+                                    studentIdString,
+                                    tutorialSetId,
+                                    com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL
+                                )
+                                if (allAnnotations.isNotEmpty()) {
+                                    val letterNameMap = letterNames.mapIndexed { i, name -> i to name }.toMap()
+                                    val summaryText = geminiRepository.generateAnnotationSummary(
+                                        allAnnotations, com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL, letterNameMap
+                                    )
+                                    if (summaryText != null) {
+                                        annotationSummaryDao.insertOrUpdate(
+                                            com.example.app.data.entity.AnnotationSummary(
+                                                studentId = studentIdString,
+                                                setId = tutorialSetId,
+                                                sessionMode = com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL,
+                                                summaryText = summaryText
+                                            )
+                                        )
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e("TutorialSession", "AI summary generation failed: ${e.message}")
+                            }
                         }
                     }
                 }

@@ -179,6 +179,8 @@ fun LearnModeSessionScreen(
     val database = remember { AppDatabase.getInstance(context) }
     val annotationDao = remember { database.learnerProfileAnnotationDao() }
     val studentSetProgressDao = remember { database.studentSetProgressDao() }
+    val annotationSummaryDao = remember { database.annotationSummaryDao() }
+    val geminiRepository = remember { com.example.app.data.repository.GeminiRepository() }
 
     // Get WatchConnectionManager instance
     val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
@@ -209,9 +211,10 @@ fun LearnModeSessionScreen(
         if (setId > 0 && studentId.isNotBlank()) {
             withContext(Dispatchers.IO) {
                 val existingAnnotations = annotationDao.getAnnotationsForStudentInSet(
-                    studentId, 
+                    studentId,
                     setId,
-                    com.example.app.data.entity.LearnerProfileAnnotation.MODE_LEARN
+                    com.example.app.data.entity.LearnerProfileAnnotation.MODE_LEARN,
+                    activityId
                 )
                 val loadedMap = existingAnnotations.associate { annotation ->
                     annotation.itemId to AnnotationData(
@@ -254,6 +257,7 @@ fun LearnModeSessionScreen(
                                 setId = setId,
                                 itemId = itemId,
                                 sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                                activityId = activityId,
                                 levelOfProgress = annotationData.levelOfProgress,
                                 strengthsObserved = annotationData.strengthsObserved.toList(),
                                 strengthsNote = annotationData.strengthsNote,
@@ -292,6 +296,36 @@ fun LearnModeSessionScreen(
                             studentSetProgressDao.upsertProgress(progress)
                         }
                         Log.d("LearnModeSession", "✅ Set marked as completed in StudentSetProgress: studentId=$studentId, activityId=$activityId, setId=$setId")
+
+                        // Generate AI summary for this set's annotations
+                        try {
+                            val allAnnotations = annotationDao.getAnnotationsForStudentInSet(
+                                studentId = studentId,
+                                setId = setId,
+                                sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                                activityId = activityId
+                            )
+                            if (allAnnotations.isNotEmpty()) {
+                                val wordNames = words.mapIndexed { i, w -> i to w.word }.toMap()
+                                val summaryText = geminiRepository.generateAnnotationSummary(
+                                    allAnnotations, LearnerProfileAnnotation.MODE_LEARN, wordNames
+                                )
+                                if (summaryText != null) {
+                                    annotationSummaryDao.insertOrUpdate(
+                                        com.example.app.data.entity.AnnotationSummary(
+                                            studentId = studentId,
+                                            setId = setId,
+                                            sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                                            activityId = activityId,
+                                            summaryText = summaryText
+                                        )
+                                    )
+                                    Log.d("LearnModeSession", "AI summary generated and saved for setId=$setId")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("LearnModeSession", "AI summary generation failed: ${e.message}")
+                        }
                     } else {
                         Log.w("LearnModeSession", "⚠️ Cannot mark set as completed - studentId=$studentId, activityId=$activityId, setId=$setId")
                     }
@@ -602,6 +636,7 @@ fun LearnModeSessionScreen(
                                 setId = setId,
                                 itemId = currentWordIndex,
                                 sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                                activityId = activityId,
                                 levelOfProgress = levelOfProgress,
                                 strengthsObserved = strengthsObserved,
                                 strengthsNote = strengthsNote,
@@ -609,7 +644,7 @@ fun LearnModeSessionScreen(
                                 challengesNote = challengesNote
                             )
                             annotationDao.insertOrUpdate(annotation)
-                            Log.d("LearnModeSession", "📝 Annotation saved to DB: studentId=$studentId, setId=$setId, itemId=$currentWordIndex")
+                            Log.d("LearnModeSession", "📝 Annotation saved to DB: studentId=$studentId, setId=$setId, activityId=$activityId, itemId=$currentWordIndex")
                         }
                     }
                 }

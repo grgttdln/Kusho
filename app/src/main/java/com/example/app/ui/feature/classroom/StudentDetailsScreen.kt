@@ -427,19 +427,22 @@ fun StudentDetailsScreen(
                     val strengthsList = annotation.getStrengthsList()
                     val challengesList = annotation.getChallengesList()
                     (strengthsList + challengesList).distinct().take(2)
-                } ?: listOf("Fluency", "Recognition")
+                } ?: emptyList()
                 
-                val annotationText = session.annotation?.let { annotation ->
-                    buildString {
-                        if (annotation.strengthsNote.isNotBlank()) {
-                            append(annotation.strengthsNote)
-                        }
-                        if (annotation.challengesNote.isNotBlank()) {
-                            if (isNotEmpty()) append(" ")
-                            append(annotation.challengesNote)
-                        }
-                    }.takeIf { it.isNotBlank() }
-                } ?: "${uiState.studentName} has completed the ${session.tutorialType} ${session.letterType.lowercase()} letters tutorial."
+                val summaryKey = "${session.setId}|TUTORIAL|0"
+                val annotationText = uiState.annotationSummaries[summaryKey]
+                    ?: session.annotation?.let { annotation ->
+                        buildString {
+                            if (annotation.strengthsNote.isNotBlank()) {
+                                append(annotation.strengthsNote)
+                            }
+                            if (annotation.challengesNote.isNotBlank()) {
+                                if (isNotEmpty()) append(" ")
+                                append(annotation.challengesNote)
+                            }
+                        }.takeIf { it.isNotBlank() }
+                    }
+                    ?: "${uiState.studentName} has completed the ${session.tutorialType} ${session.letterType.lowercase()} letters tutorial."
                 
                 TutorialAnnotationCard(
                     tags = tags,
@@ -476,17 +479,20 @@ fun StudentDetailsScreen(
                     }
                 } ?: emptyList()
                 
-                val annotationText = completedSet.annotation?.let { annotation ->
-                    buildString {
-                        if (annotation.strengthsNote.isNotBlank()) {
-                            append(annotation.strengthsNote)
-                        }
-                        if (annotation.challengesNote.isNotBlank()) {
-                            if (isNotEmpty()) append(" ")
-                            append(annotation.challengesNote)
-                        }
-                    }.takeIf { it.isNotBlank() }
-                } ?: "${uiState.studentName} has completed this activity set."
+                val learnSummaryKey = "${completedSet.setId}|LEARN|${completedSet.activityId}"
+                val annotationText = uiState.annotationSummaries[learnSummaryKey]
+                    ?: completedSet.annotation?.let { annotation ->
+                        buildString {
+                            if (annotation.strengthsNote.isNotBlank()) {
+                                append(annotation.strengthsNote)
+                            }
+                            if (annotation.challengesNote.isNotBlank()) {
+                                if (isNotEmpty()) append(" ")
+                                append(annotation.challengesNote)
+                            }
+                        }.takeIf { it.isNotBlank() }
+                    }
+                    ?: "${uiState.studentName} has completed this activity set."
 
                 LearnAnnotationCard(
                     tags = tags,

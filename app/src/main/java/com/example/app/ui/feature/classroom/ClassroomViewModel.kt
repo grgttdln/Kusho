@@ -10,6 +10,9 @@ import com.example.app.data.repository.ClassRepository
 import com.example.app.data.repository.EnrollmentRepository
 import com.example.app.data.repository.StudentRepository
 import com.example.app.data.repository.StudentTeacherRepository
+import com.example.app.data.entity.AnnotationSummary
+import com.example.app.data.entity.LearnerProfileAnnotation
+import com.example.app.data.repository.GeminiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -115,6 +118,7 @@ data class StudentDetailsUiState(
     val secondTipSubtitle: String? = null,
     val completedLearnSets: List<CompletedActivitySet> = emptyList(),
     val completedTutorialSessions: List<CompletedTutorialSession> = emptyList(),
+    val annotationSummaries: Map<String, String> = emptyMap(),
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -132,6 +136,8 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
         EnrollmentRepository(database.enrollmentDao(), database.studentDao())
     private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
     private val sessionManager = SessionManager.getInstance(application)
+    private val annotationSummaryDao = database.annotationSummaryDao()
+    private val geminiRepository = GeminiRepository()
 
     private val _classListUiState = MutableStateFlow(ClassListUiState())
     val classListUiState: StateFlow<ClassListUiState> = _classListUiState.asStateFlow()
@@ -348,11 +354,12 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                     val set = setDao.getSetById(progress.setId)
                     
                     if (activity != null && set != null) {
-                        // Load annotation for this completed set
+                        // Load annotation for this completed set (scoped to activity)
                         val annotation = annotationDao.getAnnotationsForStudentInSet(
                             studentId = studentId.toString(),
                             setId = set.id,
-                            sessionMode = com.example.app.data.entity.LearnerProfileAnnotation.MODE_LEARN
+                            sessionMode = com.example.app.data.entity.LearnerProfileAnnotation.MODE_LEARN,
+                            activityId = activity.id
                         ).firstOrNull()
                         
                         CompletedActivitySet(
@@ -378,31 +385,53 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                     Triple("Consonants", "Small", -4L)
                 )
                 
-                // Fetch annotations for each tutorial type
+                // Load tutorial completions
+                val tutorialCompletionDao = database.tutorialCompletionDao()
+                val tutorialCompletions = tutorialCompletionDao.getCompletionsForStudent(studentId)
+                val completedTutorialSetIds = tutorialCompletions.associate { it.tutorialSetId to it.completedAt }
+
+                // Fetch annotations for each tutorial type — one card per category
                 tutorialCombinations.forEach { (tutorialType, letterType, setId) ->
                     val annotations = annotationDao.getAnnotationsForStudentInSet(
                         studentId = studentId.toString(),
                         setId = setId,
                         sessionMode = com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL
                     )
-                    
-                    // Add a session for each annotation found
-                    annotations.forEach { annotation ->
+
+                    if (annotations.isNotEmpty()) {
+                        // Has annotations — show card with most recent annotation
+                        val mostRecent = annotations.maxByOrNull { it.updatedAt }
                         tutorialSessions.add(
                             CompletedTutorialSession(
                                 tutorialType = tutorialType,
                                 letterType = letterType,
-                                completedAt = annotation.createdAt,
+                                completedAt = mostRecent?.createdAt,
                                 setId = setId,
-                                annotation = annotation
+                                annotation = mostRecent
+                            )
+                        )
+                    } else if (completedTutorialSetIds.containsKey(setId)) {
+                        // No annotations but tutorial was completed — show placeholder card
+                        tutorialSessions.add(
+                            CompletedTutorialSession(
+                                tutorialType = tutorialType,
+                                letterType = letterType,
+                                completedAt = completedTutorialSetIds[setId],
+                                setId = setId,
+                                annotation = null
                             )
                         )
                     }
                 }
                 
+                // Load AI annotation summaries
+                val summaries = annotationSummaryDao.getSummariesForStudent(studentId.toString())
+                val summaryMap = summaries.associate { "${it.setId}|${it.sessionMode}|${it.activityId}" to it.summaryText }
+
                 uiState = uiState.copy(
                     completedLearnSets = completedSets,
-                    completedTutorialSessions = tutorialSessions
+                    completedTutorialSessions = tutorialSessions,
+                    annotationSummaries = summaryMap
                 )
 
                 _studentDetailsUiState.value = uiState
@@ -415,6 +444,39 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Generate an AI summary for a set/category's annotations and store it.
+     * Called after annotation save in session screens. Runs silently — failures are logged but not surfaced.
+     */
+    fun generateAnnotationSummary(studentId: String, setId: Long, sessionMode: String, activityId: Long = 0L) {
+        viewModelScope.launch {
+            try {
+                val annotationDao = database.learnerProfileAnnotationDao()
+                val annotations = annotationDao.getAnnotationsForStudentInSet(
+                    studentId = studentId,
+                    setId = setId,
+                    sessionMode = sessionMode,
+                    activityId = activityId
+                )
+
+                if (annotations.isEmpty()) return@launch
+
+                val summaryText = geminiRepository.generateAnnotationSummary(annotations, sessionMode)
+                    ?: return@launch
+
+                val summary = AnnotationSummary(
+                    studentId = studentId,
+                    setId = setId,
+                    sessionMode = sessionMode,
+                    activityId = activityId,
+                    summaryText = summaryText
+                )
+                annotationSummaryDao.insertOrUpdate(summary)
+            } catch (e: Exception) {
+                android.util.Log.e("ClassroomViewModel", "Summary generation failed: ${e.message}", e)
+            }
+        }
+    }
 
     /**
      * Create a new class.
