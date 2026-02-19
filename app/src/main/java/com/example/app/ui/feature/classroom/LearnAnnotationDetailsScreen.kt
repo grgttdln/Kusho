@@ -30,6 +30,9 @@ import com.example.app.data.AppDatabase
 import com.example.app.data.entity.LearnerProfileAnnotation
 import com.example.app.data.entity.SetWord
 import com.example.app.data.entity.Word
+import androidx.compose.ui.text.font.FontStyle
+import com.example.app.data.entity.ActivityDescriptionCache
+import com.example.app.data.repository.GeminiRepository
 
 @Composable
 fun LearnAnnotationDetailsScreen(
@@ -46,7 +49,9 @@ fun LearnAnnotationDetailsScreen(
     var setWords by remember { mutableStateOf(listOf<SetWord>()) }
     var wordsMap by remember { mutableStateOf(mapOf<Long, Word>()) }
     var annotationsMap by remember { mutableStateOf(mapOf<Long, LearnerProfileAnnotation?>()) }
-    
+    var descriptionText by remember { mutableStateOf<String?>(null) }
+    var isLoadingDescription by remember { mutableStateOf(true) }
+
     // Load set words and their corresponding word details
     LaunchedEffect(setId, studentId) {
         if (setId > 0 && studentId.isNotEmpty()) {
@@ -80,7 +85,68 @@ fun LearnAnnotationDetailsScreen(
             annotationsMap = annotationMap
         }
     }
-    
+
+    // Load or generate activity description
+    LaunchedEffect(setId, activityId) {
+        isLoadingDescription = true
+        val descriptionDao = database.activityDescriptionCacheDao()
+
+        // Clear stale Learn mode cache (one-time migration for phonics-aware descriptions)
+        val prefs = context.getSharedPreferences("app_migrations", android.content.Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("phonics_desc_v1_migrated", false)) {
+            descriptionDao.deleteBySessionMode("LEARN")
+            prefs.edit().putBoolean("phonics_desc_v1_migrated", true).apply()
+        }
+
+        val cached = descriptionDao.getDescription(
+            setId = setId,
+            sessionMode = "LEARN",
+            activityId = activityId
+        )
+        if (cached != null) {
+            descriptionText = cached.descriptionText
+            isLoadingDescription = false
+        } else {
+            val setWordDao = database.setWordDao()
+            val wordDao = database.wordDao()
+            val loadedSetWords = setWordDao.getSetWords(setId)
+            val resolvedSetWords = loadedSetWords.mapNotNull { sw ->
+                wordDao.getWordById(sw.wordId)?.let { word -> sw to word }
+            }
+            val wordNames = resolvedSetWords.map { it.second.word }
+            val configs = resolvedSetWords.map { it.first.configurationType }
+            val letterIndices = resolvedSetWords.map { it.first.selectedLetterIndex }
+
+            if (wordNames.isNotEmpty()) {
+                val geminiRepository = GeminiRepository()
+                val phonicsContext = geminiRepository.buildPhonicsContext(
+                    wordNames = wordNames,
+                    selectedLetterIndices = letterIndices,
+                    configurations = configs
+                )
+                val generated = geminiRepository.generateActivityDescription(
+                    activityTitle = lessonName,
+                    sessionMode = "LEARN",
+                    items = wordNames,
+                    configurations = configs,
+                    phonicsContext = phonicsContext.ifBlank { null }
+                )
+                if (generated != null) {
+                    descriptionText = generated
+                    descriptionDao.insertOrUpdate(
+                        ActivityDescriptionCache(
+                            setId = setId,
+                            sessionMode = "LEARN",
+                            activityId = activityId,
+                            descriptionText = generated
+                        )
+                    )
+                }
+            }
+            isLoadingDescription = false
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -136,6 +202,25 @@ fun LearnAnnotationDetailsScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
+
+                Spacer(Modifier.height(8.dp))
+
+                // AI-generated description
+                if (isLoadingDescription) {
+                    Text(
+                        text = "Generating description...",
+                        fontSize = 14.sp,
+                        fontStyle = FontStyle.Italic,
+                        color = Color(0xFF999999)
+                    )
+                } else if (descriptionText != null) {
+                    Text(
+                        text = descriptionText!!,
+                        fontSize = 14.sp,
+                        fontStyle = FontStyle.Italic,
+                        color = Color(0xFF666666)
+                    )
+                }
             }
 
             Spacer(Modifier.height(32.dp))

@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -28,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.data.AppDatabase
 import com.example.app.data.entity.LearnerProfileAnnotation
+import androidx.compose.ui.text.font.FontStyle
+import com.example.app.data.entity.ActivityDescriptionCache
+import com.example.app.data.repository.GeminiRepository
 
 @Composable
 fun TutorialAnnotationDetailsScreen(
@@ -63,6 +67,8 @@ fun TutorialAnnotationDetailsScreen(
     }
     
     var annotationsMap by remember { mutableStateOf(mapOf<Int, LearnerProfileAnnotation?>()) }
+    var descriptionText by remember { mutableStateOf<String?>(null) }
+    var isLoadingDescription by remember { mutableStateOf(true) }
 
     // Load tutorial annotations for each letter
     LaunchedEffect(setId, studentId) {
@@ -80,6 +86,40 @@ fun TutorialAnnotationDetailsScreen(
                 annotationMap[index] = annotation
             }
             annotationsMap = annotationMap
+        }
+    }
+
+    // Load or generate activity description
+    LaunchedEffect(setId) {
+        isLoadingDescription = true
+        val descriptionDao = database.activityDescriptionCacheDao()
+        val cached = descriptionDao.getDescription(
+            setId = setId,
+            sessionMode = "TUTORIAL",
+            activityId = 0L
+        )
+        if (cached != null) {
+            descriptionText = cached.descriptionText
+            isLoadingDescription = false
+        } else {
+            val geminiRepository = GeminiRepository()
+            val generated = geminiRepository.generateActivityDescription(
+                activityTitle = displayTitle,
+                sessionMode = "TUTORIAL",
+                items = letters
+            )
+            if (generated != null) {
+                descriptionText = generated
+                descriptionDao.insertOrUpdate(
+                    ActivityDescriptionCache(
+                        setId = setId,
+                        sessionMode = "TUTORIAL",
+                        activityId = 0L,
+                        descriptionText = generated
+                    )
+                )
+            }
+            isLoadingDescription = false
         }
     }
 
@@ -138,6 +178,25 @@ fun TutorialAnnotationDetailsScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
+
+                Spacer(Modifier.height(8.dp))
+
+                // AI-generated description
+                if (isLoadingDescription) {
+                    Text(
+                        text = "Generating description...",
+                        fontSize = 14.sp,
+                        fontStyle = FontStyle.Italic,
+                        color = Color(0xFF999999)
+                    )
+                } else if (descriptionText != null) {
+                    Text(
+                        text = descriptionText!!,
+                        fontSize = 14.sp,
+                        fontStyle = FontStyle.Italic,
+                        color = Color(0xFF666666)
+                    )
+                }
             }
 
             Spacer(Modifier.height(32.dp))
@@ -149,7 +208,15 @@ fun TutorialAnnotationDetailsScreen(
                     letter = letter,
                     annotation = annotation
                 )
-                Spacer(Modifier.height(16.dp))
+                if (index < letters.lastIndex) {
+                    Spacer(Modifier.height(16.dp))
+                    Divider(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFE0E0E0),
+                        thickness = 1.dp
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
             }
         }
     }
@@ -216,22 +283,7 @@ private fun LetterItem(
                     }
                 }
 
-                // Tracing category badge
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = Color(0xFFEDBB00),
-                            shape = RoundedCornerShape(50.dp)
-                        )
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Tracing",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                }
+
             }
         }
 
