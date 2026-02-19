@@ -12,6 +12,7 @@ import com.example.app.ui.feature.dashboard.DashboardScreen
 import com.example.app.ui.feature.learn.LearnScreen
 import com.example.app.ui.feature.classroom.*
 import com.example.app.ui.feature.learn.LessonScreen
+import com.example.app.ui.feature.learn.WordBankScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialModeScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialModeStudentScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialSessionScreen
@@ -186,110 +187,10 @@ fun MainNavigationContainer(
         )
         3 -> LessonScreen(
             onNavigate = { currentScreen = it },
+            onNavigateToWordBank = { currentScreen = 52 },
             onNavigateToActivities = { currentScreen = 6 },
             onNavigateToSets = { currentScreen = 7 },
-            onNavigateToAIGenerate = { jsonResult ->
-                aiGeneratedJsonResult = jsonResult
-                // Parse JSON, resolve image availability, and initialize editable sets
-                coroutineScope.launch {
-                    try {
-                        val activity = Gson().fromJson(jsonResult, AiGeneratedActivity::class.java)
-                        val allWords = wordRepository.getWordsForUserOnce(userId)
-                        val wordsWithImages = allWords
-                            .filter { !it.imagePath.isNullOrBlank() }
-                            .map { it.word }
-                            .toSet()
-
-                        // Build existingSetTitleMap for title similarity resolution
-                        val setDao = database.setDao()
-                        val setWordRows = setDao.getSetsWithWordNames(userId)
-                        existingSetTitleMap = setWordRows
-                            .groupBy { it.setTitle }
-                            .mapValues { (_, rows) -> rows.first().setId }
-
-                        val parsedSets = activity?.sets?.map { set ->
-                            // Resolve set-level title similarity
-                            val titleSimMatch = set.titleSimilarity?.let { sim ->
-                                val matchKey = existingSetTitleMap.keys.firstOrNull {
-                                    it.equals(sim.similarToExisting, ignoreCase = true)
-                                }
-                                if (matchKey != null) {
-                                    TitleSimilarityInfo(
-                                        existingTitle = matchKey,
-                                        existingId = existingSetTitleMap[matchKey] ?: 0L,
-                                        reason = sim.reason
-                                    )
-                                } else null
-                            }
-
-                            EditableSet(
-                                title = set.title,
-                                description = set.description,
-                                words = set.words.map { word ->
-                                    EditableWord(
-                                        word = word.word,
-                                        configurationType = mapAiConfigTypeToUi(word.configurationType),
-                                        selectedLetterIndex = word.selectedLetterIndex,
-                                        hasImage = word.word in wordsWithImages
-                                    )
-                                },
-                                titleSimilarityMatch = titleSimMatch
-                            )
-                        } ?: emptyList()
-
-                        // Run overlap detection before showing review screen
-                        try {
-                            val generatedWordLists = parsedSets.map { set ->
-                                set.words.map { it.word }
-                            }
-                            val overlaps = setRepository.findOverlappingSets(userId, generatedWordLists)
-
-                            aiEditableSets = parsedSets.mapIndexed { index, set ->
-                                val match = overlaps[index]
-                                if (match != null) {
-                                    set.copy(overlapMatch = match)
-                                } else {
-                                    set
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // Overlap detection failed -- proceed without overlap data
-                            android.util.Log.e("MainNavigation", "Overlap detection failed", e)
-                            aiEditableSets = parsedSets
-                        }
-
-                        // Check activity title similarity
-                        val activitySim = activity?.activity?.titleSimilarity
-                        if (activitySim != null) {
-                            val activityDao = database.activityDao()
-                            val existingActivities = activityDao.getActivitiesByUserIdOnce(userId)
-                            val matchingActivity = existingActivities.firstOrNull {
-                                it.title.equals(activitySim.similarToExisting, ignoreCase = true)
-                            }
-                            if (matchingActivity != null) {
-                                // Show dialog, DON'T navigate to screen 48
-                                activityTitleSimilarityExistingTitle = matchingActivity.title
-                                activityTitleSimilarityExistingId = matchingActivity.id
-                                activityTitleSimilarityReason = activitySim.reason
-                                showActivityTitleSimilarityDialog = true
-                                currentAiSetIndex = 0
-                                return@launch
-                            } else {
-                                android.util.Log.d("MainNavigation", "AI reported similarity to '${activitySim.similarToExisting}' but no match found in DB")
-                            }
-                        }
-
-                        currentAiSetIndex = 0
-                        currentScreen = 48
-                    } catch (e: Exception) {
-                        aiEditableSets = emptyList()
-                        currentAiSetIndex = 0
-                        currentScreen = 48
-                    }
-                }
-            },
-            modifier = modifier,
-            viewModel = lessonViewModel
+            modifier = modifier
         )
         4 -> TutorialModeScreen(
             onBack = { currentScreen = 1 },
@@ -889,6 +790,113 @@ fun MainNavigationContainer(
                 currentScreen = 6
             },
             modifier = modifier
+        )
+        // --- WORD BANK SCREEN ---
+        52 -> WordBankScreen(
+            onNavigate = { currentScreen = it },
+            onBackClick = { currentScreen = 3 },
+            onNavigateToAIGenerate = { jsonResult ->
+                aiGeneratedJsonResult = jsonResult
+                // Parse JSON, resolve image availability, and initialize editable sets
+                coroutineScope.launch {
+                    try {
+                        val activity = Gson().fromJson(jsonResult, AiGeneratedActivity::class.java)
+                        val allWords = wordRepository.getWordsForUserOnce(userId)
+                        val wordsWithImages = allWords
+                            .filter { !it.imagePath.isNullOrBlank() }
+                            .map { it.word }
+                            .toSet()
+
+                        // Build existingSetTitleMap for title similarity resolution
+                        val setDao = database.setDao()
+                        val setWordRows = setDao.getSetsWithWordNames(userId)
+                        existingSetTitleMap = setWordRows
+                            .groupBy { it.setTitle }
+                            .mapValues { (_, rows) -> rows.first().setId }
+
+                        val parsedSets = activity?.sets?.map { set ->
+                            // Resolve set-level title similarity
+                            val titleSimMatch = set.titleSimilarity?.let { sim ->
+                                val matchKey = existingSetTitleMap.keys.firstOrNull {
+                                    it.equals(sim.similarToExisting, ignoreCase = true)
+                                }
+                                if (matchKey != null) {
+                                    TitleSimilarityInfo(
+                                        existingTitle = matchKey,
+                                        existingId = existingSetTitleMap[matchKey] ?: 0L,
+                                        reason = sim.reason
+                                    )
+                                } else null
+                            }
+
+                            EditableSet(
+                                title = set.title,
+                                description = set.description,
+                                words = set.words.map { word ->
+                                    EditableWord(
+                                        word = word.word,
+                                        configurationType = mapAiConfigTypeToUi(word.configurationType),
+                                        selectedLetterIndex = word.selectedLetterIndex,
+                                        hasImage = word.word in wordsWithImages
+                                    )
+                                },
+                                titleSimilarityMatch = titleSimMatch
+                            )
+                        } ?: emptyList()
+
+                        // Run overlap detection before showing review screen
+                        try {
+                            val generatedWordLists = parsedSets.map { set ->
+                                set.words.map { it.word }
+                            }
+                            val overlaps = setRepository.findOverlappingSets(userId, generatedWordLists)
+
+                            aiEditableSets = parsedSets.mapIndexed { index, set ->
+                                val match = overlaps[index]
+                                if (match != null) {
+                                    set.copy(overlapMatch = match)
+                                } else {
+                                    set
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Overlap detection failed -- proceed without overlap data
+                            android.util.Log.e("MainNavigation", "Overlap detection failed", e)
+                            aiEditableSets = parsedSets
+                        }
+
+                        // Check activity title similarity
+                        val activitySim = activity?.activity?.titleSimilarity
+                        if (activitySim != null) {
+                            val activityDao = database.activityDao()
+                            val existingActivities = activityDao.getActivitiesByUserIdOnce(userId)
+                            val matchingActivity = existingActivities.firstOrNull {
+                                it.title.equals(activitySim.similarToExisting, ignoreCase = true)
+                            }
+                            if (matchingActivity != null) {
+                                // Show dialog, DON'T navigate to screen 48
+                                activityTitleSimilarityExistingTitle = matchingActivity.title
+                                activityTitleSimilarityExistingId = matchingActivity.id
+                                activityTitleSimilarityReason = activitySim.reason
+                                showActivityTitleSimilarityDialog = true
+                                currentAiSetIndex = 0
+                                return@launch
+                            } else {
+                                android.util.Log.d("MainNavigation", "AI reported similarity to '${activitySim.similarToExisting}' but no match found in DB")
+                            }
+                        }
+
+                        currentAiSetIndex = 0
+                        currentScreen = 48
+                    } catch (e: Exception) {
+                        aiEditableSets = emptyList()
+                        currentAiSetIndex = 0
+                        currentScreen = 48
+                    }
+                }
+            },
+            modifier = modifier,
+            viewModel = lessonViewModel
         )
     }
 }
