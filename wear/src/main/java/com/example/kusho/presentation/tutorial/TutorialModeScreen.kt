@@ -176,21 +176,10 @@ fun TutorialModeScreen() {
                         CompleteContent()
                     }
                     feedbackData.shouldShow -> {
-                        // State 4: Showing feedback
+                        // State 4: Showing feedback (frozen - teacher-gated via phone)
+                        // Watch stays on feedback screen until phone sends next_letter or retry
                         FeedbackContent(
-                            isCorrect = feedbackData.isCorrect,
-                            onDismiss = {
-                                // Notify mobile that watch dismissed feedback
-                                scope.launch {
-                                    phoneCommunicationManager.sendTutorialModeFeedbackDismissed()
-                                }
-                                TutorialModeStateHolder.clearFeedback()
-                                // Reset to wait screen to allow retry or next letter
-                                showWaitScreen = true
-                                isRecognizing = false
-                                // Mark that we need to reset on next start
-                                needsReset = true
-                            }
+                            isCorrect = feedbackData.isCorrect
                         )
                     }
                     isRecognizing && isModelInitialized && sensorManager != null && classifierResult is ClassifierLoadResult.Success && letterData.letter.isNotEmpty() -> {
@@ -399,31 +388,41 @@ private fun PracticingContent(
 
 @Composable
 private fun FeedbackContent(
-    isCorrect: Boolean,
-    onDismiss: () -> Unit
+    isCorrect: Boolean
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    // Frozen feedback screen - teacher-gated
+    // Watch stays here until the phone sends next letter data or retry command
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onDismiss
-            ),
-        contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // Show correct or wrong mascot image based on result
-        Image(
-            painter = painterResource(
-                id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
-            ),
-            contentDescription = if (isCorrect) "Correct" else "Wrong",
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            contentScale = ContentScale.Fit
-        )
+                .padding(top = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top
+        ) {
+            // Show correct or wrong mascot image based on result
+            Image(
+                painter = painterResource(
+                    id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+                ),
+                contentDescription = if (isCorrect) "Correct" else "Wrong",
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .aspectRatio(1f)
+                    .padding(8.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            Text(
+                text = "Waiting for teacher...",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 

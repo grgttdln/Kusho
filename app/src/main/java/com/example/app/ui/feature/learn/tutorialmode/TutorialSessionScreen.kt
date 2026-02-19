@@ -359,29 +359,7 @@ fun TutorialSessionScreen(
         }
     }
     
-    // Listen for feedback dismissal from watch
-    LaunchedEffect(Unit) {
-        var lastDismissTime = 0L
-        watchConnectionManager.tutorialModeFeedbackDismissed.collect { timestamp ->
-            if (timestamp > lastDismissTime && timestamp > 0L) {
-                lastDismissTime = timestamp
-                if (showProgressCheck) {
-                    showProgressCheck = false
-                    // If correct, move to next letter
-                    if (isCorrectGesture) {
-                        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                        if (currentStep < maxSteps) {
-                            currentStep++
-                        } else {
-                            completeTutorialAndEnd()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Progress Check Dialog
+    // Progress Check Dialog (teacher-gated: only Continue button advances)
     if (showProgressCheck) {
         ProgressCheckDialog(
             isCorrect = isCorrectGesture,
@@ -389,15 +367,14 @@ fun TutorialSessionScreen(
             targetLetter = currentLetter,
             targetCase = letterType,
             predictedLetter = predictedLetter,
-            onDismiss = {
+            onContinue = {
                 showProgressCheck = false
-                // Notify watch that mobile dismissed feedback
-                watchConnectionManager.notifyTutorialModeFeedbackDismissed()
                 if (isCorrectGesture) {
                     // Move to next letter on correct gesture
                     val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
                     if (currentStep < maxSteps) {
                         currentStep++
+                        // sendTutorialModeLetterData is triggered by LaunchedEffect on currentStep change
                     } else {
                         completeTutorialAndEnd()
                     }
@@ -414,6 +391,9 @@ fun TutorialSessionScreen(
                         )
                     }
                 }
+            },
+            onAddAnnotation = {
+                showAnnotationDialog = true
             }
         )
     }
@@ -742,7 +722,8 @@ private fun ProgressCheckDialog(
     targetLetter: String,
     targetCase: String,
     predictedLetter: String,
-    onDismiss: () -> Unit
+    onContinue: () -> Unit,
+    onAddAnnotation: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -828,19 +809,25 @@ private fun ProgressCheckDialog(
                          predictedLetter.isNotEmpty() && 
                          !predictedLetter.equals(expectedCase, ignoreCase = false)
     
+    // Compute display letter with correct case for dynamic feedback text
+    val displayLetter = when (targetCase.lowercase()) {
+        "small", "lowercase" -> targetLetter.lowercase()
+        else -> targetLetter.uppercase()
+    }
+
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = { /* Teacher-gated: no dismiss on back or outside tap */ },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        )
     ) {
-        // Full-screen dark overlay
+        // Full-screen dark overlay (non-dismissable)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.7f))
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
+                .background(Color.Black.copy(alpha = 0.7f)),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -864,12 +851,12 @@ private fun ProgressCheckDialog(
                 
                 Spacer(Modifier.height(24.dp))
                 
-                // Title with first name only
+                // Main label: student name greeting
                 Text(
                     text = if (isCorrect) {
-                        "Great Job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                        "Great job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
                     } else {
-                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}."
                     },
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
@@ -877,48 +864,90 @@ private fun ProgressCheckDialog(
                     textAlign = TextAlign.Center
                 )
                 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 
-                // Body text with optional case mismatch disclaimer
-                if (isCorrect && hasCaseMismatch) {
+                // Sub label: letter-specific message
+                Text(
+                    text = if (isCorrect) {
+                        "You traced the letter $displayLetter!"
+                    } else {
+                        "Let's try the letter $displayLetter again!"
+                    },
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(Modifier.height(8.dp))
+                
+                // Sub label: encouragement text
+                if (isCorrect) {
                     Text(
-                        text = "You're doing super!\nKeep up the amazing work!",
+                        text = "Keep up the amazing work!",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
-                    )
-                    
-                    Spacer(Modifier.height(16.dp))
-                    
-                    Text(
-                        text = "Psst... you wrote ${if (predictedLetter.first().isUpperCase()) "uppercase" else "lowercase"} ${predictedLetter.uppercase()}, " +
-                              "but we're practicing ${if (targetCase.lowercase() in listOf("small", "lowercase")) "lowercase" else "uppercase"} letters! " +
-                              "They look similar, so that's still great! 😊",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.9f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
-                    )
-                } else if (isCorrect) {
-                    Text(
-                        text = "You're doing super!\nKeep up the amazing work!",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center
                     )
                 } else {
                     Text(
                         text = "Let's give it another go!",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
-                        color = Color.White,
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                
+                // Case mismatch disclaimer (if applicable)
+                if (isCorrect && hasCaseMismatch) {
+                    Spacer(Modifier.height(12.dp))
+                    
+                    Text(
+                        text = "Psst... you wrote ${if (predictedLetter.first().isUpperCase()) "uppercase" else "lowercase"} ${predictedLetter.uppercase()}, " +
+                              "but we're practicing ${if (targetCase.lowercase() in listOf("small", "lowercase")) "lowercase" else "uppercase"} letters! " +
+                              "They look similar, so that's still great! \uD83D\uDE0A",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.9f),
                         textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
+                        lineHeight = 20.sp
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Add Annotations clickable text
+                Text(
+                    text = "Add Annotations",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = BlueAnnotationColor,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .clickable { onAddAnnotation() }
+                        .padding(vertical = 4.dp)
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                // Teacher-led Continue button
+                Button(
+                    onClick = onContinue,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OrangeButtonColor
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Continue",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

@@ -63,6 +63,8 @@ object TutorialModeStateHolder {
         runOnMainThread {
             try {
                 Log.d(TAG, "📝 Updating letter data: $letter ($letterCase), index: $currentIndex/$totalLetters, hand: $dominantHand")
+                // Clear feedback atomically when new letter arrives (teacher tapped Continue)
+                _feedbackData.value = FeedbackData(shouldShow = false)
                 _letterData.value = LetterData(
                     letter = letter,
                     letterCase = letterCase,
@@ -168,6 +170,8 @@ object TutorialModeStateHolder {
     fun triggerRetry() {
         runOnMainThread {
             Log.d(TAG, "🔄 Retry triggered from mobile")
+            // Clear feedback atomically when retry arrives (teacher tapped Continue on incorrect)
+            _feedbackData.value = FeedbackData(shouldShow = false)
             _retryTrigger.value = System.currentTimeMillis()
         }
     }
