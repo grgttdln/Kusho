@@ -82,6 +82,8 @@ fun DashboardScreen(
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showInstallInstructionsDialog by remember { mutableStateOf(false) }
+    var showPairingSuccessModal by remember { mutableStateOf(false) }
+    var pairedWatchName by remember { mutableStateOf("") }
     val pairingRequest by viewModel.pairingRequest.collectAsState()
     val greeting = viewModel.getGreeting()
     
@@ -307,7 +309,11 @@ fun DashboardScreen(
                                 ) {
                                     // Accept button
                                     Button(
-                                        onClick = { viewModel.acceptPairingRequest(request.nodeId) },
+                                        onClick = {
+                                            viewModel.acceptPairingRequest(request.nodeId)
+                                            pairedWatchName = request.watchName
+                                            showPairingSuccessModal = true
+                                        },
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(56.dp),
@@ -355,6 +361,100 @@ fun DashboardScreen(
                         Image(
                             painter = painterResource(id = R.drawable.dis_question),
                             contentDescription = "Pairing request",
+                            modifier = Modifier
+                                .size(160.dp)
+                                .offset(y = 0.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            }
+
+            // Pairing Success Modal
+            if (showPairingSuccessModal) {
+                Dialog(
+                    onDismissRequest = { showPairingSuccessModal = false },
+                    properties = DialogProperties(
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = false,
+                        usePlatformDefaultWidth = false
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .wrapContentHeight(),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        // Main card content (positioned below the mascot)
+                        Column(
+                            modifier = Modifier
+                                .padding(top = 80.dp)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Color.White)
+                        ) {
+                            // Blue header section
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(70.dp)
+                                    .background(Color(0xFF49A9FF))
+                            )
+
+                            // White content section
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                                    .padding(top = 24.dp, bottom = 32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Paired Successfully!",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0B0B0B),
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text(
+                                    text = "Your watch $pairedWatchName is now connected and ready to use.",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color(0xFF555555),
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                // Continue button
+                                Button(
+                                    onClick = { showPairingSuccessModal = false },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp),
+                                    shape = RoundedCornerShape(28.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF49A9FF)
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Continue",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
+
+                        // Mascot image overlapping the top (same as on watch)
+                        Image(
+                            painter = painterResource(id = R.drawable.dis_success),
+                            contentDescription = "Pairing success",
                             modifier = Modifier
                                 .size(160.dp)
                                 .offset(y = 0.dp),

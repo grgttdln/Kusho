@@ -33,13 +33,13 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             DescriptionText(
-                text = "Discover a new way to teach and learn\nwriting."
+                text = "Discover a new way to teach and learn Air Writing"
             )
 
             Spacer(modifier = Modifier.height(28.dp))
 
             PrimaryButton(
-                text = "Start Learning",
+                text = "Begin",
                 onClick = onStartLearning,
                 modifier = Modifier.fillMaxWidth()
             )
