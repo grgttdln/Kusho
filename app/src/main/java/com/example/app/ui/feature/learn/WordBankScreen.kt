@@ -6,13 +6,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +29,6 @@ import com.example.app.ui.components.wordbank.ActivityCreationModal
 import com.example.app.ui.components.wordbank.WordAddedConfirmationModal
 import com.example.app.ui.components.wordbank.WordBankEditModal
 import com.example.app.ui.components.wordbank.WordBankModal
-import androidx.compose.material3.Text
 
 @Composable
 fun WordBankScreen(
@@ -64,7 +62,6 @@ fun WordBankScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 160.dp),
             horizontalAlignment = Alignment.CenterHorizontally
