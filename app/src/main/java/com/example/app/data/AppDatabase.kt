@@ -55,7 +55,7 @@ import com.example.app.data.entity.TutorialCompletion
         AnnotationSummary::class,
         TutorialCompletion::class
     ],
-    version = 14, // Added activityId to annotations and summaries
+    version = 15, // Added lastCompletedStep, totalSteps, nullable completedAt to TutorialCompletion
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

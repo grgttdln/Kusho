@@ -91,6 +91,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
     val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
 
+    // Watch ready signal - watch has entered Tutorial Mode screen and is ready to receive data
+    private val _tutorialModeWatchReady = MutableStateFlow(0L)
+    val tutorialModeWatchReady: StateFlow<Long> = _tutorialModeWatchReady.asStateFlow()
+
     // Pairing request from watch
     private val _pairingRequest = MutableStateFlow<PairingRequestEvent?>(null)
     val pairingRequest: StateFlow<PairingRequestEvent?> = _pairingRequest.asStateFlow()
@@ -146,6 +150,8 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED = "/tutorial_mode_feedback_dismissed"
         private const val MESSAGE_PATH_TUTORIAL_MODE_RETRY = "/tutorial_mode_retry"
         private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
 
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
@@ -634,6 +640,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_TUTORIAL_MODE_SKIP,
             MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED,
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY,
             MESSAGE_PATH_BATTERY_STATUS
         )
         
@@ -744,6 +751,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED -> {
                 Log.d(TAG, "👆 Watch dismissed feedback - dismissing mobile dialog")
                 _tutorialModeFeedbackDismissed.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY -> {
+                Log.d(TAG, "✅ Watch is ready for Tutorial Mode")
+                _tutorialModeWatchReady.value = System.currentTimeMillis()
             }
         }
     }
@@ -901,6 +912,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         // Clear previous state before starting new session
         _tutorialModeSkipTrigger.value = 0L
         _tutorialModeGestureResult.value = emptyMap()
+        _tutorialModeWatchReady.value = 0L
 
         scope.launch {
             try {
@@ -920,6 +932,28 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Tutorial Mode started notification sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to notify watch of Tutorial Mode start", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the phone is on TutorialSessionScreen and ready for handshake.
+     * The watch will reply with /tutorial_mode_watch_ready when it receives this.
+     */
+    fun sendTutorialModePhoneReady() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "\u2705 Phone ready signal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "\u274C Failed to send phone ready signal", e)
             }
         }
     }

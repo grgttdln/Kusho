@@ -90,6 +90,8 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED = "/tutorial_mode_feedback_dismissed"
         private const val MESSAGE_PATH_TUTORIAL_MODE_RETRY = "/tutorial_mode_retry"
         private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
 
         private const val BATTERY_UPDATE_INTERVAL_MS = 60000L // 1 minute
     }
@@ -289,8 +291,17 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET -> {
                 android.util.Log.d("PhoneCommunicationMgr", "♻️ Mobile requested session reset - clearing all state")
                 com.example.kusho.presentation.tutorial.TutorialModeStateHolder.resetSession()
-            }
-        }
+            }            MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY -> {
+                // Only reply if watch user is actually on the Tutorial Mode screen
+                if (com.example.kusho.presentation.tutorial.TutorialModeStateHolder.isWatchOnTutorialScreen.value) {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready & watch is on Tutorial screen - replying with watch ready")
+                    scope.launch {
+                        sendTutorialModeWatchReady()
+                    }
+                } else {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready but watch is NOT on Tutorial screen - ignoring")
+                }
+            }        }
     }
 
     /**
@@ -447,6 +458,28 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                         node.id,
                         MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
                         jsonPayload.toByteArray()
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch is on the Tutorial Mode screen and ready to receive data
+     */
+    suspend fun sendTutorialModeWatchReady() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY,
+                        ByteArray(0)
                     ).await()
                 } catch (e: Exception) {
                     e.printStackTrace()

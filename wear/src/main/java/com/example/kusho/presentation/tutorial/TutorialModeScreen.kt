@@ -56,7 +56,10 @@ fun TutorialModeScreen() {
     
     // Cleanup TTS when the composable is disposed
     DisposableEffect(Unit) {
+        // Mark watch as on Tutorial Mode screen for handshake gating
+        TutorialModeStateHolder.setWatchOnTutorialScreen(true)
         onDispose {
+            TutorialModeStateHolder.setWatchOnTutorialScreen(false)
             ttsManager.shutdown()
         }
     }
@@ -153,6 +156,31 @@ fun TutorialModeScreen() {
         }
     }
     
+    // Two-way handshake: send watch_ready when session becomes active.
+    // The phone also sends /phone_ready which PhoneCommunicationManager handles
+    // by auto-replying with watch_ready, so no matter who opens first, they sync.
+    LaunchedEffect(isPhoneInTutorialMode, sessionData.isActive) {
+        if (isPhoneInTutorialMode && sessionData.isActive) {
+            // Session is active — send ready signal once
+            scope.launch {
+                phoneCommunicationManager.sendTutorialModeWatchReady()
+            }
+        }
+    }
+
+    // Heartbeat: keep sending watch_ready while no letter data yet (backup for edge cases)
+    // Only sends when watch is actually on this screen (flag managed by DisposableEffect above)
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(3000)
+            if (letterData.letter.isEmpty() && TutorialModeStateHolder.isWatchOnTutorialScreen.value) {
+                scope.launch {
+                    phoneCommunicationManager.sendTutorialModeWatchReady()
+                }
+            }
+        }
+    }
+
     // Listen for retry trigger from mobile (when user taps "Try Again" on phone)
     LaunchedEffect(retryTrigger) {
         if (retryTrigger > 0L) {

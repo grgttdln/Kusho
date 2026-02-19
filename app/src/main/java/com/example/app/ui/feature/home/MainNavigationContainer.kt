@@ -585,6 +585,7 @@ fun MainNavigationContainer(
             studentId = tutorialSessionStudentId,
             dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 29 },
+            onEarlyExit = { currentScreen = 27 },
             modifier = modifier
         )
         29 -> SessionAnalyticsScreen(
@@ -708,6 +709,7 @@ fun MainNavigationContainer(
             studentId = tutorialSessionStudentId,
             dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 39 },
+            onEarlyExit = { currentScreen = 37 },
             modifier = modifier
         )
         39 -> SessionAnalyticsScreen(

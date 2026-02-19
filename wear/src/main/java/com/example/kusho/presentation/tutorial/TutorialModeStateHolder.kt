@@ -56,6 +56,15 @@ object TutorialModeStateHolder {
     private val _retryTrigger = MutableStateFlow(0L)
     val retryTrigger: StateFlow<Long> = _retryTrigger.asStateFlow()
 
+    // Tracks whether the watch user is currently on the TutorialModeScreen
+    // Used to gate handshake replies so we don't reply when on other screens
+    private val _isWatchOnTutorialScreen = MutableStateFlow(false)
+    val isWatchOnTutorialScreen: StateFlow<Boolean> = _isWatchOnTutorialScreen.asStateFlow()
+
+    fun setWatchOnTutorialScreen(onScreen: Boolean) {
+        _isWatchOnTutorialScreen.value = onScreen
+    }
+
     /**
      * Called by WearMessageListenerService when letter data is received
      */

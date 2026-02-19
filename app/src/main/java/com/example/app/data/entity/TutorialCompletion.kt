@@ -16,5 +16,7 @@ data class TutorialCompletion(
     val id: Long = 0,
     val studentId: Long,
     val tutorialSetId: Long,
-    val completedAt: Long = System.currentTimeMillis()
+    val lastCompletedStep: Int = 0,   // 0 = not started or fully complete
+    val totalSteps: Int = 0,
+    val completedAt: Long? = null     // null = in-progress, non-null = fully completed
 )

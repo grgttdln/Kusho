@@ -78,6 +78,7 @@ fun TutorialSessionScreen(
     studentId: Long = 0L,
     dominantHand: String = "RIGHT",
     onEndSession: () -> Unit,
+    onEarlyExit: () -> Unit = onEndSession,
     modifier: Modifier = Modifier,
     initialStep: Int = 1,
     totalSteps: Int = 0, // Will be calculated from letters
@@ -133,6 +134,12 @@ fun TutorialSessionScreen(
     var predictedLetter by remember { mutableStateOf("") }
     var showAnimation by remember { mutableStateOf(false) } // Toggle for animation vs static image
     
+    // Phase 1: Watch ready state and end session confirmation
+    var isWatchReady by remember { mutableStateOf(false) }
+    var showEndSessionConfirmation by remember { mutableStateOf(false) }
+    var showResumeDialog by remember { mutableStateOf(false) }
+    var resumeChecked by remember { mutableStateOf(false) }
+    
     // Annotation dialog state
     var showAnnotationDialog by remember { mutableStateOf(false) }
     var annotationsMap by remember { mutableStateOf<Map<Int, AnnotationData>>(emptyMap()) }
@@ -150,6 +157,15 @@ fun TutorialSessionScreen(
     val annotationSummaryDao = remember { database.annotationSummaryDao() }
     val tutorialCompletionDao = remember { database.tutorialCompletionDao() }
     val geminiRepository = remember { com.example.app.data.repository.GeminiRepository() }
+
+    // Pre-compute total letter count (needed by lambdas defined before the full letter lists)
+    val letterCount = remember(title, letterType) {
+        when (title.lowercase()) {
+            "vowels" -> 5
+            "consonants" -> 21
+            else -> 0
+        }
+    }
 
     // Generate a unique setId based on tutorial session (title + letterType)
     // This ensures annotations are saved per tutorial section
@@ -169,15 +185,44 @@ fun TutorialSessionScreen(
         coroutineScope.launch {
             if (studentId > 0L) {
                 withContext(Dispatchers.IO) {
+                    // Delete any in-progress row first, then insert a completed one
+                    tutorialCompletionDao.deleteInProgress(studentId, tutorialSetId)
                     tutorialCompletionDao.insertIfNotExists(
                         com.example.app.data.entity.TutorialCompletion(
                             studentId = studentId,
-                            tutorialSetId = tutorialSetId
+                            tutorialSetId = tutorialSetId,
+                            lastCompletedStep = letterCount,
+                            totalSteps = letterCount,
+                            completedAt = System.currentTimeMillis()
                         )
                     )
                 }
             }
             onEndSession()
+        }
+    }
+
+    // Save partial progress and exit early
+    val saveProgressAndExit: () -> Unit = {
+        coroutineScope.launch {
+            if (studentId > 0L && currentStep > 1) {
+                withContext(Dispatchers.IO) {
+                    // Upsert in-progress record (completedAt = null)
+                    val existingProgress = tutorialCompletionDao.getInProgressSession(studentId, tutorialSetId)
+                    tutorialCompletionDao.upsertProgress(
+                        com.example.app.data.entity.TutorialCompletion(
+                            id = existingProgress?.id ?: 0,
+                            studentId = studentId,
+                            tutorialSetId = tutorialSetId,
+                            lastCompletedStep = currentStep - 1, // Letters completed so far
+                            totalSteps = letterCount,
+                            completedAt = null // null = in-progress
+                        )
+                    )
+                }
+            }
+            watchConnectionManager.notifyTutorialModeEnded()
+            onEarlyExit()
         }
     }
 
@@ -202,6 +247,21 @@ fun TutorialSessionScreen(
                 }
                 annotationsMap = loadedMap
             }
+        }
+    }
+
+    // Check for existing in-progress session and show resume dialog
+    LaunchedEffect(studentId, tutorialSetId) {
+        if (studentId > 0L && !resumeChecked) {
+            val inProgress = withContext(Dispatchers.IO) {
+                tutorialCompletionDao.getInProgressSession(studentId, tutorialSetId)
+            }
+            if (inProgress != null && inProgress.lastCompletedStep > 0) {
+                // Found saved progress — show resume dialog
+                currentStep = inProgress.lastCompletedStep + 1 // Pre-set to resume step
+                showResumeDialog = true
+            }
+            resumeChecked = true
         }
     }
     
@@ -283,6 +343,28 @@ fun TutorialSessionScreen(
         watchConnectionManager.notifyTutorialModeStarted(studentName, title)
     }
 
+    // Two-way handshake: send phone_ready immediately and heartbeat every 2s until watch replies
+    LaunchedEffect(Unit) {
+        // Send initial phone_ready signal
+        watchConnectionManager.sendTutorialModePhoneReady()
+        // Heartbeat: keep pinging every 2 seconds until watch responds
+        while (!isWatchReady) {
+            kotlinx.coroutines.delay(2000)
+            if (!isWatchReady) {
+                watchConnectionManager.sendTutorialModePhoneReady()
+            }
+        }
+    }
+
+    // Listen for watch ready signal (watch replies to our phone_ready or sends its own on entry)
+    LaunchedEffect(Unit) {
+        watchConnectionManager.tutorialModeWatchReady.collect { timestamp ->
+            if (timestamp > 0L) {
+                isWatchReady = true
+            }
+        }
+    }
+
     // Auto-show and auto-dismiss annotation tooltip after 5 seconds
     LaunchedEffect(showAnnotationTooltip) {
         if (showAnnotationTooltip) {
@@ -299,8 +381,9 @@ fun TutorialSessionScreen(
     // when the user leaves (Practice Again or Continue).
     
     // Send current letter data to watch whenever it changes AND play pre-recorded voice prompt
-    LaunchedEffect(currentStep, currentLetter) {
-        if (currentLetter.isNotEmpty()) {
+    // Gated behind isWatchReady so we don't send data before the watch is listening
+    LaunchedEffect(currentStep, currentLetter, isWatchReady) {
+        if (currentLetter.isNotEmpty() && isWatchReady) {
             watchConnectionManager.sendTutorialModeLetterData(
                 letter = currentLetter,
                 letterCase = letterType,
@@ -475,8 +558,9 @@ fun TutorialSessionScreen(
         )
     }
 
+    Box(modifier = modifier.fillMaxSize()) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
             .padding(top = 40.dp, bottom = 24.dp),
@@ -658,7 +742,7 @@ fun TutorialSessionScreen(
 
         // End Session Button
         Button(
-            onClick = onEndSession,
+            onClick = { showEndSessionConfirmation = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
@@ -675,6 +759,319 @@ fun TutorialSessionScreen(
             )
         }
     }
+
+    // Phase 1: Waiting for watch overlay
+    if (!isWatchReady) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {} // Block clicks through overlay
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                Spacer(Modifier.weight(1f))
+
+                Image(
+                    painter = painterResource(id = R.drawable.dis_pairing_tutorial),
+                    contentDescription = "Waiting for watch",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                    contentScale = ContentScale.Fit
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = "Waiting for $studentName...",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = YellowColor,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "Please open Tutorial Mode\non the watch to connect.",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White.copy(alpha = 0.85f),
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // Cancel Session button (same position as End Session)
+                Button(
+                    onClick = {
+                        watchConnectionManager.notifyTutorialModeEnded()
+                        onEarlyExit()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BlueButtonColor
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Cancel Session",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+
+    // Phase 1: End Session confirmation dialog
+    if (showEndSessionConfirmation) {
+        val completedLetters = currentStep - 1 // Letters fully done (current step is the one in progress)
+        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+        val progressMessage = when {
+            completedLetters <= 0 -> "You haven't completed any letters yet.\nAny annotations you've made will be saved."
+            completedLetters == 1 -> "You've completed 1/$maxSteps letter!\nYour progress and annotations will be saved."
+            else -> "You've completed $completedLetters/$maxSteps letters!\nYour progress and annotations will be saved."
+        }
+
+        Dialog(
+            onDismissRequest = { showEndSessionConfirmation = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { showEndSessionConfirmation = false }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .wrapContentHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {} // Prevent dismiss when clicking dialog content
+                        ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.dis_remove),
+                        contentDescription = "End session",
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .aspectRatio(1f),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Text(
+                        text = "Are you sure?",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Text(
+                        text = progressMessage,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // End Session button (confirms early exit with progress save)
+                    Button(
+                        onClick = {
+                            showEndSessionConfirmation = false
+                            saveProgressAndExit()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF6B6B)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "End Session",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Cancel button (go back to session)
+                    Button(
+                        onClick = { showEndSessionConfirmation = false },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BlueButtonColor
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Resume dialog — shown when there's saved progress from a previous session
+    if (showResumeDialog) {
+        val savedStep = currentStep - 1 // currentStep was pre-set to resume point
+        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+        Dialog(
+            onDismissRequest = { /* Can't dismiss — must choose */ },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .wrapContentHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.dis_pairing_tutorial),
+                        contentDescription = "Resume session",
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .aspectRatio(1f),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Text(
+                        text = "Welcome back!",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = YellowColor,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Text(
+                        text = "$studentName has completed $savedStep/$maxSteps letters.\nWould you like to continue where you left off?",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // Resume button
+                    Button(
+                        onClick = {
+                            showResumeDialog = false
+                            // currentStep is already set to the resume point
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BlueButtonColor
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Resume Session",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Start over button
+                    Button(
+                        onClick = {
+                            showResumeDialog = false
+                            currentStep = 1 // Reset to beginning
+                            coroutineScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    tutorialCompletionDao.deleteInProgress(studentId, tutorialSetId)
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OrangeButtonColor
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Start Over",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    } // End of outer Box
 }
 
 @Composable
