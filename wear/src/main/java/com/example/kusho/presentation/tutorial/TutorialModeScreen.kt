@@ -228,6 +228,11 @@ fun TutorialModeScreen() {
                                 TutorialModeStateHolder.showFeedback(isCorrect)
                                 isRecognizing = false
                             },
+                            onRecordingStarted = {
+                                scope.launch {
+                                    phoneCommunicationManager.sendTutorialModeGestureRecording()
+                                }
+                            },
                             onSkip = {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastSkipTime >= 500) {
@@ -484,6 +489,7 @@ private fun GestureRecognitionContent(
     needsReset: Boolean,
     onResetHandled: () -> Unit,
     onGestureResult: (Boolean, String) -> Unit,
+    onRecordingStarted: () -> Unit = {},
     onSkip: () -> Unit
 ) {
     // Convert letter to appropriate case for display
@@ -500,7 +506,8 @@ private fun GestureRecognitionContent(
             classifierResult = classifierResult,
             targetLetter = letter,
             letterCase = letterCase,
-            onGestureResult = onGestureResult
+            onGestureResult = onGestureResult,
+            onRecordingStarted = onRecordingStarted
         ),
         key = "$letter-$letterCase-$timestamp"
     )

@@ -25,7 +25,8 @@ class TutorialModeViewModel(
     private val classifierResult: ClassifierLoadResult,
     private val targetLetter: String,
     private val letterCase: String,
-    private val onGestureResult: (isCorrect: Boolean, predictedLetter: String) -> Unit
+    private val onGestureResult: (isCorrect: Boolean, predictedLetter: String) -> Unit,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModel() {
 
     companion object {
@@ -143,6 +144,9 @@ class TutorialModeViewModel(
                         recordingProgress = 0f
                     )
                 }
+
+                // Notify phone that recording has started (student is writing)
+                onRecordingStarted()
 
                 // Start sensor recording
                 sensorManager.startRecording()
@@ -314,12 +318,13 @@ class TutorialModeViewModelFactory(
     private val classifierResult: ClassifierLoadResult,
     private val targetLetter: String,
     private val letterCase: String,
-    private val onGestureResult: (Boolean, String) -> Unit
+    private val onGestureResult: (Boolean, String) -> Unit,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(TutorialModeViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return TutorialModeViewModel(sensorManager, classifierResult, targetLetter, letterCase, onGestureResult) as T
+            return TutorialModeViewModel(sensorManager, classifierResult, targetLetter, letterCase, onGestureResult, onRecordingStarted) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: $modelClass")
     }

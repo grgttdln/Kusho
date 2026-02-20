@@ -210,6 +210,8 @@ fun LearnModeSessionScreen(
 
     // State for Resume dialog
     var showResumeDialog by remember(sessionKey) { mutableStateOf(false) }
+    // Restart confirmation (second layer after ResumeSessionDialog)
+    var showRestartConfirmation by remember(sessionKey) { mutableStateOf(false) }
 
     // State for watch handshake - blocks session until watch is ready
     var isWatchReady by remember(sessionKey) { mutableStateOf(false) }
@@ -1363,19 +1365,120 @@ fun LearnModeSessionScreen(
                 // currentWordIndex and correctlyAnsweredWords already restored in LaunchedEffect
             },
             onRestart = {
-                showResumeDialog = false
-                currentWordIndex = 0
-                correctlyAnsweredWords = emptySet()
-                coroutineScope.launch {
-                    val studentIdLong = studentId.toLongOrNull()
-                    if (studentIdLong != null && studentIdLong > 0) {
-                        withContext(Dispatchers.IO) {
-                            studentSetProgressDao.clearInProgressSession(studentIdLong, activityId, setId)
+                // Show a second confirmation before wiping progress
+                showRestartConfirmation = true
+            }
+        )
+    }
+
+    // Restart confirmation dialog (second layer)
+    if (showRestartConfirmation) {
+        val savedWords = correctlyAnsweredWords.size
+        Dialog(
+            onDismissRequest = { showRestartConfirmation = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .wrapContentHeight(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Restart Session?",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            text = "This will erase all progress ($savedWords completed word${if (savedWords != 1) "s" else ""}). Are you sure you want to start over?",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.DarkGray,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 21.sp
+                        )
+
+                        Spacer(Modifier.height(24.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Go Back button
+                            Button(
+                                onClick = { showRestartConfirmation = false },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.LightGray.copy(alpha = 0.3f)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Go Back",
+                                    color = Color.DarkGray,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            // Confirm Restart button
+                            Button(
+                                onClick = {
+                                    showRestartConfirmation = false
+                                    showResumeDialog = false
+                                    currentWordIndex = 0
+                                    correctlyAnsweredWords = emptySet()
+                                    coroutineScope.launch {
+                                        val studentIdLong = studentId.toLongOrNull()
+                                        if (studentIdLong != null && studentIdLong > 0) {
+                                            withContext(Dispatchers.IO) {
+                                                studentSetProgressDao.clearInProgressSession(studentIdLong, activityId, setId)
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFE53935)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Restart",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
             }
-        )
+        }
     }
 
     } // End of outer Box

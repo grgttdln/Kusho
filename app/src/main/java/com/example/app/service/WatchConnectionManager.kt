@@ -95,6 +95,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _tutorialModeWatchReady = MutableStateFlow(0L)
     val tutorialModeWatchReady: StateFlow<Long> = _tutorialModeWatchReady.asStateFlow()
 
+    // Gesture recording signal - watch has started recording (student is writing)
+    private val _tutorialModeGestureRecording = MutableStateFlow(0L)
+    val tutorialModeGestureRecording: StateFlow<Long> = _tutorialModeGestureRecording.asStateFlow()
+
     // Watch ready signal for Learn Mode - watch has entered Learn Mode screen and is ready
     private val _learnModeWatchReady = MutableStateFlow(0L)
     val learnModeWatchReady: StateFlow<Long> = _learnModeWatchReady.asStateFlow()
@@ -158,6 +162,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
         private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
         private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING = "/tutorial_mode_gesture_recording"
 
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
@@ -648,6 +653,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED,
             MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY,
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
             MESSAGE_PATH_BATTERY_STATUS
         )
         
@@ -762,6 +768,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY -> {
                 Log.d(TAG, "✅ Watch is ready for Tutorial Mode")
                 _tutorialModeWatchReady.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING -> {
+                Log.d(TAG, "✍️ Watch started recording gesture (student is writing)")
+                _tutorialModeGestureRecording.value = System.currentTimeMillis()
             }
             MESSAGE_PATH_LEARN_MODE_WATCH_READY -> {
                 Log.d(TAG, "✅ Watch is ready for Learn Mode")

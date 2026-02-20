@@ -94,6 +94,7 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
         private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
         private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING = "/tutorial_mode_gesture_recording"
 
         private const val BATTERY_UPDATE_INTERVAL_MS = 60000L // 1 minute
     }
@@ -478,6 +479,28 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                         node.id,
                         MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
                         jsonPayload.toByteArray()
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch has started recording a gesture (student is writing)
+     */
+    suspend fun sendTutorialModeGestureRecording() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
+                        ByteArray(0)
                     ).await()
                 } catch (e: Exception) {
                     e.printStackTrace()
