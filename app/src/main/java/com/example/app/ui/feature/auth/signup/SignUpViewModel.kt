@@ -11,9 +11,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * ViewModel for the SignUpScreen.
- */
 class SignUpViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getInstance(application)
@@ -24,9 +21,8 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<SignUpUiState> = _uiState.asStateFlow()
 
     fun signUp(
-        email: String,
+        username: String,
         name: String,
-        school: String,
         password: String,
         confirmPassword: String,
         onSuccess: () -> Unit
@@ -39,23 +35,13 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        if (!isValidEmail(email)) {
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                errorMessage = "Please enter a valid email address"
-            )
-            return
-        }
-
         _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
         viewModelScope.launch {
-            when (val result = userRepository.signUp(email, name, school, password)) {
+            when (val result = userRepository.signUp(username, name, password)) {
                 is UserRepository.SignUpResult.Success -> {
-                    // Fetch the newly created user to save in session
                     val newUser = userRepository.getUserById(result.userId)
                     newUser?.let { user ->
-                        // Default to staySignedIn=true for new signups
                         sessionManager.saveUserSession(user, staySignedIn = true)
                     }
 
@@ -84,10 +70,6 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
     fun resetState() {
         _uiState.value = SignUpUiState()
     }
-
-    private fun isValidEmail(email: String): Boolean {
-        return android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
-    }
 }
 
 data class SignUpUiState(
@@ -96,4 +78,3 @@ data class SignUpUiState(
     val userId: Long? = null,
     val errorMessage: String? = null
 )
-

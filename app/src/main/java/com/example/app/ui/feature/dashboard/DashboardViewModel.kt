@@ -187,12 +187,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun getGreeting(): String {
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        val firstName = _uiState.value.userName.split(" ").firstOrNull() ?: "there"
+        val fullName = _uiState.value.userName.ifBlank { "there" }
         
         return when (hour) {
-            in 0..11 -> "Good Morning, $firstName!"
-            in 12..17 -> "Good Afternoon, $firstName!"
-            else -> "Good Evening, $firstName!"
+            in 0..11 -> "Good Morning, $fullName!"
+            in 12..17 -> "Good Afternoon, $fullName!"
+            else -> "Good Evening, $fullName!"
         }
     }
     

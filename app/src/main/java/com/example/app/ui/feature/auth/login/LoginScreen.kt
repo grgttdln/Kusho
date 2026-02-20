@@ -32,7 +32,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit = {},
     onNavigateToSignUp: () -> Unit = {}
 ) {
-    var email by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var staySignedIn by remember { mutableStateOf(false) }
@@ -90,9 +90,9 @@ fun LoginScreen(
                 )
 
                 TextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    placeholder = { Text("Email") },
+                    value = username,
+                    onValueChange = { username = it },
+                    placeholder = { Text("Username") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -179,7 +179,7 @@ fun LoginScreen(
                         text = "Log in",
                         onClick = {
                             viewModel.login(
-                                email = email,
+                                username = username,
                                 password = password,
                                 staySignedIn = staySignedIn,
                                 onSuccess = { onLoginSuccess() }
@@ -224,4 +224,3 @@ fun LoginScreenPreview() {
         LoginScreen()
     }
 }
-

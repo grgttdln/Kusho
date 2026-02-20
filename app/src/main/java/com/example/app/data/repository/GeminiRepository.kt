@@ -317,6 +317,174 @@ Generate a concise 2-4 sentence summary. Reference specific ${itemLabel.lowercas
         }
     }
 
+    // ========== Activity Description ==========
+
+    /**
+     * Build a phonics context string from a list of word names and their selected letter indices.
+     * Used to enrich activity description generation with CVC pattern info.
+     */
+    fun buildPhonicsContext(
+        wordNames: List<String>,
+        selectedLetterIndices: List<Int>,
+        configurations: List<String>
+    ): String {
+        data class SimpleAnalysis(
+            val word: String,
+            val onset: Char,
+            val vowel: Char,
+            val coda: Char,
+            val rime: String
+        )
+
+        val analyses = wordNames.map { w ->
+            val lower = w.lowercase()
+            SimpleAnalysis(
+                word = w,
+                onset = lower.getOrElse(0) { ' ' },
+                vowel = lower.getOrElse(1) { ' ' },
+                coda = lower.getOrElse(2) { ' ' },
+                rime = if (lower.length >= 2) lower.drop(1) else ""
+            )
+        }
+
+        val sb = StringBuilder()
+
+        // Detect word families (same rime, 2+ words)
+        val wordFamilies = analyses.groupBy { it.rime }.filter { it.value.size >= 2 }
+        if (wordFamilies.isNotEmpty()) {
+            wordFamilies.forEach { (rime, words) ->
+                sb.appendLine("Word family: -$rime (${words.joinToString(", ") { it.word }})")
+            }
+        }
+
+        // Detect same vowel groups (only if no word family covers all words)
+        val familyWords = wordFamilies.values.flatten().map { it.word }.toSet()
+        val nonFamilyWords = analyses.filter { it.word !in familyWords }
+        if (nonFamilyWords.isNotEmpty()) {
+            val sameVowel = analyses.groupBy { it.vowel }.filter { it.value.size >= 2 }
+            sameVowel.forEach { (vowel, words) ->
+                sb.appendLine("Shared vowel sound: short '$vowel' (${words.joinToString(", ") { it.word }})")
+            }
+        }
+
+        // Detect same onset consonant groups
+        val sameOnset = analyses.groupBy { it.onset }.filter { it.value.size >= 2 }
+        if (sameOnset.isNotEmpty() && wordFamilies.isEmpty()) {
+            sameOnset.forEach { (onset, words) ->
+                sb.appendLine("Same starting letter: '$onset' (${words.joinToString(", ") { it.word }})")
+            }
+        }
+
+        // Describe what letter positions are being practiced in fill-in-the-blanks
+        val fillIndices = wordNames.zip(configurations).zip(selectedLetterIndices)
+            .filter { (pair, _) -> pair.second.lowercase() in listOf("fill in the blanks", "fill in the blank") }
+            .map { (pair, idx) -> Triple(pair.first, pair.second, idx) }
+
+        if (fillIndices.isNotEmpty()) {
+            val positionGroups = fillIndices.groupBy { it.third }
+            val positionDescriptions = positionGroups.map { (idx, words) ->
+                val posName = when (idx) {
+                    0 -> "onset (first letter)"
+                    1 -> "medial vowel (middle letter)"
+                    2 -> "coda (last letter)"
+                    else -> "letter index $idx"
+                }
+                "$posName: ${words.joinToString(", ") { it.first }}"
+            }
+            sb.appendLine("Fill-in-the-blanks targets: ${positionDescriptions.joinToString("; ")}")
+        }
+
+        return sb.toString().trimEnd()
+    }
+
+    suspend fun generateActivityDescription(
+        activityTitle: String,
+        sessionMode: String,
+        items: List<String>,
+        configurations: List<String>? = null,
+        phonicsContext: String? = null
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val isTutorial = sessionMode == "TUTORIAL"
+            val itemType = if (isTutorial) "letters" else "words"
+
+            val configInfo = if (!isTutorial && !configurations.isNullOrEmpty()) {
+                val uniqueConfigs = configurations.distinct()
+                "\nActivity types used: ${uniqueConfigs.joinToString(", ")}."
+            } else ""
+
+            val phonicsInfo = if (!isTutorial && !phonicsContext.isNullOrBlank()) {
+                "\nPhonics analysis:\n$phonicsContext"
+            } else ""
+
+            val systemInstruction = """
+You are an educational content assistant. Generate a single factual sentence describing what students learn in this lesson.
+
+The description should:
+- State the learning objective (what skill students practice)
+- Do NOT list individual words or letters by name
+- Mention the activity type if provided (air writing, fill-in-the-blanks, etc.)
+- If phonics analysis is provided and shows a clear pattern (word family, shared vowel, same onset letter), mention the pattern naturally in the description
+- If no clear phonics pattern exists, just describe the activity type simply
+- Be objective and informative, written for teachers
+- Maximum 25 words
+
+Examples:
+
+Input: Tutorial, Uppercase Vowels, letters A E I O U
+Output: Students practice forming and recognizing uppercase vowels through guided writing.
+
+Input: Tutorial, Lowercase Consonants, letters b c d f g h j k l m n p q r s t v w x y z
+Output: Covers stroke-by-stroke practice of all lowercase consonant letters.
+
+Input: Learn, "-at Family", words cat bat hat, configurations: fill in the blanks, phonics: Word family: -at (cat, bat, hat); Fill-in-the-blanks targets: onset (first letter)
+Output: Students identify missing onset consonants in -at family words through fill-in-the-blanks.
+
+Input: Learn, "Short O Words", words dog bob mob, configurations: fill in the blanks, phonics: Shared vowel sound: short 'o' (dog, bob, mob); Fill-in-the-blanks targets: medial vowel (middle letter)
+Output: Students practice short-o vowel recognition in CVC words using fill-in-the-blanks.
+
+Input: Learn, "Mixed CVC", words cat dog pen, configurations: write the word, fill in the blanks
+Output: Students practice reading and writing CVC words using air writing and fill-in-the-blanks.
+
+Respond with ONLY the description text, no JSON, no markdown, no quotes.
+            """.trimIndent()
+
+            val userPrompt = """
+Lesson: $activityTitle
+Mode: ${if (isTutorial) "Tutorial (letter practice)" else "Learn (word practice)"}
+${itemType.replaceFirstChar { it.uppercase() }} covered: ${items.joinToString(", ")}$configInfo$phonicsInfo
+
+Generate one factual sentence describing this lesson.
+            """.trimIndent()
+
+            val model = GenerativeModel(
+                modelName = MODEL_NAME,
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.3f
+                    topP = 0.95f
+                    maxOutputTokens = 100
+                },
+                safetySettings = safetySettings,
+                systemInstruction = content { text(systemInstruction) }
+            )
+
+            val response = model.generateContent(userPrompt)
+            val description = response.text?.trim()
+
+            if (description.isNullOrBlank()) {
+                Log.w(TAG, "Activity description generation returned empty")
+                return@withContext null
+            }
+
+            Log.d(TAG, "Activity description generated: $description")
+            description
+        } catch (e: Exception) {
+            Log.e(TAG, "Activity description generation failed: ${e.message}", e)
+            null
+        }
+    }
+
     // ========== Step Functions ==========
 
     /**

@@ -37,6 +37,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.wear.compose.foundation.CurvedLayout
+import androidx.wear.compose.material.curvedText
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
@@ -407,6 +409,17 @@ private fun QuestionContent(
             ) { viewModel.startAnswering() },
         contentAlignment = Alignment.Center
     ) {
+        // Curved question text along the top arc of the watch face
+        if (question != null) {
+            CurvedLayout(anchor = 270f) {
+                curvedText(
+                    text = question.question,
+                    fontSize = 12.sp,
+                    color = Color.White
+                )
+            }
+        }
+
         if (isPictureMatch && emoji != null) {
             // For Picture Match: Show ONLY the emoji centered, no text
             Text(

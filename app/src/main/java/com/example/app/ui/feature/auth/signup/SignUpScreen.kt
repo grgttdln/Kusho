@@ -33,9 +33,8 @@ fun SignUpScreen(
     onSignUpSuccess: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {}
 ) {
+    var username by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
-    var school by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -98,9 +97,9 @@ fun SignUpScreen(
             )
 
             TextField(
-                value = email,
-                onValueChange = { email = it },
-                placeholder = { Text("Create a Email") },
+                value = username,
+                onValueChange = { username = it },
+                placeholder = { Text("Create a Username") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
@@ -120,25 +119,6 @@ fun SignUpScreen(
                 value = name,
                 onValueChange = { name = it },
                 placeholder = { Text("Enter your Name") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color(0xFF49A9FF),
-                    unfocusedIndicatorColor = Color(0xFF49A9FF),
-                    focusedTextColor = Color(0xFF2D2D2D),
-                    unfocusedTextColor = Color(0xFF2D2D2D)
-                ),
-                singleLine = true,
-                enabled = !uiState.isLoading
-            )
-
-            TextField(
-                value = school,
-                onValueChange = { school = it },
-                placeholder = { Text("Enter your School") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
@@ -222,9 +202,8 @@ fun SignUpScreen(
                     text = "Sign up",
                     onClick = {
                         viewModel.signUp(
-                            email = email,
+                            username = username,
                             name = name,
-                            school = school,
                             password = password,
                             confirmPassword = confirmPassword,
                             onSuccess = onSignUpSuccess
@@ -269,4 +248,3 @@ fun SignUpScreenPreview() {
         SignUpScreen()
     }
 }
-
