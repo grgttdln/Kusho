@@ -115,8 +115,11 @@ fun AppNavigation(
             val context = LocalContext.current
             val scope = rememberCoroutineScope()
             var isCheckingConnection by remember { mutableStateOf(false) }
+            val sessionManager = remember { SessionManager.getInstance(context) }
+            val userName = sessionManager.getUserName()
             
             PostSignUpOnboardingScreen(
+                userName = userName,
                 onOnboardingComplete = {
                     // Don't navigate immediately - check watch connection first
                     isCheckingConnection = true

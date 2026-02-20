@@ -27,23 +27,24 @@ import com.example.app.ui.feature.onboarding.model.OnboardingPage
 @Composable
 fun PostSignUpOnboardingScreen(
     modifier: Modifier = Modifier,
+    userName: String = "Guest",
     onOnboardingComplete: () -> Unit = {}
 ) {
     val pages = listOf(
         OnboardingPage(
             imageRes = R.drawable.dis_onb1,
-            title = "Welcome to Kusho",
+            title = "Welcome, $userName",
             description = "Learn to write by moving your hands in the air. Fun, playful, and magical!"
         ),
         OnboardingPage(
             imageRes = R.drawable.dis_onb2,
             title = "Move, Write, and Learn!",
-            description = "Trace letters with your hand. Kusho tracks your movements and helps you learn to write!"
+            description = "Students trace letters with their hand. Kusho tracks their movements and helps them learn to write!"
         ),
         OnboardingPage(
             imageRes = R.drawable.dis_onb3,
             title = "Every Learner Grows Differently",
-            description = "Kusho adapts to the child's pace, making learning gentle, encouraging, and fun."
+            description = "Kusho adapts to the student's pace, making learning gentle, encouraging, and fun."
         ),
         OnboardingPage(
             imageRes = R.drawable.dis_onb4,
@@ -53,7 +54,7 @@ fun PostSignUpOnboardingScreen(
         OnboardingPage(
             imageRes = R.drawable.dis_onb5,
             title = "Ready to Begin?",
-            description = "Join Kuu and start your air writing journey!"
+            description = "Join Kuu, your magical companion, and discover the exciting world of air writing. Let's make learning fun and engaging!"
         )
     )
 
@@ -179,6 +180,6 @@ private fun OnboardingPageContent(page: OnboardingPage) {
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun PostSignUpOnboardingScreenPreview() {
-    PostSignUpOnboardingScreen()
+    PostSignUpOnboardingScreen(userName = "John Doe")
 }
 
