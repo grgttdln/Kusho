@@ -420,8 +420,14 @@ fun DashboardScreen(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
+                                val pairingMessage = if (pairedWatchName == "Smartwatch") {
+                                    "Your smartwatch is now connected and ready to use."
+                                } else {
+                                    "Your watch \"$pairedWatchName\" is now connected and ready to use."
+                                }
+
                                 Text(
-                                    text = "Your watch $pairedWatchName is now connected and ready to use.",
+                                    text = pairingMessage,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Normal,
                                     color = Color(0xFF555555),
