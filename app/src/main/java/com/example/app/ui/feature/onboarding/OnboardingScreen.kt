@@ -33,7 +33,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             DescriptionText(
-                text = "Discover a new way to teach and learn Air Writing"
+                text = "Discover a new way to teach and learn air writing"
             )
 
             Spacer(modifier = Modifier.height(28.dp))
