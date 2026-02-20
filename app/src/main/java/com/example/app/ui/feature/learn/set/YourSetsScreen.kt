@@ -126,7 +126,7 @@ fun YourSetsScreen(
 
             // Title
             Text(
-                text = "Your Activity Sets",
+                text = "My Activities",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -169,7 +169,7 @@ fun YourSetsScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "No Sets Yet",
+                            text = "No Activities Yet",
                             color = Color(0xFF4A4A4A),
                             fontSize = 24.sp,
                             fontWeight = FontWeight.SemiBold
@@ -178,7 +178,7 @@ fun YourSetsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Tap the button below to create\nyour first activity set.",
+                            text = "Tap the button below to create\nyour first activity.",
                             color = Color(0xFF7A7A7A),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center
@@ -240,33 +240,56 @@ fun YourSetsScreen(
             Spacer(Modifier.height(32.dp))
         }
 
-        // Floating "Add Sets" Button
-        Button(
-            onClick = { currentOnAddSetClick() },
+        // Action Buttons: "Add Activity" and Magic Wand
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 96.dp)
-                .width(207.dp)
-                .height(75.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF3FA9F8)
-            ),
-            contentPadding = PaddingValues(horizontal = 16.dp)
+                .padding(bottom = 96.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Add",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Add a Set",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color.White
-            )
+            Button(
+                onClick = { currentOnAddSetClick() },
+                modifier = Modifier
+                    .width(217.dp)
+                    .height(75.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3FA9F8)
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Add Activity",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Magic Wand Button
+            IconButton(
+                onClick = { /* TODO */ },
+                modifier = Modifier
+                    .size(75.dp)
+                    .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_wand),
+                    contentDescription = "Magic Wand",
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
 
         // Bottom Navigation Bar

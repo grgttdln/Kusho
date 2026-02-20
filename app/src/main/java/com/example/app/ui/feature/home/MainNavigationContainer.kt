@@ -258,7 +258,7 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         10 -> ConfirmationScreen(
-            title = "Activity Created!",
+            title = "Activity Set Created!",
             onContinueClick = { currentScreen = 6 },
             modifier = modifier
         )
@@ -293,7 +293,7 @@ fun MainNavigationContainer(
             )
         }
         13 -> ConfirmationScreen(
-            title = "Set Created!",
+            title = "Activity Created!",
             subtitle = createdSetTitle,
             onContinueClick = {
                 yourSetsScreenKey++

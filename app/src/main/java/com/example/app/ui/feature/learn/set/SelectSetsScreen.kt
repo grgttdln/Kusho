@@ -105,7 +105,7 @@ fun SelectSetsScreen(
 
             // Title
             Text(
-                text = "Select Set/s",
+                text = "Select Activities",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF000000),
@@ -124,7 +124,7 @@ fun SelectSetsScreen(
                     .padding(horizontal = 15.dp),
                 placeholder = {
                     Text(
-                        text = "Search for Sets",
+                        text = "Search for Activities",
                         fontSize = 16.sp,
                         color = Color(0xFF3FA9F8),
                         fontWeight = FontWeight.Normal
@@ -239,7 +239,7 @@ fun SelectSetsScreen(
             enabled = selectedSets.isNotEmpty()
         ) {
             Text(
-                text = "Add ${selectedSets.size} Sets",
+                text = "Add ${selectedSets.size} Activities",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,

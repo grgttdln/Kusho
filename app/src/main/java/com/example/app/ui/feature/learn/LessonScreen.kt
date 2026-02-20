@@ -17,6 +17,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -227,7 +228,7 @@ fun AddWordBankButton(
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "Word Bank",
+            text = "Add Word",
             fontSize = 20.sp,
             fontWeight = FontWeight.Normal,
             color = Color.White

@@ -34,8 +34,8 @@ import com.example.app.ui.components.wordbank.WordBankModal
 fun WordBankScreen(
     onNavigate: (Int) -> Unit,
     onBackClick: () -> Unit,
-    onNavigateToAIGenerate: (String) -> Unit = {},
     modifier: Modifier = Modifier,
+    onNavigateToAIGenerate: (String) -> Unit = {},
     viewModel: LessonViewModel = viewModel()
 ) {
     // Collect UI state from ViewModel
@@ -63,7 +63,7 @@ fun WordBankScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 160.dp),
+                .padding(bottom = 80.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(24.dp))
@@ -101,7 +101,7 @@ fun WordBankScreen(
 
             // Title
             Text(
-                text = "Word Bank",
+                text = "My Word Bank",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -112,7 +112,7 @@ fun WordBankScreen(
             // Word Bank List
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .height(420.dp)
                     .fillMaxWidth()
             ) {
                 WordBankList(
@@ -123,47 +123,47 @@ fun WordBankScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Action Buttons: "+ Word Bank" and Magic Wand
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AddWordBankButton(
-                    onClick = {
-                        viewModel.showWordBankModal()
-                    }
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Magic Wand Button
-                IconButton(
-                    onClick = { viewModel.showActivityCreationModal() },
-                    modifier = Modifier
-                        .size(75.dp)
-                        .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_wand),
-                        contentDescription = "Magic Wand",
-                        modifier = Modifier.size(28.dp),
-                        contentScale = ContentScale.Fit
-                    )
+        // Action Buttons: "+ Word Bank" and Magic Wand
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AddWordBankButton(
+                onClick = {
+                    viewModel.showWordBankModal()
                 }
-            }
+            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Magic Wand Button
+            IconButton(
+                onClick = { viewModel.showActivityCreationModal() },
+                modifier = Modifier
+                    .size(75.dp)
+                    .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_wand),
+                    contentDescription = "Magic Wand",
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
 
         // Bottom Navigation Bar
         BottomNavBar(
             selectedTab = 3,
             onTabSelected = { onNavigate(it) },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
         )
 
         // Word Bank Modal (add word)

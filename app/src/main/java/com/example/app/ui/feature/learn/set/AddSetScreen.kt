@@ -136,9 +136,9 @@ fun AddSetScreen(
 
             // Title text "Add a New Set"
             Text(
-                text = "Add a New Set",
+                text = "Add a New Activity",
                 fontSize = 32.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B),
                 textAlign = TextAlign.Center
             )
@@ -158,7 +158,7 @@ fun AddSetScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Add a Set Title",
+                        text = "Add an Activity Title",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color(0xFF0B0B0B)
@@ -201,7 +201,7 @@ fun AddSetScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Add Description",
+                        text = "Add a short description",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color(0xFF0B0B0B)
@@ -352,7 +352,7 @@ fun AddSetScreen(
             enabled = setTitle.isNotBlank() && internalWords.isNotEmpty() && !uiState.isLoading
         ) {
             Text(
-                text = if (uiState.isLoading) "Creating..." else "Create Set",
+                text = if (uiState.isLoading) "Creating..." else "Create Activity",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
