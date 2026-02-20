@@ -20,6 +20,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
@@ -150,7 +152,8 @@ fun LearnModeSessionScreen(
     modifier: Modifier = Modifier,
     onSkip: () -> Unit = {},
     onAudioClick: () -> Unit = {},
-    onSessionComplete: () -> Unit = {}
+    onSessionComplete: () -> Unit = {},
+    onEarlyExit: () -> Unit = {}
 ) {
     // Local state - fresh on each recomposition with new sessionKey
     var isLoading by remember(sessionKey) { mutableStateOf(true) }
@@ -199,6 +202,12 @@ fun LearnModeSessionScreen(
 
     // State to trigger save-and-complete when session ends
     var shouldSaveAndComplete by remember(sessionKey) { mutableStateOf(false) }
+
+    // State for End Session confirmation dialog
+    var showEndSessionConfirmation by remember(sessionKey) { mutableStateOf(false) }
+
+    // State for Resume dialog
+    var showResumeDialog by remember(sessionKey) { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -260,6 +269,35 @@ fun LearnModeSessionScreen(
         }
     }
 
+    // Check for in-progress session to offer resume
+    LaunchedEffect(setId, studentId, activityId, sessionKey) {
+        val studentIdLong = studentId.toLongOrNull()
+        if (studentIdLong != null && studentIdLong > 0 && activityId > 0 && setId > 0) {
+            val inProgress = withContext(Dispatchers.IO) {
+                studentSetProgressDao.getInProgressSession(studentIdLong, activityId, setId)
+            }
+            if (inProgress != null && inProgress.lastCompletedWordIndex > 0) {
+                // Restore state from saved progress
+                currentWordIndex = inProgress.lastCompletedWordIndex
+                // Restore correctly answered words from JSON
+                val savedWords = inProgress.correctlyAnsweredWordsJson
+                if (!savedWords.isNullOrBlank()) {
+                    try {
+                        val indices = org.json.JSONArray(savedWords)
+                        val restoredSet = mutableSetOf<Int>()
+                        for (i in 0 until indices.length()) {
+                            restoredSet.add(indices.getInt(i))
+                        }
+                        correctlyAnsweredWords = restoredSet
+                    } catch (e: Exception) {
+                        Log.e("LearnModeSession", "Failed to parse correctlyAnsweredWordsJson", e)
+                    }
+                }
+                showResumeDialog = true
+            }
+        }
+    }
+
     // Notify watch when Learn Mode session starts
     LaunchedEffect(sessionKey) {
         watchConnectionManager.notifyLearnModeStarted()
@@ -303,6 +341,8 @@ fun LearnModeSessionScreen(
                     // Mark the set as completed in StudentSetProgress
                     val studentIdLong = studentId.toLongOrNull()
                     if (studentIdLong != null && activityId > 0) {
+                        // Clear any in-progress session data
+                        studentSetProgressDao.clearInProgressSession(studentIdLong, activityId, setId)
                         // Check if progress record exists
                         val existingProgress = studentSetProgressDao.getProgress(studentIdLong, activityId, setId)
                         if (existingProgress != null) {
@@ -365,6 +405,100 @@ fun LearnModeSessionScreen(
             }
             // Navigate after saving is complete
             onSessionComplete()
+        }
+    }
+
+    // Save partial progress and exit early
+    val saveProgressAndExit: () -> Unit = {
+        coroutineScope.launch {
+            val studentIdLong = studentId.toLongOrNull()
+            if (studentIdLong != null && studentIdLong > 0 && setId > 0 && activityId > 0) {
+                withContext(Dispatchers.IO) {
+                    // Save all annotations accumulated so far
+                    annotationsMap.forEach { (itemId, annotationData) ->
+                        if (annotationData.hasData()) {
+                            val annotation = LearnerProfileAnnotation.create(
+                                studentId = studentId,
+                                setId = setId,
+                                itemId = itemId,
+                                sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                                activityId = activityId,
+                                levelOfProgress = annotationData.levelOfProgress,
+                                strengthsObserved = annotationData.strengthsObserved.toList(),
+                                strengthsNote = annotationData.strengthsNote,
+                                challenges = annotationData.challenges.toList(),
+                                challengesNote = annotationData.challengesNote
+                            )
+                            annotationDao.insertOrUpdate(annotation)
+                        }
+                    }
+
+                    // Generate AI summary if annotations exist
+                    try {
+                        val allAnnotations = annotationDao.getAnnotationsForStudentInSet(
+                            studentId = studentId,
+                            setId = setId,
+                            sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                            activityId = activityId
+                        )
+                        if (allAnnotations.isNotEmpty()) {
+                            val wordNames = words.mapIndexed { i, w -> i to w.word }.toMap()
+                            val summaryText = geminiRepository.generateAnnotationSummary(
+                                allAnnotations, LearnerProfileAnnotation.MODE_LEARN, wordNames
+                            )
+                            if (summaryText != null) {
+                                annotationSummaryDao.insertOrUpdate(
+                                    com.example.app.data.entity.AnnotationSummary(
+                                        studentId = studentId,
+                                        setId = setId,
+                                        sessionMode = LearnerProfileAnnotation.MODE_LEARN,
+                                        activityId = activityId,
+                                        summaryText = summaryText
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("LearnModeSession", "AI summary generation failed on early exit: ${e.message}")
+                    }
+
+                    // Save partial progress
+                    val completedWords = correctlyAnsweredWords.size
+                    val totalWords = words.size.coerceAtLeast(1)
+                    val percentage = (completedWords * 100) / totalWords
+                    val correctWordsJson = org.json.JSONArray(correctlyAnsweredWords.toList()).toString()
+
+                    val existingProgress = studentSetProgressDao.getProgress(studentIdLong, activityId, setId)
+                    if (existingProgress != null) {
+                        studentSetProgressDao.upsertProgress(
+                            existingProgress.copy(
+                                lastCompletedWordIndex = currentWordIndex,
+                                correctlyAnsweredWordsJson = correctWordsJson,
+                                completionPercentage = percentage,
+                                isCompleted = false,
+                                completedAt = null,
+                                lastAccessedAt = System.currentTimeMillis()
+                            )
+                        )
+                    } else {
+                        studentSetProgressDao.upsertProgress(
+                            com.example.app.data.entity.StudentSetProgress(
+                                studentId = studentIdLong,
+                                activityId = activityId,
+                                setId = setId,
+                                isCompleted = false,
+                                completionPercentage = percentage,
+                                lastCompletedWordIndex = currentWordIndex,
+                                correctlyAnsweredWordsJson = correctWordsJson,
+                                lastAccessedAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                    Log.d("LearnModeSession", "Partial progress saved: wordIndex=$currentWordIndex, correctWords=$correctWordsJson, percentage=$percentage%")
+                }
+            }
+            watchConnectionManager.notifyLearnModeEnded()
+            onEarlyExit()
         }
     }
 
@@ -790,6 +924,240 @@ fun LearnModeSessionScreen(
         )
     }
 
+    // End Session confirmation dialog
+    if (showEndSessionConfirmation) {
+        val completedWords = correctlyAnsweredWords.size
+        val totalWords = words.size.coerceAtLeast(1)
+        val progressMessage = when {
+            completedWords <= 0 -> "You haven't completed any words yet.\nAny annotations you've made will be saved."
+            completedWords == 1 -> "You've completed 1/$totalWords word!\nYour progress and annotations will be saved."
+            else -> "You've completed $completedWords/$totalWords words!\nYour progress and annotations will be saved."
+        }
+
+        Dialog(
+            onDismissRequest = { showEndSessionConfirmation = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { showEndSessionConfirmation = false }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .wrapContentHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {}
+                        ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.dis_remove),
+                        contentDescription = "End session",
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .aspectRatio(1f),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Text(
+                        text = "Are you sure?",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Text(
+                        text = progressMessage,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            showEndSessionConfirmation = false
+                            saveProgressAndExit()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF6B6B)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "End Session",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Button(
+                        onClick = { showEndSessionConfirmation = false },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BlueColor
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Resume dialog - shown when there's saved progress from a previous session
+    if (showResumeDialog) {
+        val savedWords = correctlyAnsweredWords.size
+        val totalWords = words.size.coerceAtLeast(1)
+        Dialog(
+            onDismissRequest = { /* Can't dismiss - must choose */ },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .wrapContentHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.dis_pairing_tutorial),
+                        contentDescription = "Resume session",
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .aspectRatio(1f),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Text(
+                        text = "Welcome back!",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PurpleColor,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Text(
+                        text = "$studentName has completed $savedWords/$totalWords words.\nWould you like to continue where you left off?",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // Resume button
+                    Button(
+                        onClick = {
+                            showResumeDialog = false
+                            // currentWordIndex and correctlyAnsweredWords already restored in LaunchedEffect
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BlueColor
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Resume Session",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Start over button
+                    Button(
+                        onClick = {
+                            showResumeDialog = false
+                            currentWordIndex = 0
+                            correctlyAnsweredWords = emptySet()
+                            coroutineScope.launch {
+                                val studentIdLong = studentId.toLongOrNull()
+                                if (studentIdLong != null && studentIdLong > 0) {
+                                    withContext(Dispatchers.IO) {
+                                        studentSetProgressDao.clearInProgressSession(studentIdLong, activityId, setId)
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF9800)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Start Over",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // Show loading
     if (isLoading) {
         Box(
@@ -1077,6 +1445,25 @@ fun LearnModeSessionScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+
+        // End Session Button
+        Button(
+            onClick = { showEndSessionConfirmation = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = BlueColor
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = "End Session",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 

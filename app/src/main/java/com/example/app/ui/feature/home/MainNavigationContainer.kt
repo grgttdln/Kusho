@@ -660,7 +660,8 @@ fun MainNavigationContainer(
                 studentName = selectedStudentName,
                 dominantHand = selectedDominantHand,
                 modifier = modifier,
-                onSessionComplete = { currentScreen = 34 }
+                onSessionComplete = { currentScreen = 34 },
+                onEarlyExit = { currentScreen = 1 }
             )
         }
         34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
@@ -786,7 +787,8 @@ fun MainNavigationContainer(
                 studentName = selectedStudentName,
                 dominantHand = selectedDominantHand,
                 modifier = modifier,
-                onSessionComplete = { currentScreen = 44 }
+                onSessionComplete = { currentScreen = 44 },
+                onEarlyExit = { currentScreen = 0 }
             )
         }
         44 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(

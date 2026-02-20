@@ -41,6 +41,24 @@ interface StudentSetProgressDao {
     suspend fun getProgress(studentId: Long, activityId: Long, setId: Long): StudentSetProgress?
 
     /**
+     * Get an in-progress (not completed) session for a student, activity, and set.
+     * Returns null if no in-progress session exists.
+     */
+    @Query("SELECT * FROM student_set_progress WHERE studentId = :studentId AND activityId = :activityId AND setId = :setId AND isCompleted = 0 AND lastCompletedWordIndex > 0")
+    suspend fun getInProgressSession(studentId: Long, activityId: Long, setId: Long): StudentSetProgress?
+
+    /**
+     * Delete in-progress session data by resetting partial progress fields.
+     * Called when "Start Over" is chosen or when a session completes normally.
+     */
+    @Query("""
+        UPDATE student_set_progress
+        SET lastCompletedWordIndex = 0, correctlyAnsweredWordsJson = NULL
+        WHERE studentId = :studentId AND activityId = :activityId AND setId = :setId AND isCompleted = 0
+    """)
+    suspend fun clearInProgressSession(studentId: Long, activityId: Long, setId: Long): Int
+
+    /**
      * Get all progress records for a specific student as a Flow.
      *
      * @param studentId The student's ID
@@ -69,8 +87,10 @@ interface StudentSetProgressDao {
      * @return The number of rows updated
      */
     @Query("""
-        UPDATE student_set_progress 
-        SET isCompleted = 1, completionPercentage = 100, completedAt = :completedAt, lastAccessedAt = :completedAt 
+        UPDATE student_set_progress
+        SET isCompleted = 1, completionPercentage = 100, completedAt = :completedAt,
+            lastAccessedAt = :completedAt, lastCompletedWordIndex = 0,
+            correctlyAnsweredWordsJson = NULL
         WHERE studentId = :studentId AND activityId = :activityId AND setId = :setId
     """)
     suspend fun markSetAsCompleted(studentId: Long, activityId: Long, setId: Long, completedAt: Long): Int

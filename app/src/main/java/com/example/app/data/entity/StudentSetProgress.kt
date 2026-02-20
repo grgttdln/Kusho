@@ -47,5 +47,7 @@ data class StudentSetProgress(
     val isCompleted: Boolean = false,
     val completionPercentage: Int = 0,
     val completedAt: Long? = null,
-    val lastAccessedAt: Long = System.currentTimeMillis()
+    val lastAccessedAt: Long = System.currentTimeMillis(),
+    val lastCompletedWordIndex: Int = 0,
+    val correctlyAnsweredWordsJson: String? = null
 )

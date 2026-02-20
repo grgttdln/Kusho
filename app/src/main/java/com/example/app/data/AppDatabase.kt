@@ -55,7 +55,7 @@ import com.example.app.data.entity.TutorialCompletion
         AnnotationSummary::class,
         TutorialCompletion::class
     ],
-    version = 15, // Added lastCompletedStep, totalSteps, nullable completedAt to TutorialCompletion
+    version = 16, // Added lastCompletedWordIndex, correctlyAnsweredWordsJson to StudentSetProgress
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
