@@ -54,6 +54,8 @@ import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
 import com.example.app.ui.components.common.ProgressCheckDialog
 import com.example.app.ui.components.common.ProgressIndicator
+import com.example.app.ui.components.common.EndSessionDialog
+import com.example.app.ui.components.common.ResumeSessionDialog
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
 import com.example.app.ui.components.tutorial.AnimatedLetterView
@@ -841,234 +843,40 @@ fun TutorialSessionScreen(
 
     // Phase 1: End Session confirmation dialog
     if (showEndSessionConfirmation) {
-        val completedLetters = currentStep - 1 // Letters fully done (current step is the one in progress)
-        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-        val progressMessage = when {
-            completedLetters <= 0 -> "You haven't completed any letters yet.\nAny annotations you've made will be saved."
-            completedLetters == 1 -> "You've completed 1/$maxSteps letter!\nYour progress and annotations will be saved."
-            else -> "You've completed $completedLetters/$maxSteps letters!\nYour progress and annotations will be saved."
-        }
-
-        Dialog(
-            onDismissRequest = { showEndSessionConfirmation = false },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { showEndSessionConfirmation = false }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .wrapContentHeight()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {} // Prevent dismiss when clicking dialog content
-                        ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.dis_remove),
-                        contentDescription = "End session",
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .aspectRatio(1f),
-                        contentScale = ContentScale.Fit
-                    )
-
-                    Spacer(Modifier.height(20.dp))
-
-                    Text(
-                        text = "Are you sure?",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        text = progressMessage,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.85f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp
-                    )
-
-                    Spacer(Modifier.height(24.dp))
-
-                    // End Session button (confirms early exit with progress save)
-                    Button(
-                        onClick = {
-                            showEndSessionConfirmation = false
-                            saveProgressAndExit()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF6B6B)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "End Session",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Cancel button (go back to session)
-                    Button(
-                        onClick = { showEndSessionConfirmation = false },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BlueButtonColor
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
+        EndSessionDialog(
+            mascotDrawable = R.drawable.dis_end_session,
+            onEndSession = {
+                showEndSessionConfirmation = false
+                saveProgressAndExit()
+            },
+            onCancel = { showEndSessionConfirmation = false }
+        )
     }
 
     // Resume dialog — shown when there's saved progress from a previous session
     if (showResumeDialog) {
         val savedStep = currentStep - 1 // currentStep was pre-set to resume point
         val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-        Dialog(
-            onDismissRequest = { /* Can't dismiss — must choose */ },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .wrapContentHeight(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.dis_pairing_tutorial),
-                        contentDescription = "Resume session",
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .aspectRatio(1f),
-                        contentScale = ContentScale.Fit
-                    )
-
-                    Spacer(Modifier.height(20.dp))
-
-                    Text(
-                        text = "Welcome back!",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = YellowColor,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        text = "$studentName has completed $savedStep/$maxSteps letters.\nWould you like to continue where you left off?",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.85f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp
-                    )
-
-                    Spacer(Modifier.height(24.dp))
-
-                    // Resume button
-                    Button(
-                        onClick = {
-                            showResumeDialog = false
-                            // currentStep is already set to the resume point
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BlueButtonColor
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Resume Session",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Start over button
-                    Button(
-                        onClick = {
-                            showResumeDialog = false
-                            currentStep = 1 // Reset to beginning
-                            coroutineScope.launch {
-                                withContext(Dispatchers.IO) {
-                                    tutorialCompletionDao.deleteInProgress(studentId, tutorialSetId)
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OrangeButtonColor
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Start Over",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+        ResumeSessionDialog(
+            mascotDrawable = R.drawable.dis_pairing_tutorial,
+            studentName = studentName,
+            completedCount = savedStep,
+            totalCount = maxSteps,
+            unitLabel = "letters",
+            onResume = {
+                showResumeDialog = false
+                // currentStep is already set to the resume point
+            },
+            onRestart = {
+                showResumeDialog = false
+                currentStep = 1 // Reset to beginning
+                coroutineScope.launch {
+                    withContext(Dispatchers.IO) {
+                        tutorialCompletionDao.deleteInProgress(studentId, tutorialSetId)
                     }
                 }
             }
-        }
+        )
     }
 
     } // End of outer Box

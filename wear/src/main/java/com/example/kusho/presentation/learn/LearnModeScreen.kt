@@ -74,7 +74,9 @@ fun LearnModeScreen() {
     // Keep screen on during Learn Mode to prevent sleep during air writing
     DisposableEffect(Unit) {
         view.keepScreenOn = true
+        LearnModeStateHolder.setWatchOnLearnScreen(true)
         onDispose {
+            LearnModeStateHolder.setWatchOnLearnScreen(false)
             view.keepScreenOn = false
         }
     }
@@ -119,8 +121,32 @@ fun LearnModeScreen() {
         }
     }
 
+    // Two-way handshake: send watch_ready when session becomes active
+    LaunchedEffect(isPhoneInLearnMode) {
+        if (isPhoneInLearnMode) {
+            scope.launch {
+                phoneCommunicationManager.sendLearnModeWatchReady()
+            }
+        }
+    }
+
+    // Heartbeat: keep sending watch_ready while no word data yet
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(3000)
+            if (wordData.word.isEmpty() && LearnModeStateHolder.isWatchOnLearnScreen.value) {
+                scope.launch {
+                    phoneCommunicationManager.sendLearnModeWatchReady()
+                }
+            }
+        }
+    }
+
     // Debouncing state for skip gesture
     var lastSkipTime by remember { mutableLongStateOf(0L) }
+
+    // "Tap to begin" wait screen - shown after handshake but before user taps
+    var showWaitScreen by remember { mutableStateOf(true) }
 
     // Check if current word is Fill in the Blank type
     val isFillInTheBlank = wordData.configurationType == "Fill in the Blank"
@@ -140,6 +166,23 @@ fun LearnModeScreen() {
                     !isPhoneInLearnMode -> {
                         // Waiting state - phone hasn't started Learn Mode session yet
                         WaitingContent()
+                    }
+                    showWaitScreen -> {
+                        // Tap to begin - after handshake, before user starts
+                        WaitScreenContent(
+                            onTap = {
+                                showWaitScreen = false
+                            },
+                            onSkip = {
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastSkipTime >= 500) {
+                                    lastSkipTime = currentTime
+                                    scope.launch {
+                                        phoneCommunicationManager.sendSkipCommand()
+                                    }
+                                }
+                            }
+                        )
                     }
                     isFillInTheBlank && wordData.word.isNotEmpty() -> {
                         // Fill in the Blank mode - show gesture input
@@ -261,6 +304,54 @@ private fun WaitingContent() {
                 .padding(top = 14.dp),
             contentScale = ContentScale.Crop
         )
+    }
+}
+
+@Composable
+private fun WaitScreenContent(
+    onTap: () -> Unit,
+    onSkip: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (dragAmount < -50f) {
+                        change.consume()
+                        onSkip()
+                    }
+                }
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onTap
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = "Tap to begin!",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Image(
+                painter = painterResource(id = R.drawable.dis_watch_wait),
+                contentDescription = "Tap to start",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
     }
 }
 

@@ -64,6 +64,8 @@ import com.example.app.speech.TextToSpeechManager
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
 import com.example.app.ui.components.common.ProgressIndicator
+import com.example.app.ui.components.common.EndSessionDialog
+import com.example.app.ui.components.common.ResumeSessionDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -209,6 +211,9 @@ fun LearnModeSessionScreen(
     // State for Resume dialog
     var showResumeDialog by remember(sessionKey) { mutableStateOf(false) }
 
+    // State for watch handshake - blocks session until watch is ready
+    var isWatchReady by remember(sessionKey) { mutableStateOf(false) }
+
     val context = LocalContext.current
 
     // Coroutine scope for async operations
@@ -298,9 +303,27 @@ fun LearnModeSessionScreen(
         }
     }
 
-    // Notify watch when Learn Mode session starts
+    // Notify watch when Learn Mode session starts and begin handshake
     LaunchedEffect(sessionKey) {
         watchConnectionManager.notifyLearnModeStarted()
+        // Send initial phone_ready signal
+        watchConnectionManager.sendLearnModePhoneReady()
+        // Heartbeat: keep pinging every 2 seconds until watch responds
+        while (!isWatchReady) {
+            kotlinx.coroutines.delay(2000)
+            if (!isWatchReady) {
+                watchConnectionManager.sendLearnModePhoneReady()
+            }
+        }
+    }
+
+    // Listen for watch ready signal
+    LaunchedEffect(sessionKey) {
+        watchConnectionManager.learnModeWatchReady.collect { timestamp ->
+            if (timestamp > 0L) {
+                isWatchReady = true
+            }
+        }
     }
     
     // Auto-dismiss annotation tooltip after 5 seconds
@@ -541,8 +564,9 @@ fun LearnModeSessionScreen(
         }
     }
 
-    // Send current word data to watch whenever current word changes
-    LaunchedEffect(currentWordIndex, words) {
+    // Send current word data to watch whenever current word changes (only after handshake)
+    LaunchedEffect(currentWordIndex, words, isWatchReady) {
+        if (!isWatchReady) return@LaunchedEffect
         val currentWord = words.getOrNull(currentWordIndex)
         if (currentWord != null) {
             // Reset letter tracking state for new word
@@ -924,240 +948,6 @@ fun LearnModeSessionScreen(
         )
     }
 
-    // End Session confirmation dialog
-    if (showEndSessionConfirmation) {
-        val completedWords = correctlyAnsweredWords.size
-        val totalWords = words.size.coerceAtLeast(1)
-        val progressMessage = when {
-            completedWords <= 0 -> "You haven't completed any words yet.\nAny annotations you've made will be saved."
-            completedWords == 1 -> "You've completed 1/$totalWords word!\nYour progress and annotations will be saved."
-            else -> "You've completed $completedWords/$totalWords words!\nYour progress and annotations will be saved."
-        }
-
-        Dialog(
-            onDismissRequest = { showEndSessionConfirmation = false },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { showEndSessionConfirmation = false }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .wrapContentHeight()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {}
-                        ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.dis_remove),
-                        contentDescription = "End session",
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .aspectRatio(1f),
-                        contentScale = ContentScale.Fit
-                    )
-
-                    Spacer(Modifier.height(20.dp))
-
-                    Text(
-                        text = "Are you sure?",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        text = progressMessage,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.85f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp
-                    )
-
-                    Spacer(Modifier.height(24.dp))
-
-                    Button(
-                        onClick = {
-                            showEndSessionConfirmation = false
-                            saveProgressAndExit()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF6B6B)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "End Session",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Button(
-                        onClick = { showEndSessionConfirmation = false },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BlueColor
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Resume dialog - shown when there's saved progress from a previous session
-    if (showResumeDialog) {
-        val savedWords = correctlyAnsweredWords.size
-        val totalWords = words.size.coerceAtLeast(1)
-        Dialog(
-            onDismissRequest = { /* Can't dismiss - must choose */ },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .wrapContentHeight(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.dis_pairing_tutorial),
-                        contentDescription = "Resume session",
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .aspectRatio(1f),
-                        contentScale = ContentScale.Fit
-                    )
-
-                    Spacer(Modifier.height(20.dp))
-
-                    Text(
-                        text = "Welcome back!",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PurpleColor,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        text = "$studentName has completed $savedWords/$totalWords words.\nWould you like to continue where you left off?",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.85f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp
-                    )
-
-                    Spacer(Modifier.height(24.dp))
-
-                    // Resume button
-                    Button(
-                        onClick = {
-                            showResumeDialog = false
-                            // currentWordIndex and correctlyAnsweredWords already restored in LaunchedEffect
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BlueColor
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Resume Session",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Start over button
-                    Button(
-                        onClick = {
-                            showResumeDialog = false
-                            currentWordIndex = 0
-                            correctlyAnsweredWords = emptySet()
-                            coroutineScope.launch {
-                                val studentIdLong = studentId.toLongOrNull()
-                                if (studentIdLong != null && studentIdLong > 0) {
-                                    withContext(Dispatchers.IO) {
-                                        studentSetProgressDao.clearInProgressSession(studentIdLong, activityId, setId)
-                                    }
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF9800)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Start Over",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-
     // Show loading
     if (isLoading) {
         Box(
@@ -1191,8 +981,9 @@ fun LearnModeSessionScreen(
     }
 
 
+    Box(modifier = modifier.fillMaxSize()) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
             .padding(top = 40.dp, bottom = 24.dp),
@@ -1465,6 +1256,129 @@ fun LearnModeSessionScreen(
             )
         }
     }
+
+    // Waiting for watch overlay - drawn on top of content inside Box
+    if (!isWatchReady) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {} // Block clicks through overlay
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                Spacer(Modifier.weight(1f))
+
+                Image(
+                    painter = painterResource(id = R.drawable.dis_pairing_learn),
+                    contentDescription = "Waiting for watch",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                    contentScale = ContentScale.Fit
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = "Waiting for $studentName...",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PurpleColor,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "Please open Learn Mode\non the watch to connect.",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White.copy(alpha = 0.85f),
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // Cancel Session button
+                Button(
+                    onClick = {
+                        watchConnectionManager.notifyLearnModeEnded()
+                        onEarlyExit()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BlueColor
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Cancel Session",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+
+    // End Session confirmation dialog
+    if (showEndSessionConfirmation) {
+        EndSessionDialog(
+            mascotDrawable = R.drawable.dis_end_session,
+            onEndSession = {
+                showEndSessionConfirmation = false
+                saveProgressAndExit()
+            },
+            onCancel = { showEndSessionConfirmation = false }
+        )
+    }
+
+    // Resume dialog - shown when there's saved progress from a previous session
+    if (showResumeDialog) {
+        val savedWords = correctlyAnsweredWords.size
+        val totalWords = words.size.coerceAtLeast(1)
+        ResumeSessionDialog(
+            mascotDrawable = R.drawable.dis_pairing_learn,
+            studentName = studentName,
+            completedCount = savedWords,
+            totalCount = totalWords,
+            unitLabel = "words",
+            onResume = {
+                showResumeDialog = false
+                // currentWordIndex and correctlyAnsweredWords already restored in LaunchedEffect
+            },
+            onRestart = {
+                showResumeDialog = false
+                currentWordIndex = 0
+                correctlyAnsweredWords = emptySet()
+                coroutineScope.launch {
+                    val studentIdLong = studentId.toLongOrNull()
+                    if (studentIdLong != null && studentIdLong > 0) {
+                        withContext(Dispatchers.IO) {
+                            studentSetProgressDao.clearInProgressSession(studentIdLong, activityId, setId)
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    } // End of outer Box
 }
 
 /**

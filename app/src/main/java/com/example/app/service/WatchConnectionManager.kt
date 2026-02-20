@@ -95,6 +95,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _tutorialModeWatchReady = MutableStateFlow(0L)
     val tutorialModeWatchReady: StateFlow<Long> = _tutorialModeWatchReady.asStateFlow()
 
+    // Watch ready signal for Learn Mode - watch has entered Learn Mode screen and is ready
+    private val _learnModeWatchReady = MutableStateFlow(0L)
+    val learnModeWatchReady: StateFlow<Long> = _learnModeWatchReady.asStateFlow()
+
     // Pairing request from watch
     private val _pairingRequest = MutableStateFlow<PairingRequestEvent?>(null)
     val pairingRequest: StateFlow<PairingRequestEvent?> = _pairingRequest.asStateFlow()
@@ -139,6 +143,8 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
         private const val MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED = "/learn_mode_feedback_dismissed"
         private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
+        private const val MESSAGE_PATH_LEARN_MODE_PHONE_READY = "/learn_mode_phone_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_WATCH_READY = "/learn_mode_watch_ready"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -372,6 +378,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * Notify watch that Learn Mode session has started
      */
     fun notifyLearnModeStarted() {
+        _learnModeWatchReady.value = 0L // Reset handshake state for fresh session
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
@@ -756,6 +763,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Watch is ready for Tutorial Mode")
                 _tutorialModeWatchReady.value = System.currentTimeMillis()
             }
+            MESSAGE_PATH_LEARN_MODE_WATCH_READY -> {
+                Log.d(TAG, "✅ Watch is ready for Learn Mode")
+                _learnModeWatchReady.value = System.currentTimeMillis()
+            }
         }
     }
     
@@ -954,6 +965,28 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "\u2705 Phone ready signal sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "\u274C Failed to send phone ready signal", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the phone is on LearnModeSessionScreen and ready for handshake.
+     * The watch will reply with /learn_mode_watch_ready when it receives this.
+     */
+    fun sendLearnModePhoneReady() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_PHONE_READY,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode phone ready signal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Learn Mode phone ready signal", e)
             }
         }
     }

@@ -79,6 +79,8 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
         private const val MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED = "/learn_mode_feedback_dismissed"
         private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
+        private const val MESSAGE_PATH_LEARN_MODE_PHONE_READY = "/learn_mode_phone_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_WATCH_READY = "/learn_mode_watch_ready"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -301,7 +303,24 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                 } else {
                     android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready but watch is NOT on Tutorial screen - ignoring")
                 }
-            }        }
+            }
+            MESSAGE_PATH_LEARN_MODE_PHONE_READY -> {
+                // Phone is sending phone_ready pings, so it's in Learn Mode.
+                // Set this unconditionally so new PhoneCommunicationManager instances
+                // (created when watch re-enters LearnModeScreen) learn the phone's state
+                // even if they missed the original /learn_mode_started message.
+                _isPhoneInLearnMode.value = true
+                // Only reply if watch user is actually on the Learn Mode screen
+                if (com.example.kusho.presentation.learn.LearnModeStateHolder.isWatchOnLearnScreen.value) {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready & watch is on Learn screen - replying with watch ready")
+                    scope.launch {
+                        sendLearnModeWatchReady()
+                    }
+                } else {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready but watch is NOT on Learn screen - ignoring")
+                }
+            }
+        }
     }
 
     /**
@@ -480,6 +499,28 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                     messageClient.sendMessage(
                         node.id,
                         MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY,
+                        ByteArray(0)
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch is on the Learn Mode screen and ready to receive data
+     */
+    suspend fun sendLearnModeWatchReady() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_WATCH_READY,
                         ByteArray(0)
                     ).await()
                 } catch (e: Exception) {
