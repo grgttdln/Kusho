@@ -5,6 +5,9 @@ import android.media.MediaPlayer
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -33,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -67,6 +71,22 @@ private val LightPurpleColor = Color(0xFFE7DDFE)
 private val CompletedLetterColor = Color(0xFFAE8EFB)
 private val PendingLetterColor = Color(0xFF808080)
 private val BlueColor = Color(0xFF42A5F5)
+private val WrongLetterColor = Color(0xFFFF6B6B)
+
+private val wrongAffirmativeAudioResources = listOf(
+    R.raw.wrong_youre_learning_so_keep_going,
+    R.raw.wrong_think_carefully_and_try_one_more_time,
+    R.raw.wrong_its_okay_to_make_mistakes_keep_trying,
+    R.raw.wrong_believe_in_yourself_and_try_again,
+    R.raw.wrong_stay_patient_and_keep_working,
+    R.raw.wrong_give_it_another_try_and_do_your_best,
+    R.raw.wrong_try_again_with_confidence,
+    R.raw.wrong_youre_almost_there_keep_going,
+    R.raw.wrong_keep_practicing_and_youll_get_it,
+    R.raw.wrong_take_your_time_and_try_once_more,
+    R.raw.wrong_you_can_do_better_on_the_next_try,
+    R.raw.wrong_dont_worry_try_again
+)
 
 /**
  * Letters that have very similar writing structures between uppercase and lowercase
@@ -144,15 +164,21 @@ fun LearnModeSessionScreen(
     // State for Fill in the Blank mode - tracks if the masked letter has been correctly answered
     var fillInBlankCorrect by remember(sessionKey) { mutableStateOf(false) }
 
-    // State for ProgressCheckDialog
+    // State for ProgressCheckDialog (only shown for correct answers)
     var showProgressCheckDialog by remember(sessionKey) { mutableStateOf(false) }
-    var isCorrectGesture by remember(sessionKey) { mutableStateOf(false) }
     var predictedLetter by remember(sessionKey) { mutableStateOf("") }
     var targetLetter by remember(sessionKey) { mutableStateOf("") }
     var targetCase by remember(sessionKey) { mutableStateOf("") }
     
     // Store pending state changes to apply after dialog dismissal
     var pendingCorrectAction by remember(sessionKey) { mutableStateOf<(() -> Unit)?>(null) }
+
+    // State for wrong letter inline animation (replaces ProgressCheckDialog for incorrect answers)
+    var wrongLetterText by remember(sessionKey) { mutableStateOf("") }
+    var wrongLetterAnimationActive by remember(sessionKey) { mutableStateOf(false) }
+    var wrongLetterAnimationTrigger by remember(sessionKey) { mutableIntStateOf(0) }
+    val wrongLetterShakeOffset = remember(sessionKey) { Animatable(0f) }
+    val wrongLetterAlpha = remember(sessionKey) { Animatable(1f) }
 
     // State for Learner Profile Annotation Dialog
     var showAnnotationDialog by remember(sessionKey) { mutableStateOf(false) }
@@ -425,6 +451,13 @@ fun LearnModeSessionScreen(
             // Process event only if timestamp is valid (> 0) and newer than last processed event
             if (event.timestamp > 0L && event.timestamp > lastEventTime) {
                 lastEventTime = event.timestamp
+
+                // Block input while wrong letter animation is playing
+                if (wrongLetterAnimationActive) {
+                    android.util.Log.d("LearnModeSession", "🚫 Input BLOCKED - animation active (trigger=$wrongLetterAnimationTrigger)")
+                    return@collect
+                }
+
                 val currentWord = words.getOrNull(currentWordIndex)
                 android.util.Log.d("LearnModeSession", "📥 Processing event: currentWord=${currentWord?.word}, type=${currentWord?.configurationType}, currentWordIndex=$currentWordIndex")
                 if (currentWord != null) {
@@ -439,14 +472,20 @@ fun LearnModeSessionScreen(
                             // Set up dialog state
                             targetLetter = expectedLetter?.toString() ?: ""
                             targetCase = if (expectedLetter?.isUpperCase() == true) "capital" else "small"
-                            predictedLetter = event.letter.toString()
-                            isCorrectGesture = isCorrect
-                            
+
                             // Send feedback to watch so it shows the same screen
                             watchConnectionManager.sendLearnModeFeedback(isCorrect, event.letter.toString())
 
-                            android.util.Log.d("LearnModeSession", "🎭 Setting showProgressCheckDialog = true for Fill in the Blank")
-                            showProgressCheckDialog = true
+                            if (isCorrect) {
+                                predictedLetter = event.letter.toString()
+                                android.util.Log.d("LearnModeSession", "🎭 Setting showProgressCheckDialog = true for Fill in the Blank (correct)")
+                                showProgressCheckDialog = true
+                            } else {
+                                android.util.Log.d("LearnModeSession", "🎭 Starting wrong letter animation for Fill in the Blank")
+                                wrongLetterText = event.letter.toString()
+                                wrongLetterAnimationActive = true
+                                wrongLetterAnimationTrigger++
+                            }
 
                             // Store pending action to execute on dialog dismiss
                             if (isCorrect) {
@@ -467,15 +506,8 @@ fun LearnModeSessionScreen(
                                 }
                             } else {
                                 pendingCorrectAction = {
-                                    // Wrong letter - send incorrect feedback and resend word data for retry
+                                    // Wrong letter - send incorrect feedback so watch stays on same letter
                                     watchConnectionManager.sendLetterResult(false, currentWord.selectedLetterIndex, currentWord.word.length)
-                                    // Resend word data so watch can prompt user to retry
-                                    watchConnectionManager.sendLearnModeWordData(
-                                        word = currentWord.word,
-                                        maskedIndex = currentWord.selectedLetterIndex,
-                                        configurationType = currentWord.configurationType,
-                                        dominantHand = dominantHand
-                                    )
                                 }
                             }
                         }
@@ -491,14 +523,20 @@ fun LearnModeSessionScreen(
                             // Set up dialog state
                             targetLetter = expectedLetter?.toString() ?: ""
                             targetCase = if (expectedLetter?.isUpperCase() == true) "capital" else "small"
-                            predictedLetter = event.letter.toString()
-                            isCorrectGesture = isCorrect
-                            
+
                             // Send feedback to watch so it shows the same screen
                             watchConnectionManager.sendLearnModeFeedback(isCorrect, event.letter.toString())
-                            
-                            android.util.Log.d("LearnModeSession", "🎭 Setting showProgressCheckDialog = true for Write the Word/Name the Picture")
-                            showProgressCheckDialog = true
+
+                            if (isCorrect) {
+                                predictedLetter = event.letter.toString()
+                                android.util.Log.d("LearnModeSession", "🎭 Setting showProgressCheckDialog = true for Write the Word/Name the Picture (correct)")
+                                showProgressCheckDialog = true
+                            } else {
+                                android.util.Log.d("LearnModeSession", "🎭 Starting wrong letter animation for Write the Word/Name the Picture")
+                                wrongLetterText = event.letter.toString()
+                                wrongLetterAnimationActive = true
+                                wrongLetterAnimationTrigger++
+                            }
 
                             // Store pending action to execute on dialog dismiss
                             if (isCorrect) {
@@ -526,16 +564,8 @@ fun LearnModeSessionScreen(
                                 }
                             } else {
                                 pendingCorrectAction = {
-                                    // Wrong letter - send incorrect feedback but DON'T advance letter index
-                                    // User must retry the same letter until correct (case-sensitive)
+                                    // Wrong letter - send incorrect feedback so watch stays on same letter
                                     watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
-                                    // Resend word data so watch can prompt user to retry
-                                    watchConnectionManager.sendLearnModeWordData(
-                                        word = currentWord.word,
-                                        maskedIndex = currentWord.selectedLetterIndex,
-                                        configurationType = currentWord.configurationType,
-                                        dominantHand = dominantHand
-                                    )
                                 }
                             }
                         }
@@ -557,6 +587,12 @@ fun LearnModeSessionScreen(
                     // Execute pending action
                     pendingCorrectAction?.invoke()
                     pendingCorrectAction = null
+                } else if (wrongLetterAnimationActive) {
+                    android.util.Log.d("LearnModeSession", "👆 Watch dismissed feedback - cancelling wrong letter animation")
+                    wrongLetterAnimationActive = false
+                    wrongLetterText = ""
+                    pendingCorrectAction?.invoke()
+                    pendingCorrectAction = null
                 }
             }
         }
@@ -572,6 +608,12 @@ fun LearnModeSessionScreen(
             val timeSinceLastSkip = skipTime - lastSkipTime
             if (skipTime > sessionStartTime && skipTime > lastSkipTime && timeSinceLastSkip >= 500) {
                 lastSkipTime = skipTime
+                // Cancel any ongoing wrong letter animation
+                if (wrongLetterAnimationActive) {
+                    wrongLetterAnimationActive = false
+                    wrongLetterText = ""
+                    pendingCorrectAction = null
+                }
                 onSkip()
                 if (currentWordIndex < words.size - 1) {
                     currentWordIndex++
@@ -584,10 +626,94 @@ fun LearnModeSessionScreen(
         }
     }
 
+    // Wrong letter inline animation sequence (~3 seconds)
+    // Key is a counter that increments per trigger — never changes mid-execution,
+    // so the coroutine always runs to completion (no cancellation issues).
+    LaunchedEffect(wrongLetterAnimationTrigger) {
+        if (wrongLetterAnimationTrigger > 0 && wrongLetterAnimationActive) {
+            android.util.Log.d("LearnModeSession", "🎬 Animation START: trigger=$wrongLetterAnimationTrigger, letter=$wrongLetterText")
+            // Reset animation values
+            wrongLetterShakeOffset.snapTo(0f)
+            wrongLetterAlpha.snapTo(1f)
+
+            // Play wrong audio concurrently — MediaPlayer self-releases when all audio finishes,
+            // so the animation ending won't cut off audio that's still playing.
+            try {
+                val mediaPlayer = MediaPlayer()
+                fun playAudio(resId: Int, onComplete: (() -> Unit)? = null) {
+                    try {
+                        mediaPlayer.reset()
+                        val afd = context.resources.openRawResourceFd(resId)
+                        mediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                        afd.close()
+                        mediaPlayer.prepare()
+                        mediaPlayer.setOnCompletionListener {
+                            onComplete?.invoke()
+                        }
+                        mediaPlayer.start()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        onComplete?.invoke()
+                    }
+                }
+
+                val randomAffirmative = wrongAffirmativeAudioResources.random()
+                playAudio(R.raw.wrong) {
+                    playAudio(randomAffirmative) {
+                        // Release after all audio finishes
+                        try { mediaPlayer.release() } catch (_: Exception) {}
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("LearnModeSession", "Error playing wrong audio", e)
+            }
+
+            // Phase 1: Hold
+            kotlinx.coroutines.delay(500L)
+
+            // Phase 2: Shake
+            val shakeDurations = listOf(300, 300, 300, 300, 300)
+            val shakeAmplitudes = listOf(12f, 10f, 8f, 5f, 3f)
+            for (i in shakeDurations.indices) {
+                wrongLetterShakeOffset.animateTo(
+                    targetValue = shakeAmplitudes[i],
+                    animationSpec = tween(durationMillis = shakeDurations[i] / 2)
+                )
+                wrongLetterShakeOffset.animateTo(
+                    targetValue = -shakeAmplitudes[i],
+                    animationSpec = tween(durationMillis = shakeDurations[i] / 2)
+                )
+            }
+            wrongLetterShakeOffset.snapTo(0f)
+
+            // Phase 3: Fade out
+            wrongLetterAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 1000, easing = EaseOut)
+            )
+
+            // Reset animation values
+            wrongLetterShakeOffset.snapTo(0f)
+            wrongLetterAlpha.snapTo(1f)
+
+            // Only do cleanup if animation wasn't already cancelled by watch dismiss or skip
+            if (wrongLetterAnimationActive) {
+                wrongLetterText = ""
+                wrongLetterAnimationActive = false
+
+                android.util.Log.d("LearnModeSession", "🎬 Animation COMPLETE: trigger=$wrongLetterAnimationTrigger, notifying watch & running pending action")
+                watchConnectionManager.notifyLearnModeFeedbackDismissed()
+                pendingCorrectAction?.invoke()
+                pendingCorrectAction = null
+            } else {
+                android.util.Log.d("LearnModeSession", "🎬 Animation already cancelled, skipping duplicate cleanup")
+            }
+        }
+    }
+
     // Progress Check Dialog - show before loading check to ensure it always renders
     if (showProgressCheckDialog) {
         ProgressCheckDialog(
-            isCorrect = isCorrectGesture,
             studentName = studentName,
             targetLetter = targetLetter,
             targetCase = targetCase,
@@ -671,6 +797,12 @@ fun LearnModeSessionScreen(
 
     // Function to handle skip/next
     fun handleSkipOrNext() {
+        // Cancel any ongoing wrong letter animation
+        if (wrongLetterAnimationActive) {
+            wrongLetterAnimationActive = false
+            wrongLetterText = ""
+            pendingCorrectAction = null
+        }
         if (currentWordIndex < words.size - 1) {
             currentWordIndex++
         } else {
@@ -874,7 +1006,11 @@ fun LearnModeSessionScreen(
                             word = currentWord.word,
                             completedIndices = completedLetterIndices,
                             currentIndex = currentLetterIndex,
-                            hasImage = imageExists
+                            hasImage = imageExists,
+                            wrongLetterText = wrongLetterText,
+                            wrongLetterAnimationActive = wrongLetterAnimationActive,
+                            wrongLetterShakeOffset = wrongLetterShakeOffset.value,
+                            wrongLetterAlpha = wrongLetterAlpha.value
                         )
                     }
                     isFillInTheBlank -> {
@@ -883,7 +1019,11 @@ fun LearnModeSessionScreen(
                             word = currentWord.word,
                             maskedIndex = currentWord.selectedLetterIndex,
                             isCorrect = fillInBlankCorrect,
-                            hasImage = imageExists
+                            hasImage = imageExists,
+                            wrongLetterText = wrongLetterText,
+                            wrongLetterAnimationActive = wrongLetterAnimationActive,
+                            wrongLetterShakeOffset = wrongLetterShakeOffset.value,
+                            wrongLetterAlpha = wrongLetterAlpha.value
                         )
                     }
                     isNameThePicture -> {
@@ -892,7 +1032,11 @@ fun LearnModeSessionScreen(
                             word = currentWord.word,
                             completedIndices = completedLetterIndices,
                             currentIndex = currentLetterIndex,
-                            hasImage = imageExists
+                            hasImage = imageExists,
+                            wrongLetterText = wrongLetterText,
+                            wrongLetterAnimationActive = wrongLetterAnimationActive,
+                            wrongLetterShakeOffset = wrongLetterShakeOffset.value,
+                            wrongLetterAlpha = wrongLetterAlpha.value
                         )
                     }
                     else -> {
@@ -923,7 +1067,11 @@ private fun WriteTheWordDisplay(
     word: String,
     completedIndices: Set<Int>,
     currentIndex: Int,
-    hasImage: Boolean
+    hasImage: Boolean,
+    wrongLetterText: String = "",
+    wrongLetterAnimationActive: Boolean = false,
+    wrongLetterShakeOffset: Float = 0f,
+    wrongLetterAlpha: Float = 1f
 ) {
     val fontSize = if (hasImage) 48.sp else 96.sp
     val letterSpacing = if (hasImage) 12.dp else 16.dp
@@ -936,13 +1084,22 @@ private fun WriteTheWordDisplay(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val isCurrentAndWrong = index == currentIndex && wrongLetterAnimationActive
                 Text(
-                    text = letter.toString(),
+                    text = if (isCurrentAndWrong) wrongLetterText else letter.toString(),
                     fontSize = fontSize,
                     fontWeight = FontWeight.Bold,
                     color = when {
-                        index in completedIndices -> CompletedLetterColor  // Completed - purple
-                        else -> PendingLetterColor  // Pending letters - gray
+                        isCurrentAndWrong -> WrongLetterColor
+                        index in completedIndices -> CompletedLetterColor
+                        else -> PendingLetterColor
+                    },
+                    modifier = if (isCurrentAndWrong) {
+                        Modifier
+                            .offset(x = wrongLetterShakeOffset.dp)
+                            .alpha(wrongLetterAlpha)
+                    } else {
+                        Modifier
                     }
                 )
 
@@ -970,7 +1127,11 @@ private fun FillInTheBlankDisplay(
     word: String,
     maskedIndex: Int,
     isCorrect: Boolean,
-    hasImage: Boolean
+    hasImage: Boolean,
+    wrongLetterText: String = "",
+    wrongLetterAnimationActive: Boolean = false,
+    wrongLetterShakeOffset: Float = 0f,
+    wrongLetterAlpha: Float = 1f
 ) {
     val fontSize = if (hasImage) 48.sp else 96.sp
     val letterSpacing = if (hasImage) 12.dp else 16.dp
@@ -983,13 +1144,26 @@ private fun FillInTheBlankDisplay(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val isMaskedAndWrong = index == maskedIndex && !isCorrect && wrongLetterAnimationActive
                 Text(
-                    text = if (index == maskedIndex && !isCorrect) " " else letter.toString(),
+                    text = when {
+                        isMaskedAndWrong -> wrongLetterText
+                        index == maskedIndex && !isCorrect -> " "
+                        else -> letter.toString()
+                    },
                     fontSize = fontSize,
                     fontWeight = FontWeight.Bold,
                     color = when {
-                        index == maskedIndex && isCorrect -> CompletedLetterColor  // Revealed - purple
-                        else -> Color.Black  // Other letters - black
+                        isMaskedAndWrong -> WrongLetterColor
+                        index == maskedIndex && isCorrect -> CompletedLetterColor
+                        else -> Color.Black
+                    },
+                    modifier = if (isMaskedAndWrong) {
+                        Modifier
+                            .offset(x = wrongLetterShakeOffset.dp)
+                            .alpha(wrongLetterAlpha)
+                    } else {
+                        Modifier
                     }
                 )
 
@@ -1017,7 +1191,11 @@ private fun NameThePictureDisplay(
     word: String,
     completedIndices: Set<Int>,
     currentIndex: Int,
-    hasImage: Boolean
+    hasImage: Boolean,
+    wrongLetterText: String = "",
+    wrongLetterAnimationActive: Boolean = false,
+    wrongLetterShakeOffset: Float = 0f,
+    wrongLetterAlpha: Float = 1f
 ) {
     val fontSize = if (hasImage) 48.sp else 96.sp
     val letterSpacing = if (hasImage) 12.dp else 16.dp
@@ -1030,11 +1208,27 @@ private fun NameThePictureDisplay(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val isCurrentAndWrong = index == currentIndex && index !in completedIndices && wrongLetterAnimationActive
                 Text(
-                    text = if (index in completedIndices) letter.toString() else " ",
+                    text = when {
+                        isCurrentAndWrong -> wrongLetterText
+                        index in completedIndices -> letter.toString()
+                        else -> " "
+                    },
                     fontSize = fontSize,
                     fontWeight = FontWeight.Bold,
-                    color = if (index in completedIndices) CompletedLetterColor else Color.Transparent
+                    color = when {
+                        isCurrentAndWrong -> WrongLetterColor
+                        index in completedIndices -> CompletedLetterColor
+                        else -> Color.Transparent
+                    },
+                    modifier = if (isCurrentAndWrong) {
+                        Modifier
+                            .offset(x = wrongLetterShakeOffset.dp)
+                            .alpha(wrongLetterAlpha)
+                    } else {
+                        Modifier
+                    }
                 )
 
                 // Add underline for letters not yet completed
@@ -1091,7 +1285,6 @@ fun LearnModeSessionScreenPreview() {
 
 @Composable
 private fun ProgressCheckDialog(
-    isCorrect: Boolean,
     studentName: String,
     targetLetter: String,
     targetCase: String,
@@ -1100,7 +1293,6 @@ private fun ProgressCheckDialog(
 ) {
     val context = LocalContext.current
 
-    // Lists of specific affirmative audio files
     val correctAffirmatives = listOf(
         R.raw.correct_great_effort_on_that_task,
         R.raw.correct_you_completed_that_perfectly,
@@ -1114,23 +1306,8 @@ private fun ProgressCheckDialog(
         R.raw.correct_you_did_a_great_job
     )
 
-    val wrongAffirmatives = listOf(
-        R.raw.wrong_youre_learning_so_keep_going,
-        R.raw.wrong_think_carefully_and_try_one_more_time,
-        R.raw.wrong_its_okay_to_make_mistakes_keep_trying,
-        R.raw.wrong_believe_in_yourself_and_try_again,
-        R.raw.wrong_stay_patient_and_keep_working,
-        R.raw.wrong_give_it_another_try_and_do_your_best,
-        R.raw.wrong_try_again_with_confidence,
-        R.raw.wrong_youre_almost_there_keep_going,
-        R.raw.wrong_keep_practicing_and_youll_get_it,
-        R.raw.wrong_take_your_time_and_try_once_more,
-        R.raw.wrong_you_can_do_better_on_the_next_try,
-        R.raw.wrong_dont_worry_try_again
-    )
-
-    // Play audio when dialog appears
-    DisposableEffect(isCorrect) {
+    // Play correct audio when dialog appears
+    DisposableEffect(Unit) {
         val mediaPlayer = MediaPlayer()
 
         fun playAudio(resId: Int, onComplete: (() -> Unit)? = null) {
@@ -1150,13 +1327,8 @@ private fun ProgressCheckDialog(
             }
         }
 
-        // Play base sound first, then random affirmative
-        val baseResId = if (isCorrect) R.raw.correct else R.raw.wrong
-        val affirmativeList = if (isCorrect) correctAffirmatives else wrongAffirmatives
-        val randomAffirmative = affirmativeList.random()
-
-        playAudio(baseResId) {
-            // Play random affirmative after base sound finishes
+        val randomAffirmative = correctAffirmatives.random()
+        playAudio(R.raw.correct) {
             playAudio(randomAffirmative)
         }
 
@@ -1178,7 +1350,7 @@ private fun ProgressCheckDialog(
         "small", "lowercase" -> targetLetter.lowercase()
         else -> targetLetter.uppercase()
     }
-    val hasCaseMismatch = isCorrect && isSimilarShape &&
+    val hasCaseMismatch = isSimilarShape &&
                          predictedLetter.isNotEmpty() &&
                          !predictedLetter.equals(expectedCase, ignoreCase = false)
 
@@ -1206,10 +1378,8 @@ private fun ProgressCheckDialog(
             ) {
                 // Mascot Image
                 Image(
-                    painter = painterResource(
-                        id = if (isCorrect) R.drawable.dis_mobile_correct else R.drawable.dis_mobile_incorrect
-                    ),
-                    contentDescription = if (isCorrect) "Correct" else "Incorrect",
+                    painter = painterResource(id = R.drawable.dis_mobile_correct),
+                    contentDescription = "Correct",
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
                         .aspectRatio(1f),
@@ -1218,32 +1388,27 @@ private fun ProgressCheckDialog(
 
                 Spacer(Modifier.height(24.dp))
 
-                // Title with first name only
                 Text(
-                    text = if (isCorrect) {
-                        "Great Job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
-                    } else {
-                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
-                    },
+                    text = "Great Job${if (firstName.isNotEmpty()) ", $firstName" else ""}!",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isCorrect) Color(0xFFCCDB00) else Color(0xFFFF6B6B),
+                    color = Color(0xFFCCDB00),
                     textAlign = TextAlign.Center
                 )
 
                 Spacer(Modifier.height(12.dp))
 
-                // Body text with optional case mismatch disclaimer
-                if (isCorrect && hasCaseMismatch) {
-                    Text(
-                        text = "You're doing super!\nKeep up the amazing work!",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
-                    )
+                Text(
+                    text = "You're doing super!\nKeep up the amazing work!",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 24.sp
+                )
 
+                // Case mismatch disclaimer for similar-shaped letters
+                if (hasCaseMismatch) {
                     Spacer(Modifier.height(16.dp))
 
                     Text(
@@ -1255,24 +1420,6 @@ private fun ProgressCheckDialog(
                         color = Color.White.copy(alpha = 0.9f),
                         textAlign = TextAlign.Center,
                         lineHeight = 20.sp
-                    )
-                } else if (isCorrect) {
-                    Text(
-                        text = "You're doing super!\nKeep up the amazing work!",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
-                    )
-                } else {
-                    Text(
-                        text = "Let's give it another go!",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
                     )
                 }
             }

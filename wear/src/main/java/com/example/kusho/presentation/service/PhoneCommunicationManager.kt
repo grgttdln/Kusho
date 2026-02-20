@@ -406,9 +406,10 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             val letterCase = json.optString("letterCase", "")
             val currentIndex = json.optInt("currentIndex", 0)
             val totalLetters = json.optInt("totalLetters", 0)
+            val dominantHand = json.optString("dominantHand", "RIGHT")
 
             com.example.kusho.presentation.tutorial.TutorialModeStateHolder.updateLetterData(
-                letter, letterCase, currentIndex, totalLetters
+                letter, letterCase, currentIndex, totalLetters, dominantHand
             )
         } catch (e: Exception) {
             android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing letter data", e)

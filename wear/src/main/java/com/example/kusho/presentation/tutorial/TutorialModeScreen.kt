@@ -54,17 +54,17 @@ fun TutorialModeScreen() {
     // Initialize TextToSpeech manager
     val ttsManager = remember { TextToSpeechManager(context) }
     
-    // Cleanup TTS when the composable is disposed
+    // Cleanup when the composable is disposed
     DisposableEffect(Unit) {
         // Mark watch as on Tutorial Mode screen for handshake gating
         TutorialModeStateHolder.setWatchOnTutorialScreen(true)
         onDispose {
             TutorialModeStateHolder.setWatchOnTutorialScreen(false)
             ttsManager.shutdown()
+            phoneCommunicationManager.cleanup()
         }
     }
     
-    val isPhoneInTutorialMode by phoneCommunicationManager.isPhoneInTutorialMode.collectAsState()
     val letterData by TutorialModeStateHolder.letterData.collectAsState()
     val sessionData by TutorialModeStateHolder.sessionData.collectAsState()
     val feedbackData by TutorialModeStateHolder.feedbackData.collectAsState()
@@ -159,8 +159,8 @@ fun TutorialModeScreen() {
     // Two-way handshake: send watch_ready when session becomes active.
     // The phone also sends /phone_ready which PhoneCommunicationManager handles
     // by auto-replying with watch_ready, so no matter who opens first, they sync.
-    LaunchedEffect(isPhoneInTutorialMode, sessionData.isActive) {
-        if (isPhoneInTutorialMode && sessionData.isActive) {
+    LaunchedEffect(sessionData.isActive) {
+        if (sessionData.isActive) {
             // Session is active — send ready signal once
             scope.launch {
                 phoneCommunicationManager.sendTutorialModeWatchReady()
@@ -195,7 +195,7 @@ fun TutorialModeScreen() {
         Scaffold {
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
-                    !isPhoneInTutorialMode || !sessionData.isActive -> {
+                    !sessionData.isActive -> {
                         // State 1: Waiting for phone to start session
                         WaitingContent()
                     }

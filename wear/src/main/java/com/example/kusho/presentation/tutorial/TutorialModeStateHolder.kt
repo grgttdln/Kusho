@@ -94,12 +94,21 @@ object TutorialModeStateHolder {
     fun startSession(studentName: String, lessonTitle: String) {
         runOnMainThread {
             try {
+                // Guard against duplicate calls (both WearMessageListenerService and
+                // PhoneCommunicationManager process /tutorial_mode_started). Without this,
+                // the second call can clear letterData that arrived between the two calls.
+                val current = _sessionData.value
+                if (current.isActive && current.studentName == studentName && current.lessonTitle == lessonTitle) {
+                    Log.d(TAG, "⏭️ Session already active for $studentName/$lessonTitle, skipping duplicate start")
+                    return@runOnMainThread
+                }
+
                 Log.d(TAG, "🎯 Starting session: $lessonTitle for $studentName")
                 // Clear all previous state first
                 _letterData.value = LetterData()
                 _feedbackData.value = FeedbackData()
                 _isSessionComplete.value = false
-                
+
                 // Then set new session data
                 _sessionData.value = SessionData(
                     studentName = studentName,

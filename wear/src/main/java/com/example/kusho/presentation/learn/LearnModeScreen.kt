@@ -443,11 +443,14 @@ private fun FillInTheBlankMainContent(
         }
     }
 
-    // Reset viewModel when feedback is dismissed
+    // Reset ViewModel only when feedback is actually dismissed (true -> false),
+    // not on initial composition when showingFeedback starts as false
+    var previousShowingFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(showingFeedback) {
-        if (!showingFeedback) {
+        if (previousShowingFeedback && !showingFeedback) {
             viewModel.resetToIdle()
         }
+        previousShowingFeedback = showingFeedback
     }
 
     // Build masked word display
@@ -488,14 +491,6 @@ private fun FillInTheBlankMainContent(
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
-                    LearnModeViewModel.State.RESULT -> {
-                        // This state should not be reached as feedback is now controlled by phone
-                        // But just in case, reset to idle
-                        LaunchedEffect(Unit) {
-                            viewModel.resetToIdle()
-                        }
-                        IdleContent(maskedWord = maskedWord, viewModel = viewModel)
-                    }
                 }
             }
         }
@@ -754,15 +749,15 @@ private fun WriteTheWordMainContent(
         }
     }
 
-    // Reset viewModel when feedback is dismissed
+    // Reset ViewModel only when feedback is actually dismissed (true -> false),
+    // not on initial composition when showingFeedback starts as false
+    var previousShowingFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(showingFeedback) {
-        if (!showingFeedback) {
+        if (previousShowingFeedback && !showingFeedback) {
             viewModel.resetToIdle()
         }
+        previousShowingFeedback = showingFeedback
     }
-
-    // Check if prediction matches expected letter for local UI feedback (case-sensitive)
-    val isCorrectPrediction = uiState.prediction?.firstOrNull() == expectedLetter
 
     Box(
         modifier = Modifier
@@ -800,11 +795,6 @@ private fun WriteTheWordMainContent(
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
-                    LearnModeViewModel.State.RESULT -> WriteTheWordIdleContent(
-                        wordData = wordData,
-                        writeTheWordState = writeTheWordState,
-                        viewModel = viewModel
-                    )
                 }
             }
         }
@@ -882,37 +872,6 @@ private fun WriteTheWordLetterDisplay(
                 }
             )
         }
-    }
-}
-
-@Composable
-private fun WriteTheWordResultContent(
-    uiState: LearnModeViewModel.UiState,
-    wordData: LearnModeStateHolder.WordData,
-    writeTheWordState: LearnModeStateHolder.WriteTheWordState,
-    isCorrect: Boolean,
-    viewModel: LearnModeViewModel
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { viewModel.resetToIdle() },
-        contentAlignment = Alignment.Center
-    ) {
-        // Show correct or wrong mascot image based on result
-        Image(
-            painter = painterResource(
-                id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
-            ),
-            contentDescription = if (isCorrect) "Correct" else "Wrong",
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentScale = ContentScale.Fit
-        )
     }
 }
 
@@ -1075,11 +1034,14 @@ private fun NameThePictureMainContent(
         }
     }
 
-    // Reset viewModel when feedback is dismissed
+    // Reset ViewModel only when feedback is actually dismissed (true -> false),
+    // not on initial composition when showingFeedback starts as false
+    var previousShowingFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(showingFeedback) {
-        if (!showingFeedback) {
+        if (previousShowingFeedback && !showingFeedback) {
             viewModel.resetToIdle()
         }
+        previousShowingFeedback = showingFeedback
     }
 
     Box(
@@ -1118,11 +1080,6 @@ private fun NameThePictureMainContent(
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
-                    LearnModeViewModel.State.RESULT -> NameThePictureIdleContent(
-                        wordData = wordData,
-                        writeTheWordState = writeTheWordState,
-                        viewModel = viewModel
-                    )
                 }
             }
         }

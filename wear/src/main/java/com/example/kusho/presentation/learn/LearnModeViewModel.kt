@@ -30,42 +30,8 @@ class LearnModeViewModel(
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 3
         private const val PREDICTION_DISPLAY_MS = 1500L // 1.5 seconds
-        private const val RESULT_DISPLAY_SECONDS = 3
+        private const val PHONE_FEEDBACK_TIMEOUT_MS = 8000L
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
-
-        /**
-         * Letters that have very similar writing structures between uppercase and lowercase
-         * in air writing. These letters should be checked case-insensitively.
-         */
-        private val similarCaseLetters = setOf(
-            'c', 'C', 'k', 'K', 'o', 'O', 'p', 'P', 's', 'S',
-            'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'z', 'Z'
-        )
-
-        /**
-         * Check if the input letter matches the expected letter.
-         * For letters with similar writing structures (c, k, o, p, s, u, v, w, x, z),
-         * the comparison is case-insensitive.
-         * For other letters, the comparison is case-sensitive.
-         */
-        private fun isLetterMatch(inputLetter: String?, expectedLetter: String?): Boolean {
-            if (inputLetter.isNullOrEmpty() || expectedLetter.isNullOrEmpty()) {
-                Log.d(TAG, "isLetterMatch: null/empty input=$inputLetter, expected=$expectedLetter")
-                return false
-            }
-            val input = inputLetter.firstOrNull() ?: return false
-            val expected = expectedLetter.firstOrNull() ?: return false
-
-            val isSimilarCase = expected in similarCaseLetters
-            val result = if (isSimilarCase) {
-                input.lowercaseChar() == expected.lowercaseChar()
-            } else {
-                input == expected
-            }
-
-            Log.d(TAG, "isLetterMatch: input='$input', expected='$expected', isSimilarCase=$isSimilarCase, result=$result")
-            return result
-        }
     }
 
     enum class State {
@@ -73,8 +39,7 @@ class LearnModeViewModel(
         COUNTDOWN,
         RECORDING,
         PROCESSING,
-        SHOWING_PREDICTION,
-        RESULT
+        SHOWING_PREDICTION
     }
 
     data class UiState(
@@ -84,7 +49,6 @@ class LearnModeViewModel(
         val recordingProgress: Float = 0f,
         val prediction: String? = null,
         val confidence: Float? = null,
-        val isCorrect: Boolean? = null,
         val statusMessage: String = "Tap to guess",
         val errorMessage: String? = null,
         val isModelLoaded: Boolean = false
@@ -95,9 +59,6 @@ class LearnModeViewModel(
 
     private var recordingJob: Job? = null
     private val classifier: AirWritingClassifier?
-
-    // Current word data from LearnModeStateHolder
-    private var currentMaskedLetter: String = ""
 
     init {
         // Process classifier load result
@@ -122,23 +83,18 @@ class LearnModeViewModel(
             }
         }
 
-        // Observe word data from LearnModeStateHolder
+        // Reset to idle when new word data arrives
         viewModelScope.launch {
             LearnModeStateHolder.wordData.collect { wordData ->
-                if (wordData.word.isNotEmpty() && wordData.maskedIndex >= 0) {
-                    // Preserve the original case of the masked letter
-                    currentMaskedLetter = wordData.word.getOrNull(wordData.maskedIndex)?.toString() ?: ""
-                    Log.d(TAG, "📚 Masked letter to guess: $currentMaskedLetter")
-                    // Reset to idle when new word arrives
-                    if (_uiState.value.state == State.RESULT) {
-                        _uiState.update {
-                            it.copy(
-                                state = State.IDLE,
-                                statusMessage = "Tap to guess",
-                                prediction = null,
-                                isCorrect = null
-                            )
-                        }
+                if (wordData.word.isNotEmpty() && _uiState.value.state != State.IDLE) {
+                    recordingJob?.cancel()
+                    recordingJob = null
+                    _uiState.update {
+                        it.copy(
+                            state = State.IDLE,
+                            statusMessage = "Tap to guess",
+                            prediction = null
+                        )
                     }
                 }
             }
@@ -160,9 +116,10 @@ class LearnModeViewModel(
             return
         }
 
-        if (currentMaskedLetter.isEmpty()) {
-            Log.e(TAG, "Cannot start: no masked letter to guess")
-            _uiState.update { it.copy(errorMessage = "No letter to guess") }
+        val wordData = LearnModeStateHolder.wordData.value
+        if (wordData.word.isEmpty()) {
+            Log.e(TAG, "Cannot start: no word data")
+            _uiState.update { it.copy(errorMessage = "No word to practice") }
             return
         }
 
@@ -179,8 +136,7 @@ class LearnModeViewModel(
                             countdownSeconds = i,
                             statusMessage = "Get ready...",
                             errorMessage = null,
-                            prediction = null,
-                            isCorrect = null
+                            prediction = null
                         )
                     }
                     delay(1000)
@@ -258,47 +214,30 @@ class LearnModeViewModel(
                     return@launch
                 }
 
-                // === Phase 4: Show the predicted letter first ===
-                // Keep the predicted letter as the raw input from the user (no case conversion)
+                // === Phase 4: Show the predicted letter ===
                 val predictedLetter = result.label?.trim()
-                // Use case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
-                val isCorrect = isLetterMatch(predictedLetter, currentMaskedLetter.trim())
+                Log.d(TAG, "Predicted: '$predictedLetter', Expected: '${wordData.word}'")
 
-                Log.d(TAG, "Predicted: '$predictedLetter', Expected: '$currentMaskedLetter', Correct: $isCorrect")
-
-                // Show the predicted letter for 1.5 seconds
                 _uiState.update {
                     it.copy(
                         state = State.SHOWING_PREDICTION,
                         prediction = predictedLetter,
                         confidence = result.confidence,
-                        isCorrect = isCorrect,
                         errorMessage = null,
                         recordingProgress = 0f
                     )
                 }
 
-                // Wait 1.5 seconds showing the prediction
+                // Show prediction briefly, then wait for phone feedback
                 delay(PREDICTION_DISPLAY_MS)
-
                 if (!isActive) return@launch
 
-                // === Phase 5: Show the result (correct/wrong) ===
-                _uiState.update {
-                    it.copy(
-                        state = State.RESULT,
-                        statusMessage = if (isCorrect) "Correct! ✓" else "Try again"
-                    )
-                }
-
-                // Auto-reset after showing result
-                delay(RESULT_DISPLAY_SECONDS * 1000L)
-                if (isActive && _uiState.value.state == State.RESULT) {
+                // Safety timeout: if phone doesn't respond within 8 seconds, reset to idle
+                delay(PHONE_FEEDBACK_TIMEOUT_MS)
+                if (isActive && _uiState.value.state == State.SHOWING_PREDICTION) {
+                    Log.w(TAG, "Phone feedback timeout — resetting to idle")
                     _uiState.update {
-                        it.copy(
-                            state = State.IDLE,
-                            statusMessage = "Tap to guess"
-                        )
+                        it.copy(state = State.IDLE, statusMessage = "Tap to guess")
                     }
                 }
 
@@ -336,27 +275,23 @@ class LearnModeViewModel(
     }
 
     /**
-     * Reset from result state back to idle
+     * Reset to idle state, cancelling any pending recording or timeout
      */
     fun resetToIdle() {
         Log.d(TAG, "Resetting to idle")
+        recordingJob?.cancel()
+        recordingJob = null
         _uiState.update {
             it.copy(
                 state = State.IDLE,
                 statusMessage = "Tap to guess",
                 errorMessage = null,
                 prediction = null,
-                isCorrect = null,
                 recordingProgress = 0f,
                 countdownSeconds = 0
             )
         }
     }
-
-    /**
-     * Get the current masked letter (for UI display)
-     */
-    fun getCurrentMaskedLetter(): String = currentMaskedLetter
 
     override fun onCleared() {
         super.onCleared()
