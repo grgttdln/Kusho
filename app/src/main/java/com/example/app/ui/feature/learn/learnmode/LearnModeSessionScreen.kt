@@ -61,6 +61,7 @@ import com.example.app.speech.DeepgramTTSManager
 import com.example.app.speech.TextToSpeechManager
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
+import com.example.app.ui.components.common.ProgressIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -163,6 +164,9 @@ fun LearnModeSessionScreen(
 
     // State for Fill in the Blank mode - tracks if the masked letter has been correctly answered
     var fillInBlankCorrect by remember(sessionKey) { mutableStateOf(false) }
+
+    // Track which word indices were correctly answered (for green progress segments)
+    var correctlyAnsweredWords by remember(sessionKey) { mutableStateOf<Set<Int>>(emptySet()) }
 
     // State for ProgressCheckDialog (only shown for correct answers)
     var showProgressCheckDialog by remember(sessionKey) { mutableStateOf(false) }
@@ -492,10 +496,13 @@ fun LearnModeSessionScreen(
                                 pendingCorrectAction = {
                                     // Mark Fill in the Blank as correct to reveal the letter
                                     fillInBlankCorrect = true
-                                    
+
+                                    // Flag this word as correctly answered
+                                    correctlyAnsweredWords = correctlyAnsweredWords + currentWordIndex
+
                                     // Correct answer - notify watch and move to next word
                                     watchConnectionManager.sendWordComplete()
-                                    
+
                                     if (currentWordIndex < words.size - 1) {
                                         currentWordIndex++
                                     } else {
@@ -547,6 +554,9 @@ fun LearnModeSessionScreen(
                                     currentLetterIndex = newLetterIndex
 
                                     if (newLetterIndex >= currentWord.word.length) {
+                                        // Flag this word as correctly answered
+                                        correctlyAnsweredWords = correctlyAnsweredWords + currentWordIndex
+
                                         // Word complete - notify watch and move to next word
                                         watchConnectionManager.sendWordComplete()
 
@@ -825,8 +835,20 @@ fun LearnModeSessionScreen(
             currentStep = currentStep,
             totalSteps = totalWords,
             modifier = Modifier.fillMaxWidth(),
+            completedIndices = correctlyAnsweredWords,
             activeColor = PurpleColor,
-            inactiveColor = LightPurpleColor
+            inactiveColor = LightPurpleColor,
+            completedColor = Color(0xFF4CAF50),
+            onSegmentClick = { index ->
+                // Cancel any ongoing wrong letter animation
+                if (wrongLetterAnimationActive) {
+                    wrongLetterAnimationActive = false
+                    wrongLetterText = ""
+                    pendingCorrectAction = null
+                }
+                // Navigate to the clicked item
+                currentWordIndex = index
+            }
         )
 
         Spacer(Modifier.height(12.dp))
@@ -1245,32 +1267,6 @@ private fun NameThePictureDisplay(
     }
 }
 
-@Composable
-private fun ProgressIndicator(
-    currentStep: Int,
-    totalSteps: Int,
-    modifier: Modifier = Modifier,
-    activeColor: Color = PurpleColor,
-    inactiveColor: Color = LightPurpleColor
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        repeat(totalSteps) { index ->
-            val isActive = index < currentStep
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        if (isActive) activeColor else inactiveColor
-                    )
-            )
-        }
-    }
-}
 
 @Preview(showBackground = true)
 @Composable
