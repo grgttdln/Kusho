@@ -30,13 +30,10 @@ fun PostSignUpOnboardingScreen(
     userName: String = "Guest",
     onOnboardingComplete: () -> Unit = {}
 ) {
-    // Extract first name from full name
-    val firstName = userName.split(" ").firstOrNull() ?: userName
-    
     val pages = listOf(
         OnboardingPage(
             imageRes = R.drawable.dis_onb1,
-            title = "Welcome, $firstName",
+            title = "Welcome, $userName",
             description = "Learn to write by moving your hands in the air. Fun, playful, and magical!"
         ),
         OnboardingPage(
