@@ -29,6 +29,7 @@ import com.example.app.ui.components.wordbank.WordAddedConfirmationModal
 import com.example.app.ui.components.wordbank.WordBankEditModal
 import com.example.app.ui.components.wordbank.WordBankGenerationModal
 import com.example.app.ui.components.wordbank.WordBankModal
+import androidx.compose.runtime.LaunchedEffect
 
 @Composable
 fun WordBankScreen(
@@ -44,6 +45,13 @@ fun WordBankScreen(
     var isGenerationModalVisible by remember { mutableStateOf(false) }
     var generationPrompt by remember { mutableStateOf("") }
     var generationWordCount by remember { mutableIntStateOf(5) }
+
+    // Load suggested prompts when generation modal becomes visible
+    LaunchedEffect(isGenerationModalVisible) {
+        if (isGenerationModalVisible) {
+            viewModel.loadSuggestedPrompts()
+        }
+    }
 
     // Image picker launcher for add modal
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -213,6 +221,11 @@ fun WordBankScreen(
             isLoading = false,
             wordCount = generationWordCount,
             onWordCountChanged = { generationWordCount = it },
+            suggestedPrompts = uiState.suggestedPrompts,
+            isSuggestionsLoading = uiState.isSuggestionsLoading,
+            onSuggestionClick = { suggestion ->
+                generationPrompt = suggestion
+            },
             onPromptInputChanged = { generationPrompt = it },
             onGenerate = { /* TODO: Wire to generation logic */ },
             onDismiss = {
