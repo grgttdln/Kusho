@@ -11,6 +11,7 @@ import com.example.app.data.model.AiGenerationResult
 import com.example.app.data.repository.GeminiRepository
 import com.example.app.data.repository.GenerationPhase
 import com.example.app.data.repository.WordRepository
+import com.example.app.util.DictionaryValidator
 import com.example.app.util.ImageStorageManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,9 +30,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
 
     // Initialize database and repositories
     private val database = AppDatabase.getInstance(application)
-    private val wordRepository = WordRepository(database.wordDao())
     private val sessionManager = SessionManager.getInstance(application)
     private val imageStorageManager = ImageStorageManager(application)
+    private val dictionaryValidator = DictionaryValidator(application)
+    private val wordRepository = WordRepository(database.wordDao(), dictionaryValidator)
     private val activityDao = database.activityDao()
     private val setDao = database.setDao()
     private val geminiRepository = GeminiRepository()
@@ -101,7 +103,8 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 wordInput = "",
                 selectedMediaUri = null,
                 inputError = null,
-                imageError = null
+                imageError = null,
+                dictionarySuggestions = emptyList()
             )
         }
     }
@@ -113,7 +116,8 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 wordInput = word.trim(),
-                inputError = null // Clear error when user types
+                inputError = null,
+                dictionarySuggestions = emptyList()
             )
         }
     }
@@ -233,6 +237,18 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                         )
                     }
                 }
+                is WordRepository.AddWordResult.NotInDictionary -> {
+                    if (imagePath != null) {
+                        imageStorageManager.deleteImage(imagePath)
+                    }
+                    _uiState.update {
+                        it.copy(
+                            inputError = "This word was not found in the dictionary",
+                            dictionarySuggestions = result.suggestions,
+                            isLoading = false
+                        )
+                    }
+                }
             }
             } catch (e: Exception) {
                 // Clean up saved image on any error
@@ -300,7 +316,8 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 editSelectedMediaUri = null,
                 editInputError = null,
                 editImageError = null,
-                isEditLoading = false
+                isEditLoading = false,
+                editDictionarySuggestions = emptyList()
             )
         }
     }
@@ -312,7 +329,34 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 editWordInput = word.trim(),
-                editInputError = null
+                editInputError = null,
+                editDictionarySuggestions = emptyList()
+            )
+        }
+    }
+
+    /**
+     * Handle suggestion click in the add word modal.
+     */
+    fun onSuggestionClick(word: String) {
+        _uiState.update {
+            it.copy(
+                wordInput = word,
+                inputError = null,
+                dictionarySuggestions = emptyList()
+            )
+        }
+    }
+
+    /**
+     * Handle suggestion click in the edit word modal.
+     */
+    fun onEditSuggestionClick(word: String) {
+        _uiState.update {
+            it.copy(
+                editWordInput = word,
+                editInputError = null,
+                editDictionarySuggestions = emptyList()
             )
         }
     }
@@ -439,6 +483,18 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                         _uiState.update {
                             it.copy(
                                 editInputError = result.message,
+                                isEditLoading = false
+                            )
+                        }
+                    }
+                    is WordRepository.UpdateWordResult.NotInDictionary -> {
+                        if (newMediaUri != null && newImagePath != editingWord.imagePath) {
+                            newImagePath?.let { imageStorageManager.deleteImage(it) }
+                        }
+                        _uiState.update {
+                            it.copy(
+                                editInputError = "This word was not found in the dictionary",
+                                editDictionarySuggestions = result.suggestions,
                                 isEditLoading = false
                             )
                         }
@@ -748,6 +804,10 @@ data class LessonUiState(
     val selectedActivityWordIds: Set<Long> = emptySet(),
     val isActivityCreationLoading: Boolean = false,
     val activityError: String? = null,
-    val generatedJsonResult: String? = null
+    val generatedJsonResult: String? = null,
+    // Dictionary suggestion state (add modal)
+    val dictionarySuggestions: List<String> = emptyList(),
+    // Dictionary suggestion state (edit modal)
+    val editDictionarySuggestions: List<String> = emptyList()
 )
 
