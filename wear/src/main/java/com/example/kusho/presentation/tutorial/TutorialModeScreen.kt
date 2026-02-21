@@ -36,26 +36,28 @@ import com.example.kusho.speech.TextToSpeechManager
 import kotlinx.coroutines.launch
 
 /**
- * Tutorial Mode screen - displays air writing practice with gesture input
- * 
+ * Tutorial Mode screen - displays air writing practice with gesture input.
+ * Mirrors LearnModeScreen architecture: phone is single source of truth for feedback,
+ * feedback is handled INSIDE the content composable (not as a top-level state branch).
+ *
  * States:
  * 1. Waiting for phone to start session
- * 2. Showing wait screen (dis_watch_wait.png) - tap to start countdown
- * 3. Practicing (gesture recognition active) - swipe left to skip
- * 4. Showing feedback (correct/incorrect)
- * 5. Session complete
+ * 2. Gesture recognition active (with feedback overlay from phone)
+ * 3. Session complete
  */
 @Composable
 fun TutorialModeScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val phoneCommunicationManager = remember { PhoneCommunicationManager(context) }
-    
+
     // Initialize TextToSpeech manager
     val ttsManager = remember { TextToSpeechManager(context) }
-    
+
     // Cleanup when the composable is disposed
     DisposableEffect(Unit) {
+        // Clear stale state from any previous session before setting screen flag
+        TutorialModeStateHolder.resetSession()
         // Mark watch as on Tutorial Mode screen for handshake gating
         TutorialModeStateHolder.setWatchOnTutorialScreen(true)
         onDispose {
@@ -64,28 +66,28 @@ fun TutorialModeScreen() {
             phoneCommunicationManager.cleanup()
         }
     }
-    
+
     val letterData by TutorialModeStateHolder.letterData.collectAsState()
     val sessionData by TutorialModeStateHolder.sessionData.collectAsState()
-    val feedbackData by TutorialModeStateHolder.feedbackData.collectAsState()
     val isSessionComplete by TutorialModeStateHolder.isSessionComplete.collectAsState()
-    val retryTrigger by TutorialModeStateHolder.retryTrigger.collectAsState()
-    
+
     // Debouncing state for skip gesture
     var lastSkipTime by remember { mutableLongStateOf(0L) }
-    
-    // State for wait screen interaction
+
+    // Phone-driven feedback state — persists across recompositions (mirrors Learn Mode)
+    var showingFeedback by remember { mutableStateOf(false) }
+    var feedbackIsCorrect by remember { mutableStateOf(false) }
+
+    // "Tap to begin" wait screen — shown after handshake but before user taps
     var showWaitScreen by remember { mutableStateOf(true) }
-    var isRecognizing by remember { mutableStateOf(false) }
-    var needsReset by remember { mutableStateOf(false) }
-    
+
     // Gesture recognition dependencies
     var sensorManager by remember { mutableStateOf<MotionSensorManager?>(null) }
     var classifierResult by remember { mutableStateOf<ClassifierLoadResult?>(null) }
     var isModelInitialized by remember { mutableStateOf(false) }
     var modelLoadError by remember { mutableStateOf<String?>(null) }
     var currentModelCase by remember { mutableStateOf("") }
-    
+
     // Initialize sensor manager once
     LaunchedEffect(Unit) {
         try {
@@ -96,36 +98,31 @@ fun TutorialModeScreen() {
             Log.e("TutorialMode", "❌ Sensor initialization error", e)
         }
     }
-    
+
     // Clean up resources when screen is disposed
     DisposableEffect(Unit) {
         onDispose {
             Log.d("TutorialMode", "🧹 Cleaning up resources")
-            // Close the TFLite model to free native memory
             (classifierResult as? ClassifierLoadResult.Success)?.classifier?.close()
             classifierResult = null
             isModelInitialized = false
         }
     }
-    
+
     // Load appropriate model when letterCase or dominantHand changes
     LaunchedEffect(letterData.letterCase, letterData.dominantHand) {
         val modelKey = "${letterData.letterCase}_${letterData.dominantHand}"
         if (letterData.letterCase.isNotEmpty() && modelKey != currentModelCase) {
             try {
                 Log.d("TutorialMode", "🔄 Loading model for case: ${letterData.letterCase}, hand: ${letterData.dominantHand}")
-                
-                // CRITICAL: Close the old model before loading a new one to prevent memory leak
                 val oldClassifier = (classifierResult as? ClassifierLoadResult.Success)?.classifier
                 if (oldClassifier != null) {
                     Log.d("TutorialMode", "🧹 Closing old model: $currentModelCase")
                     oldClassifier.close()
                 }
-                
                 val modelConfig = ModelConfig.getModelForSession(letterData.letterCase, letterData.dominantHand)
                 val loadResult = ModelLoader.load(context, modelConfig)
                 classifierResult = loadResult
-                
                 when (loadResult) {
                     is ClassifierLoadResult.Success -> {
                         isModelInitialized = true
@@ -146,30 +143,24 @@ fun TutorialModeScreen() {
             }
         }
     }
-    
+
     // Reset wait screen when letter data arrives
     LaunchedEffect(letterData.timestamp) {
         if (letterData.timestamp > 0) {
             showWaitScreen = true
-            isRecognizing = false
-            needsReset = false  // New letter, no reset needed
         }
     }
-    
+
     // Two-way handshake: send watch_ready when session becomes active.
-    // The phone also sends /phone_ready which PhoneCommunicationManager handles
-    // by auto-replying with watch_ready, so no matter who opens first, they sync.
     LaunchedEffect(sessionData.isActive) {
         if (sessionData.isActive) {
-            // Session is active — send ready signal once
             scope.launch {
                 phoneCommunicationManager.sendTutorialModeWatchReady()
             }
         }
     }
 
-    // Heartbeat: keep sending watch_ready while no letter data yet (backup for edge cases)
-    // Only sends when watch is actually on this screen (flag managed by DisposableEffect above)
+    // Heartbeat: keep sending watch_ready while no letter data yet
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(3000)
@@ -181,37 +172,72 @@ fun TutorialModeScreen() {
         }
     }
 
-    // Listen for retry trigger from mobile (when user taps "Try Again" on phone)
-    LaunchedEffect(retryTrigger) {
-        if (retryTrigger > 0L) {
-            Log.d("TutorialMode", "🔄 Retry triggered from mobile, setting needsReset")
-            needsReset = true
-            showWaitScreen = true
-            isRecognizing = false
+    // Listen for feedback from phone (phone is single source of truth)
+    LaunchedEffect(Unit) {
+        phoneCommunicationManager.tutorialModeFeedbackEvent.collect { event ->
+            if (event.timestamp > 0L) {
+                Log.d("TutorialMode", "📥 Feedback received from phone: correct=${event.isCorrect}")
+                feedbackIsCorrect = event.isCorrect
+                showingFeedback = true
+            }
         }
     }
-    
+
+    // Listen for feedback dismissal from phone
+    LaunchedEffect(Unit) {
+        var lastDismissTime = 0L
+        phoneCommunicationManager.tutorialModeFeedbackDismissed.collect { timestamp ->
+            if (timestamp > lastDismissTime && timestamp > 0L && showingFeedback) {
+                lastDismissTime = timestamp
+                Log.d("TutorialMode", "👆 Phone dismissed feedback")
+                showingFeedback = false
+            }
+        }
+    }
+
+    // Reset feedback when new letter data arrives
+    LaunchedEffect(letterData.timestamp) {
+        if (letterData.timestamp > 0L) {
+            Log.d("TutorialMode", "🔄 Letter changed - resetting feedback state")
+            showingFeedback = false
+        }
+    }
+
     CircularModeBorder(borderColor = AppColors.TutorialModeColor) {
         Scaffold {
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
                     !sessionData.isActive -> {
-                        // State 1: Waiting for phone to start session
+                        // Waiting for phone to start session
                         WaitingContent()
                     }
                     isSessionComplete -> {
-                        // State 5: Session complete
+                        // Session complete
                         CompleteContent()
                     }
-                    feedbackData.shouldShow -> {
-                        // State 4: Showing feedback (frozen - teacher-gated via phone)
-                        // Watch stays on feedback screen until phone sends next_letter or retry
-                        FeedbackContent(
-                            isCorrect = feedbackData.isCorrect
-                        )
+                    showWaitScreen && isModelInitialized && sensorManager != null && classifierResult is ClassifierLoadResult.Success && letterData.letter.isNotEmpty() -> {
+                        // Tap to begin (model ready, letter received)
+                        if (modelLoadError != null) {
+                            ErrorContent(errorMessage = modelLoadError!!)
+                        } else {
+                            WaitScreenContent(
+                                onTap = {
+                                    showWaitScreen = false
+                                },
+                                onSkip = {
+                                    val currentTime = System.currentTimeMillis()
+                                    if (currentTime - lastSkipTime >= 500) {
+                                        lastSkipTime = currentTime
+                                        scope.launch {
+                                            phoneCommunicationManager.sendTutorialModeSkipCommand()
+                                        }
+                                    }
+                                }
+                            )
+                        }
                     }
-                    isRecognizing && isModelInitialized && sensorManager != null && classifierResult is ClassifierLoadResult.Success && letterData.letter.isNotEmpty() -> {
-                        // State 3: Gesture recognition (countdown -> recording -> processing)
+                    !showWaitScreen && isModelInitialized && sensorManager != null && classifierResult is ClassifierLoadResult.Success && letterData.letter.isNotEmpty() -> {
+                        // Gesture recognition + phone-driven feedback (content stays mounted)
                         GestureRecognitionContent(
                             letter = letterData.letter,
                             letterCase = letterData.letterCase,
@@ -219,20 +245,9 @@ fun TutorialModeScreen() {
                             sensorManager = sensorManager!!,
                             classifierResult = classifierResult as ClassifierLoadResult.Success,
                             ttsManager = ttsManager,
-                            needsReset = needsReset,
-                            onResetHandled = { needsReset = false },
-                            onGestureResult = { isCorrect, predictedLetter ->
-                                scope.launch {
-                                    phoneCommunicationManager.sendTutorialModeGestureResult(isCorrect, predictedLetter)
-                                }
-                                TutorialModeStateHolder.showFeedback(isCorrect)
-                                isRecognizing = false
-                            },
-                            onRecordingStarted = {
-                                scope.launch {
-                                    phoneCommunicationManager.sendTutorialModeGestureRecording()
-                                }
-                            },
+                            phoneCommunicationManager = phoneCommunicationManager,
+                            showingFeedback = showingFeedback,
+                            feedbackIsCorrect = feedbackIsCorrect,
                             onSkip = {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastSkipTime >= 500) {
@@ -240,39 +255,23 @@ fun TutorialModeScreen() {
                                     scope.launch {
                                         phoneCommunicationManager.sendTutorialModeSkipCommand()
                                     }
-                                    isRecognizing = false
+                                    showWaitScreen = true
                                 }
                             }
                         )
                     }
                     showWaitScreen -> {
-                        // State 2: Wait screen - tap to start
+                        // Wait screen (model still loading or no letter yet)
                         if (modelLoadError != null) {
-                            // Show error if model failed to load
                             ErrorContent(errorMessage = modelLoadError!!)
                         } else {
-                            // Show wait screen immediately (model loads in background)
                             WaitScreenContent(
-                                onTap = {
-                                    if (isModelInitialized && sensorManager != null && classifierResult is ClassifierLoadResult.Success) {
-                                        showWaitScreen = false
-                                        isRecognizing = true
-                                    }
-                                },
-                            onSkip = {
-                                val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastSkipTime >= 500) {
-                                    lastSkipTime = currentTime
-                                    scope.launch {
-                                        phoneCommunicationManager.sendTutorialModeSkipCommand()
-                                    }
-                                }
-                            }
-                        )
+                                onTap = { /* Model not ready yet, ignore */ },
+                                onSkip = { /* Nothing to skip yet */ }
+                            )
                         }
                     }
                     else -> {
-                        // Fallback
                         WaitingContent()
                     }
                 }
@@ -321,8 +320,6 @@ private fun WaitingContent() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(36.dp))
-
-        // Text at the top
         Text(
             text = "Waiting...",
             color = Color.White,
@@ -330,8 +327,6 @@ private fun WaitingContent() {
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
-
-        // Mascot below the text
         Image(
             painter = painterResource(id = R.drawable.dis_watch_learn_start),
             contentDescription = "Tutorial Mode waiting mascot",
@@ -354,7 +349,6 @@ private fun WaitScreenContent(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
-                    // Only handle left swipe for skip
                     if (dragAmount < -50f) {
                         change.consume()
                         onSkip()
@@ -373,7 +367,6 @@ private fun WaitScreenContent(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(32.dp))
-            
             Text(
                 text = "Tap to begin!",
                 color = Color.White,
@@ -381,79 +374,11 @@ private fun WaitScreenContent(
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            
             Image(
                 painter = painterResource(id = R.drawable.dis_watch_wait),
                 contentDescription = "Tap to start",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
-            )
-        }
-    }
-}
-
-@Composable
-private fun PracticingContent(
-    letter: String,
-    onSkip: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount < -50f) {
-                        change.consume()
-                        onSkip()
-                    }
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_kusho_hand),
-            contentDescription = "Air write now",
-            modifier = Modifier.size(70.dp),
-            contentScale = ContentScale.Fit
-        )
-    }
-}
-
-@Composable
-private fun FeedbackContent(
-    isCorrect: Boolean
-) {
-    // Frozen feedback screen - teacher-gated
-    // Watch stays here until the phone sends next letter data or retry command
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
-        ) {
-            // Show correct or wrong mascot image based on result
-            Image(
-                painter = painterResource(
-                    id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
-                ),
-                contentDescription = if (isCorrect) "Correct" else "Wrong",
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .aspectRatio(1f)
-                    .padding(8.dp),
-                contentScale = ContentScale.Fit
-            )
-
-            Text(
-                text = "Waiting for teacher...",
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
             )
         }
     }
@@ -478,6 +403,13 @@ private fun CompleteContent() {
     }
 }
 
+/**
+ * Gesture recognition content — stays mounted during feedback.
+ * Mirrors LearnModeScreen's FillInTheBlankMainContent pattern:
+ * - showingFeedback/feedbackIsCorrect passed in as params
+ * - if (showingFeedback) shows feedback overlay, else shows ViewModel UI states
+ * - When feedback dismisses (true → false), viewModel.resetToIdle() is called
+ */
 @Composable
 private fun GestureRecognitionContent(
     letter: String,
@@ -486,46 +418,40 @@ private fun GestureRecognitionContent(
     sensorManager: MotionSensorManager,
     classifierResult: ClassifierLoadResult,
     ttsManager: TextToSpeechManager,
-    needsReset: Boolean,
-    onResetHandled: () -> Unit,
-    onGestureResult: (Boolean, String) -> Unit,
-    onRecordingStarted: () -> Unit = {},
+    phoneCommunicationManager: PhoneCommunicationManager,
+    showingFeedback: Boolean,
+    feedbackIsCorrect: Boolean,
     onSkip: () -> Unit
 ) {
-    // Convert letter to appropriate case for display
-    val displayLetter = when (letterCase.lowercase()) {
-        "small" -> letter.lowercase()
-        else -> letter.uppercase()
-    }
-    
-    // Create ViewModel with gesture result callback
-    // Include timestamp in key to force fresh ViewModel for each session
+    val scope = rememberCoroutineScope()
+
+    // Create ViewModel — includes timestamp in key to force fresh ViewModel per letter
     val viewModel: TutorialModeViewModel = viewModel(
         factory = TutorialModeViewModelFactory(
             sensorManager = sensorManager,
             classifierResult = classifierResult,
             targetLetter = letter,
             letterCase = letterCase,
-            onGestureResult = onGestureResult,
-            onRecordingStarted = onRecordingStarted
+            onGestureResult = { isCorrect, predictedLetter ->
+                // Send result to phone — phone will send feedback back
+                scope.launch {
+                    phoneCommunicationManager.sendTutorialModeGestureResult(isCorrect, predictedLetter)
+                }
+            },
+            onRecordingStarted = {
+                scope.launch {
+                    phoneCommunicationManager.sendTutorialModeGestureRecording()
+                }
+            }
         ),
         key = "$letter-$letterCase-$timestamp"
     )
-    
+
     val uiState by viewModel.uiState.collectAsState()
-    
-    // Call reset directly when needed (after incorrect result)
-    LaunchedEffect(needsReset) {
-        if (needsReset) {
-            viewModel.reset()
-            onResetHandled()  // Clear the flag immediately
-        }
-    }
-    
-    // Speak the prediction when we enter RESULT state
-    // Only speak the letter if correct; otherwise speak encouraging try-again message
+
+    // Speak the prediction when we enter SHOWING_PREDICTION state
     LaunchedEffect(uiState.state, uiState.prediction, uiState.isCorrect) {
-        if (uiState.state == TutorialModeViewModel.State.RESULT && uiState.prediction != null) {
+        if (uiState.state == TutorialModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
             if (uiState.isCorrect) {
                 ttsManager.speakLetter(uiState.prediction!!)
             } else {
@@ -533,14 +459,25 @@ private fun GestureRecognitionContent(
             }
         }
     }
-    
+
+    // Reset ViewModel only when feedback is actually dismissed (true -> false),
+    // not on initial composition when showingFeedback starts as false.
+    // Mirrors LearnModeScreen's pattern exactly.
+    var previousShowingFeedback by remember { mutableStateOf(false) }
+    LaunchedEffect(showingFeedback) {
+        if (previousShowingFeedback && !showingFeedback) {
+            viewModel.resetToIdle()
+        }
+        previousShowingFeedback = showingFeedback
+    }
+
     // Cleanup on dispose
     DisposableEffect(Unit) {
         onDispose {
             viewModel.cancelRecognition()
         }
     }
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -554,113 +491,147 @@ private fun GestureRecognitionContent(
             },
         contentAlignment = Alignment.Center
     ) {
-        when (uiState.state) {
-            TutorialModeViewModel.State.COUNTDOWN -> {
-                // Show countdown
-                Text(
-                    text = "${uiState.countdownSeconds}",
-                    color = AppColors.TutorialModeColor,
-                    fontSize = 80.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            TutorialModeViewModel.State.RECORDING -> {
-                // Show recording progress with hand icon
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        progress = uiState.recordingProgress,
-                        modifier = Modifier.fillMaxSize(0.95f),
-                        strokeWidth = 8.dp,
-                        indicatorColor = AppColors.TutorialModeColor
-                    )
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_kusho_hand),
-                        contentDescription = "Air write now",
-                        modifier = Modifier.size(85.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-            }
-            TutorialModeViewModel.State.PROCESSING -> {
-                // Show processing indicator
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(60.dp),
-                        strokeWidth = 6.dp,
-                        indicatorColor = AppColors.TutorialModeColor
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+        // Phone-driven feedback overlay (mirrors Learn Mode pattern)
+        if (showingFeedback) {
+            TutorialModeFeedbackContent(
+                isCorrect = feedbackIsCorrect
+            )
+        } else {
+            when (uiState.state) {
+                TutorialModeViewModel.State.IDLE -> {
+                    // Idle state — tap to start recording
+                    // Auto-start on first composition (user already tapped "Tap to begin!")
+                    LaunchedEffect(Unit) {
+                        viewModel.startRecording()
+                    }
+                    // Show brief "Get ready..." while starting
                     Text(
                         text = uiState.statusMessage,
                         color = AppColors.TutorialModeColor,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-            TutorialModeViewModel.State.SHOWING_PREDICTION -> {
-                // Show the predicted letter in white (like Learn Mode)
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.prediction ?: "",
-                        color = Color.White,
-                        fontSize = 80.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
                 }
-            }
-            TutorialModeViewModel.State.RESULT -> {
-                // Show feedback image (correct/wrong) similar to Learn Mode
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) { viewModel.reset() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Show correct or wrong mascot image based on result
-                    Image(
-                        painter = painterResource(
-                            id = if (uiState.isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
-                        ),
-                        contentDescription = if (uiState.isCorrect) "Correct" else "Wrong",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        contentScale = ContentScale.Fit
+                TutorialModeViewModel.State.COUNTDOWN -> {
+                    Text(
+                        text = "${uiState.countdownSeconds}",
+                        color = AppColors.TutorialModeColor,
+                        fontSize = 80.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
+                TutorialModeViewModel.State.RECORDING -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            progress = uiState.recordingProgress,
+                            modifier = Modifier.fillMaxSize(0.95f),
+                            strokeWidth = 8.dp,
+                            indicatorColor = AppColors.TutorialModeColor
+                        )
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_kusho_hand),
+                            contentDescription = "Air write now",
+                            modifier = Modifier.size(85.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+                TutorialModeViewModel.State.PROCESSING -> {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(60.dp),
+                            strokeWidth = 6.dp,
+                            indicatorColor = AppColors.TutorialModeColor
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = uiState.statusMessage,
+                            color = AppColors.TutorialModeColor,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                TutorialModeViewModel.State.SHOWING_PREDICTION -> {
+                    // Show the predicted letter — stays here until phone sends feedback
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.prediction ?: "",
+                            color = Color.White,
+                            fontSize = 80.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
-            TutorialModeViewModel.State.COMPLETE -> {
-                // Show brief status before transitioning
+        }
+    }
+}
+
+/**
+ * Feedback content for Tutorial Mode - briefly shows correct/wrong image,
+ * then transitions to a waiting state until the teacher continues on the phone.
+ * Mirrors LearnModeFeedbackContent for consistent behavior.
+ */
+@Composable
+private fun TutorialModeFeedbackContent(isCorrect: Boolean) {
+    var showWaiting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2000L)
+        showWaiting = true
+    }
+
+    if (showWaiting) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(32.dp))
                 Text(
-                    text = uiState.statusMessage,
-                    color = AppColors.TutorialModeColor,
-                    fontSize = 18.sp,
+                    text = "Waiting for teacher...",
+                    color = Color.White,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
-                uiState.errorMessage?.let { error ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = error,
-                        color = Color.Red,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                Image(
+                    painter = painterResource(id = R.drawable.dis_watch_wait),
+                    contentDescription = "Waiting for teacher",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
             }
+        }
+    } else {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(
+                    id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+                ),
+                contentDescription = if (isCorrect) "Correct" else "Wrong",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentScale = ContentScale.Fit
+            )
         }
     }
 }

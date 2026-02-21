@@ -86,26 +86,58 @@ fun LearnModeScreen() {
     // Global feedback state - persists across word changes
     var showingFeedback by remember { mutableStateOf(false) }
     var feedbackIsCorrect by remember { mutableStateOf(false) }
+    // Predicted letter from the phone's feedback event (reliable, not ViewModel-dependent)
+    var feedbackPredictedLetter by remember { mutableStateOf("") }
+    // Snapshot of letter index when feedback was received (avoids race with sendLetterResult)
+    var feedbackLetterIndex by remember { mutableStateOf(-1) }
 
     // Listen for feedback from phone at the top level (persists across recompositions)
     LaunchedEffect(Unit) {
         phoneCommunicationManager.learnModeFeedbackEvent.collect { event ->
             if (event.timestamp > 0L) {
-                android.util.Log.d("LearnModeScreen", "📥 Global feedback received: correct=${event.isCorrect}")
+                android.util.Log.d("LearnModeScreen", "📥 Global feedback received: correct=${event.isCorrect}, letter=${event.predictedLetter}")
                 feedbackIsCorrect = event.isCorrect
+                feedbackPredictedLetter = event.predictedLetter
+                feedbackLetterIndex = writeTheWordState.currentLetterIndex
                 showingFeedback = true
             }
         }
     }
 
+    // Detect if feedback is for the last letter of the word (correct)
+    val isWriteTheWordOrNameThePicture = wordData.configurationType == "Write the Word" ||
+            wordData.configurationType == "Name the Picture"
+    val isLastLetterCorrect = feedbackIsCorrect &&
+            feedbackLetterIndex >= wordData.word.length - 1 &&
+            wordData.word.isNotEmpty() &&
+            isWriteTheWordOrNameThePicture
+
     // Listen for feedback dismissal from phone at the top level
+    // NOTE: Must compute per-letter check from state variables directly (not captured vals)
+    // because LaunchedEffect(Unit) only launches once — plain vals would be stale.
     LaunchedEffect(Unit) {
         var lastDismissTime = 0L
         phoneCommunicationManager.learnModeFeedbackDismissed.collect { timestamp ->
             if (timestamp > lastDismissTime && timestamp > 0L && showingFeedback) {
                 lastDismissTime = timestamp
-                android.util.Log.d("LearnModeScreen", "👆 Global: Phone dismissed feedback")
-                showingFeedback = false
+                // Compute fresh from state variables (read current values inside coroutine)
+                val configType = wordData.configurationType
+                val isWTWOrNTP = configType == "Write the Word" || configType == "Name the Picture"
+                val lastLetterCorrect = feedbackIsCorrect &&
+                        feedbackLetterIndex >= wordData.word.length - 1 &&
+                        wordData.word.isNotEmpty() && isWTWOrNTP
+                // For per-letter feedback in Write the Word / Name the Picture,
+                // ignore the phone's immediate dismissal — let the 2s auto-dismiss handle it
+                // so the green/red letter is visible. For last letter (word complete) and
+                // Fill in the Blank, honor the phone's dismissal normally.
+                val isPerLetterFeedback = isWTWOrNTP &&
+                        !writeTheWordState.isWordComplete && !lastLetterCorrect
+                if (!isPerLetterFeedback) {
+                    android.util.Log.d("LearnModeScreen", "👆 Global: Phone dismissed feedback")
+                    showingFeedback = false
+                } else {
+                    android.util.Log.d("LearnModeScreen", "⏳ Per-letter feedback: ignoring phone dismissal, auto-dismiss handles it")
+                }
             }
         }
     }
@@ -114,6 +146,15 @@ fun LearnModeScreen() {
     LaunchedEffect(wordData.timestamp) {
         if (wordData.timestamp > 0L) {
             android.util.Log.d("LearnModeScreen", "🔄 Word changed - resetting feedback state")
+            showingFeedback = false
+        }
+    }
+
+    // Auto-dismiss per-letter feedback for Write the Word / Name the Picture after 1 second
+    // Don't auto-dismiss if this is the last letter correctly completed (teacher-gated)
+    LaunchedEffect(showingFeedback, writeTheWordState.isWordComplete, isLastLetterCorrect) {
+        if (showingFeedback && !writeTheWordState.isWordComplete && isWriteTheWordOrNameThePicture && !isLastLetterCorrect) {
+            kotlinx.coroutines.delay(2000L)
             showingFeedback = false
         }
     }
@@ -185,7 +226,9 @@ fun LearnModeScreen() {
                             writeTheWordState = writeTheWordState,
                             phoneCommunicationManager = phoneCommunicationManager,
                             showingFeedback = showingFeedback,
-                            feedbackIsCorrect = feedbackIsCorrect
+                            feedbackIsCorrect = feedbackIsCorrect,
+                            feedbackPredictedLetter = feedbackPredictedLetter,
+                            isLastLetterCorrect = isLastLetterCorrect
                         )
                     }
                     isNameThePicture && wordData.word.isNotEmpty() -> {
@@ -195,7 +238,9 @@ fun LearnModeScreen() {
                             writeTheWordState = writeTheWordState,
                             phoneCommunicationManager = phoneCommunicationManager,
                             showingFeedback = showingFeedback,
-                            feedbackIsCorrect = feedbackIsCorrect
+                            feedbackIsCorrect = feedbackIsCorrect,
+                            feedbackPredictedLetter = feedbackPredictedLetter,
+                            isLastLetterCorrect = isLastLetterCorrect
                         )
                     }
                     else -> {
@@ -351,8 +396,9 @@ private fun FillInTheBlankContent(
         }
     }
 
-    // Determine letter case from word content
-    val letterCase = if (wordData.word.firstOrNull()?.isUpperCase() == true) "uppercase" else "lowercase"
+    // Determine letter case from the actual target letter (at maskedIndex), not the first letter of the word
+    val targetChar = wordData.word.getOrNull(wordData.maskedIndex)
+    val letterCase = if (targetChar?.isUpperCase() == true) "uppercase" else "lowercase"
 
     // Initialize dependencies and load hand+case-specific model
     LaunchedEffect(letterCase, wordData.dominantHand) {
@@ -627,7 +673,9 @@ private fun WriteTheWordContent(
     writeTheWordState: LearnModeStateHolder.WriteTheWordState,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean
+    feedbackIsCorrect: Boolean,
+    feedbackPredictedLetter: String,
+    isLastLetterCorrect: Boolean
 ) {
     val context = LocalContext.current
 
@@ -646,8 +694,9 @@ private fun WriteTheWordContent(
         }
     }
 
-    // Determine letter case from word content
-    val letterCase = if (wordData.word.firstOrNull()?.isUpperCase() == true) "uppercase" else "lowercase"
+    // Determine letter case from the actual current letter being written, not the first letter of the word
+    val targetChar = wordData.word.getOrNull(writeTheWordState.currentLetterIndex)
+    val letterCase = if (targetChar?.isUpperCase() == true) "uppercase" else "lowercase"
 
     // Initialize dependencies and load hand+case-specific model
     LaunchedEffect(letterCase, wordData.dominantHand) {
@@ -691,7 +740,9 @@ private fun WriteTheWordContent(
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
             showingFeedback = showingFeedback,
-            feedbackIsCorrect = feedbackIsCorrect
+            feedbackIsCorrect = feedbackIsCorrect,
+            feedbackPredictedLetter = feedbackPredictedLetter,
+            isLastLetterCorrect = isLastLetterCorrect
         )
     }
 }
@@ -705,7 +756,9 @@ private fun WriteTheWordMainContent(
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean
+    feedbackIsCorrect: Boolean,
+    feedbackPredictedLetter: String,
+    isLastLetterCorrect: Boolean
 ) {
     val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
@@ -771,11 +824,16 @@ private fun WriteTheWordMainContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Show feedback image if we're in feedback state
+            // Show feedback based on word-complete vs per-letter
             if (showingFeedback) {
-                LearnModeFeedbackContent(
-                    isCorrect = feedbackIsCorrect
-                )
+                if (writeTheWordState.isWordComplete || isLastLetterCorrect) {
+                    WordCompleteFeedbackContent(ttsManager = ttsManager)
+                } else {
+                    PerLetterFeedbackContent(
+                        prediction = feedbackPredictedLetter,
+                        isCorrect = feedbackIsCorrect
+                    )
+                }
             } else {
                 when (uiState.state) {
                     LearnModeViewModel.State.IDLE -> WriteTheWordIdleContent(
@@ -868,6 +926,95 @@ private fun WriteTheWordLetterDisplay(
 }
 
 /**
+ * Per-letter feedback for Write the Word / Name the Picture modes.
+ * Shows the predicted letter in green (correct) or red (wrong), large and centered.
+ * Auto-dismissed by the parent after ~1 second.
+ */
+@Composable
+private fun PerLetterFeedbackContent(
+    prediction: String?,
+    isCorrect: Boolean
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = prediction ?: "",
+            color = if (isCorrect) Color(0xFF4CAF50) else Color(0xFFF44336),
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.display1
+        )
+    }
+}
+
+/**
+ * Word-complete feedback for Write the Word / Name the Picture modes.
+ * Shows dis_watch_correct image + TTS affirmation, then transitions to "Waiting for teacher...".
+ * Stays visible until teacher dismisses from phone.
+ */
+@Composable
+private fun WordCompleteFeedbackContent(
+    ttsManager: TextToSpeechManager
+) {
+    var showWaiting by remember { mutableStateOf(false) }
+
+    // Play TTS affirmation and transition to waiting after 2 seconds
+    LaunchedEffect(Unit) {
+        ttsManager.speakEncouragement("Great job!")
+        kotlinx.coroutines.delay(2000L)
+        showWaiting = true
+    }
+
+    if (showWaiting) {
+        // Waiting for teacher state
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Text(
+                    text = "Waiting for teacher...",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Image(
+                    painter = painterResource(id = R.drawable.dis_watch_wait),
+                    contentDescription = "Waiting for teacher",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
+        }
+    } else {
+        // Correct celebration image
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.dis_watch_correct),
+                contentDescription = "Word complete - correct",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
+}
+
+/**
  * Feedback content for Learn Mode - briefly shows correct/wrong image,
  * then transitions to a waiting state until the teacher continues on the phone.
  */
@@ -940,7 +1087,9 @@ private fun NameThePictureContent(
     writeTheWordState: LearnModeStateHolder.WriteTheWordState,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean
+    feedbackIsCorrect: Boolean,
+    feedbackPredictedLetter: String,
+    isLastLetterCorrect: Boolean
 ) {
     val context = LocalContext.current
 
@@ -959,8 +1108,9 @@ private fun NameThePictureContent(
         }
     }
 
-    // Determine letter case from word content
-    val letterCase = if (wordData.word.firstOrNull()?.isUpperCase() == true) "uppercase" else "lowercase"
+    // Determine letter case from the actual current letter being written, not the first letter of the word
+    val targetChar = wordData.word.getOrNull(writeTheWordState.currentLetterIndex)
+    val letterCase = if (targetChar?.isUpperCase() == true) "uppercase" else "lowercase"
 
     // Initialize dependencies and load hand+case-specific model
     LaunchedEffect(letterCase, wordData.dominantHand) {
@@ -1004,7 +1154,9 @@ private fun NameThePictureContent(
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
             showingFeedback = showingFeedback,
-            feedbackIsCorrect = feedbackIsCorrect
+            feedbackIsCorrect = feedbackIsCorrect,
+            feedbackPredictedLetter = feedbackPredictedLetter,
+            isLastLetterCorrect = isLastLetterCorrect
         )
     }
 }
@@ -1018,7 +1170,9 @@ private fun NameThePictureMainContent(
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean
+    feedbackIsCorrect: Boolean,
+    feedbackPredictedLetter: String,
+    isLastLetterCorrect: Boolean
 ) {
     val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
@@ -1084,11 +1238,16 @@ private fun NameThePictureMainContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Show feedback image if we're in feedback state
+            // Show feedback based on word-complete vs per-letter
             if (showingFeedback) {
-                LearnModeFeedbackContent(
-                    isCorrect = feedbackIsCorrect
-                )
+                if (writeTheWordState.isWordComplete || isLastLetterCorrect) {
+                    WordCompleteFeedbackContent(ttsManager = ttsManager)
+                } else {
+                    PerLetterFeedbackContent(
+                        prediction = feedbackPredictedLetter,
+                        isCorrect = feedbackIsCorrect
+                    )
+                }
             } else {
                 when (uiState.state) {
                     LearnModeViewModel.State.IDLE -> NameThePictureIdleContent(

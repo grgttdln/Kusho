@@ -58,6 +58,19 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
     private val _learnModeFeedbackDismissed = MutableStateFlow(0L)
     val learnModeFeedbackDismissed: StateFlow<Long> = _learnModeFeedbackDismissed.asStateFlow()
 
+    // StateFlow for Tutorial Mode feedback from phone (to show correct/incorrect screen)
+    data class TutorialModeFeedbackEvent(
+        val isCorrect: Boolean = false,
+        val predictedLetter: String = "",
+        val timestamp: Long = 0L
+    )
+    private val _tutorialModeFeedbackEvent = MutableStateFlow(TutorialModeFeedbackEvent())
+    val tutorialModeFeedbackEvent: StateFlow<TutorialModeFeedbackEvent> = _tutorialModeFeedbackEvent.asStateFlow()
+
+    // StateFlow for Tutorial Mode feedback dismissed from phone
+    private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
+    val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
+
     // StateFlow to track if mobile app is in Tutorial Mode session
     private val _isPhoneInTutorialMode = MutableStateFlow(false)
     val isPhoneInTutorialMode: StateFlow<Boolean> = _isPhoneInTutorialMode.asStateFlow()
@@ -96,6 +109,7 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
         private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
         private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING = "/tutorial_mode_gesture_recording"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK = "/tutorial_mode_show_feedback"
 
         private const val BATTERY_UPDATE_INTERVAL_MS = 60000L // 1 minute
     }
@@ -284,9 +298,13 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                 android.util.Log.d("PhoneCommunicationMgr", "🎊 Session complete")
                 com.example.kusho.presentation.tutorial.TutorialModeStateHolder.markSessionComplete()
             }
+            MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK -> {
+                android.util.Log.d("PhoneCommunicationMgr", "🎯 Tutorial Mode feedback received")
+                handleTutorialModeFeedback(messageEvent.data)
+            }
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED -> {
-                android.util.Log.d("PhoneCommunicationMgr", "👆 Mobile dismissed feedback - clearing watch feedback")
-                com.example.kusho.presentation.tutorial.TutorialModeStateHolder.clearFeedback()
+                android.util.Log.d("PhoneCommunicationMgr", "👆 Mobile dismissed Tutorial Mode feedback")
+                _tutorialModeFeedbackDismissed.value = System.currentTimeMillis()
             }
             MESSAGE_PATH_TUTORIAL_MODE_RETRY -> {
                 android.util.Log.d("PhoneCommunicationMgr", "🔄 Mobile requested retry")
@@ -373,6 +391,27 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             )
         } catch (e: Exception) {
             android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing Learn Mode feedback", e)
+        }
+    }
+
+    /**
+     * Handle Tutorial Mode feedback from phone
+     */
+    private fun handleTutorialModeFeedback(data: ByteArray) {
+        try {
+            val json = org.json.JSONObject(String(data))
+            val isCorrect = json.optBoolean("isCorrect", false)
+            val predictedLetter = json.optString("predictedLetter", "")
+
+            android.util.Log.d("PhoneCommunicationMgr", "🎯 Tutorial Mode feedback: correct=$isCorrect, letter=$predictedLetter")
+
+            _tutorialModeFeedbackEvent.value = TutorialModeFeedbackEvent(
+                isCorrect = isCorrect,
+                predictedLetter = predictedLetter,
+                timestamp = System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("PhoneCommunicationMgr", "Error parsing tutorial mode feedback", e)
         }
     }
 

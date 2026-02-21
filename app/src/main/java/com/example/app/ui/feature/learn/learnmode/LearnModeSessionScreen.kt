@@ -692,12 +692,17 @@ fun LearnModeSessionScreen(
                                     // Correct answer - notify watch and move to next word
                                     watchConnectionManager.sendWordComplete()
 
-                                    if (currentWordIndex < words.size - 1) {
-                                        currentWordIndex++
-                                    } else {
-                                        // All items complete - save annotations, notify watch and navigate away
+                                    if (correctlyAnsweredWords.size >= words.size) {
+                                        // All words answered correctly - complete the activity
                                         watchConnectionManager.notifyActivityComplete()
                                         shouldSaveAndComplete = true
+                                    } else {
+                                        // Navigate to next unanswered word (wrap around)
+                                        val nextUnanswered = ((currentWordIndex + 1) until words.size).firstOrNull { it !in correctlyAnsweredWords }
+                                            ?: (0 until currentWordIndex).firstOrNull { it !in correctlyAnsweredWords }
+                                        if (nextUnanswered != null) {
+                                            currentWordIndex = nextUnanswered
+                                        }
                                     }
                                 }
                             } else {
@@ -743,12 +748,17 @@ fun LearnModeSessionScreen(
                                         // Notify watch and move to next word
                                         watchConnectionManager.sendWordComplete()
 
-                                        if (currentWordIndex < words.size - 1) {
-                                            currentWordIndex++
-                                        } else {
-                                            // All items complete - save annotations, notify watch and navigate away
+                                        if (correctlyAnsweredWords.size >= words.size) {
+                                            // All words answered correctly - complete the activity
                                             watchConnectionManager.notifyActivityComplete()
                                             shouldSaveAndComplete = true
+                                        } else {
+                                            // Navigate to next unanswered word (wrap around)
+                                            val nextUnanswered = ((currentWordIndex + 1) until words.size).firstOrNull { it !in correctlyAnsweredWords }
+                                                ?: (0 until currentWordIndex).firstOrNull { it !in correctlyAnsweredWords }
+                                            if (nextUnanswered != null) {
+                                                currentWordIndex = nextUnanswered
+                                            }
                                         }
                                     }
                                 } else {
@@ -983,13 +993,13 @@ fun LearnModeSessionScreen(
             wrongLetterText = ""
             pendingCorrectAction = null
         }
-        if (currentWordIndex < words.size - 1) {
-            currentWordIndex++
-        } else {
-            // Session complete - save annotations, notify watch and navigate away
-            watchConnectionManager.notifyActivityComplete()
-            shouldSaveAndComplete = true
+        // Navigate to next unanswered word (wrap around instead of completing)
+        val nextUnanswered = ((currentWordIndex + 1) until words.size).firstOrNull { it !in correctlyAnsweredWords }
+            ?: (0 until currentWordIndex).firstOrNull { it !in correctlyAnsweredWords }
+        if (nextUnanswered != null) {
+            currentWordIndex = nextUnanswered
         }
+        // Note: activity only completes when all words are answered correctly (not via skip)
     }
 
 
@@ -1099,9 +1109,12 @@ fun LearnModeSessionScreen(
         Spacer(Modifier.height(24.dp))
 
         val isNameThePicture = currentWord?.configurationType == "Name the Picture"
+        val isFillInTheBlank = currentWord?.configurationType == "Fill in the Blank"
+        val imageExistsForBranch = currentWord?.imagePath?.let { File(it).exists() } ?: false
+        val isFillInBlankWithImage = isFillInTheBlank && imageExistsForBranch
 
-        // Large Content Card (purple border) - hidden for Name the Picture mode
-        if (!isNameThePicture) {
+        // Large Content Card (purple border) - hidden for Name the Picture mode and Fill in the Blank with image
+        if (!isNameThePicture && !isFillInBlankWithImage) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1271,7 +1284,7 @@ fun LearnModeSessionScreen(
             }
         }
         } else {
-            // Name the Picture - no card wrapper, just the content with weight
+            // Name the Picture / Fill in the Blank with image - no card wrapper, just the content with weight
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1361,18 +1374,34 @@ fun LearnModeSessionScreen(
                     Spacer(Modifier.height(24.dp))
                 }
 
-                // Word display
+                // Word display - use FillInTheBlankDisplay for Fill in the Blank, NameThePictureDisplay otherwise
                 if (currentWord != null) {
-                    NameThePictureDisplay(
-                        word = currentWord.word,
-                        completedIndices = completedLetterIndices,
-                        currentIndex = currentLetterIndex,
-                        hasImage = imageExists,
-                        wrongLetterText = wrongLetterText,
-                        wrongLetterAnimationActive = wrongLetterAnimationActive,
-                        wrongLetterShakeOffset = wrongLetterShakeOffset.value,
-                        wrongLetterAlpha = wrongLetterAlpha.value
-                    )
+                    when (currentWord.configurationType) {
+                        "Fill in the Blank" -> {
+                            FillInTheBlankDisplay(
+                                word = currentWord.word,
+                                maskedIndex = currentWord.selectedLetterIndex,
+                                isCorrect = fillInBlankCorrect,
+                                hasImage = imageExists,
+                                wrongLetterText = wrongLetterText,
+                                wrongLetterAnimationActive = wrongLetterAnimationActive,
+                                wrongLetterShakeOffset = wrongLetterShakeOffset.value,
+                                wrongLetterAlpha = wrongLetterAlpha.value
+                            )
+                        }
+                        else -> {
+                            NameThePictureDisplay(
+                                word = currentWord.word,
+                                completedIndices = completedLetterIndices,
+                                currentIndex = currentLetterIndex,
+                                hasImage = imageExists,
+                                wrongLetterText = wrongLetterText,
+                                wrongLetterAnimationActive = wrongLetterAnimationActive,
+                                wrongLetterShakeOffset = wrongLetterShakeOffset.value,
+                                wrongLetterAlpha = wrongLetterAlpha.value
+                            )
+                        }
+                    }
                 }
             }
         }

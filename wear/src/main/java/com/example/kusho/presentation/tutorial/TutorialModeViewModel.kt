@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
 
 /**
  * ViewModel for Tutorial Mode gesture recognition.
- * Handles: countdown -> gesture recording -> classification -> send result to phone
+ * Mirrors LearnModeViewModel pattern: IDLE -> countdown -> recording -> classification -> SHOWING_PREDICTION -> (wait for phone)
+ * Phone is single source of truth for feedback. ViewModel stops at SHOWING_PREDICTION.
  */
 class TutorialModeViewModel(
     private val sensorManager: MotionSensorManager,
@@ -34,7 +35,7 @@ class TutorialModeViewModel(
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 3
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
-        
+
         // Letters with similar shapes in uppercase and lowercase
         private val SIMILAR_SHAPE_LETTERS = setOf(
             'C', 'K', 'O', 'P', 'S', 'V', 'W', 'X', 'Z'
@@ -42,21 +43,20 @@ class TutorialModeViewModel(
     }
 
     enum class State {
+        IDLE,
         COUNTDOWN,
         RECORDING,
         PROCESSING,
-        SHOWING_PREDICTION,
-        RESULT,
-        COMPLETE
+        SHOWING_PREDICTION
     }
 
     data class UiState(
-        val state: State = State.COUNTDOWN,
+        val state: State = State.IDLE,
         val countdownSeconds: Int = COUNTDOWN_SECONDS,
         val recordingProgress: Float = 0f,
         val prediction: String? = null,
         val isCorrect: Boolean = false,
-        val statusMessage: String = "Get ready...",
+        val statusMessage: String = "Tap to begin",
         val errorMessage: String? = null
     )
 
@@ -78,31 +78,22 @@ class TutorialModeViewModel(
                 null
             }
         }
-        
-        // Auto-start the recognition flow
-        startRecognition()
     }
 
     /**
-     * Reset the ViewModel state and restart recognition.
-     * Call this when user wants to retry after incorrect/error.
+     * Start recording from IDLE state (user tapped to begin).
+     * Mirrors LearnModeViewModel.startRecording().
      */
-    fun reset() {
-        Log.d(TAG, "Resetting ViewModel for retry")
-        recordingJob?.cancel()
-        _uiState.value = UiState()  // Reset to initial state
-        startRecognition()
-    }
+    fun startRecording() {
+        if (_uiState.value.state != State.IDLE) {
+            Log.d(TAG, "Not in IDLE state, ignoring start")
+            return
+        }
 
-    /**
-     * Start the recognition flow: countdown -> record -> classify -> send result
-     */
-    private fun startRecognition() {
         if (classifier == null) {
             Log.e(TAG, "Cannot start: classifier is null")
             _uiState.update {
                 it.copy(
-                    state = State.COMPLETE,
                     errorMessage = "Model not loaded",
                     statusMessage = "Error"
                 )
@@ -112,9 +103,7 @@ class TutorialModeViewModel(
         }
 
         recordingJob?.cancel()
-        // Reset state to initial before starting
-        _uiState.value = UiState()
-        
+
         recordingJob = viewModelScope.launch(Dispatchers.Default) {
             try {
                 // === Phase 1: Countdown ===
@@ -189,7 +178,7 @@ class TutorialModeViewModel(
                     Log.w(TAG, "Not enough samples: ${samples.size} < $minSamples")
                     _uiState.update {
                         it.copy(
-                            state = State.COMPLETE,
+                            state = State.IDLE,
                             errorMessage = "Not enough motion",
                             statusMessage = "Try again",
                             recordingProgress = 0f
@@ -206,7 +195,7 @@ class TutorialModeViewModel(
                 if (!result.success) {
                     _uiState.update {
                         it.copy(
-                            state = State.COMPLETE,
+                            state = State.IDLE,
                             errorMessage = result.errorMessage,
                             statusMessage = "Try again",
                             recordingProgress = 0f
@@ -216,73 +205,49 @@ class TutorialModeViewModel(
                     return@launch
                 }
 
-                // === Phase 4: Show prediction ===
+                // === Phase 4: Show prediction and send result to phone ===
                 val predictedLetter = result.label  // Model always outputs uppercase
-                
-                // Show the predicted letter first
-                _uiState.update {
-                    it.copy(
-                        state = State.SHOWING_PREDICTION,
-                        prediction = predictedLetter,
-                        statusMessage = "$predictedLetter",
-                        errorMessage = null,
-                        recordingProgress = 0f
-                    )
-                }
-                
-                // Brief delay to show the prediction
-                delay(1000)
-                
-                // === Phase 5: Check if correct ===
-                // Determine the expected letter case based on letterCase parameter
+
+                // Determine the expected letter case
                 val expectedLetter = when (letterCase.lowercase()) {
                     "small", "lowercase" -> targetLetter.lowercase()
                     else -> targetLetter.uppercase()
                 }
-                
+
                 // Check if this letter has similar shapes in both cases
                 val targetUppercase = targetLetter.uppercase().firstOrNull()
                 val isSimilarShape = targetUppercase != null && targetUppercase in SIMILAR_SHAPE_LETTERS
-                
-                // For similar shape letters, use case-insensitive comparison
-                // For others (like A/a), enforce case-sensitive
+
                 val isCorrect = if (isSimilarShape) {
                     predictedLetter.equals(expectedLetter, ignoreCase = true)
                 } else {
                     predictedLetter.equals(expectedLetter, ignoreCase = false)
                 }
-                
+
                 Log.d(TAG, "Predicted: $predictedLetter, Expected: $expectedLetter (case: $letterCase), Similar: $isSimilarShape, Correct: $isCorrect")
-                
-                // Show the result state
+
+                // Show the predicted letter (stay in this state until phone sends feedback)
                 _uiState.update {
                     it.copy(
-                        state = State.RESULT,
-                        isCorrect = isCorrect
-                    )
-                }
-                
-                // Wait for TTS to complete (2 seconds)
-                delay(2000)
-                
-                if (!isActive) return@launch
-                
-                // Then transition to complete state
-                _uiState.update {
-                    it.copy(
-                        state = State.COMPLETE,
-                        statusMessage = if (isCorrect) "Correct!" else "Try again"
+                        state = State.SHOWING_PREDICTION,
+                        prediction = predictedLetter,
+                        isCorrect = isCorrect,
+                        statusMessage = predictedLetter,
+                        errorMessage = null,
+                        recordingProgress = 0f
                     )
                 }
 
-                // Send result to phone
+                // Send result to phone — phone will send feedback back
                 onGestureResult(isCorrect, predictedLetter)
+
+                // ViewModel stops here. Phone-driven feedback takes over in the composable.
 
             } catch (e: Exception) {
                 Log.e(TAG, "Recognition error: ${e.message}", e)
                 _uiState.update {
                     it.copy(
-                        state = State.COMPLETE,
+                        state = State.IDLE,
                         errorMessage = "Error: ${e.message}",
                         statusMessage = "Try again",
                         recordingProgress = 0f
@@ -290,6 +255,28 @@ class TutorialModeViewModel(
                 }
                 onGestureResult(false, "")
             }
+        }
+    }
+
+    /**
+     * Reset to idle state, cancelling any pending recording.
+     * Called when phone-driven feedback is dismissed.
+     * Mirrors LearnModeViewModel.resetToIdle().
+     */
+    fun resetToIdle() {
+        Log.d(TAG, "Resetting to idle")
+        recordingJob?.cancel()
+        recordingJob = null
+        _uiState.update {
+            it.copy(
+                state = State.IDLE,
+                statusMessage = "Tap to begin",
+                errorMessage = null,
+                prediction = null,
+                isCorrect = false,
+                recordingProgress = 0f,
+                countdownSeconds = COUNTDOWN_SECONDS
+            )
         }
     }
 

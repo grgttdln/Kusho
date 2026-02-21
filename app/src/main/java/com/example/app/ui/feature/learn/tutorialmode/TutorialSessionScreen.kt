@@ -158,6 +158,8 @@ fun TutorialSessionScreen(
     
     // Phase 2: Track completed letter indices (for green progress bar segments)
     var completedIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    // Track which items the student has attempted air-writing (for revisit auto-advance)
+    var attemptedIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     // Phase 2: Card stack grid navigation overlay
     var showCardStackGrid by remember { mutableStateOf(false) }
     // Voice playback highlight state
@@ -465,8 +467,11 @@ fun TutorialSessionScreen(
             if (skipTime > sessionStartTime && skipTime > lastSkipTime && timeSinceLastSkip >= 500) {
                 lastSkipTime = skipTime
                 val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                if (currentStep < maxSteps) {
-                    currentStep++
+                // Wrap around to first unanswered item instead of stopping at end
+                val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in completedIndices }
+                    ?: (0 until currentStep - 1).firstOrNull { it !in completedIndices }
+                if (nextIncomplete != null) {
+                    currentStep = nextIncomplete + 1
                 }
                 onSkip()
             }
@@ -481,10 +486,62 @@ fun TutorialSessionScreen(
             val timestamp = result["timestamp"] as? Long ?: 0L
             if (timestamp > sessionStartTime && timestamp > lastGestureTime && result.isNotEmpty()) {
                 lastGestureTime = timestamp
-                isCorrectGesture = result["isCorrect"] as? Boolean ?: false
-                predictedLetter = result["predictedLetter"] as? String ?: ""
+                val gestureCorrect = result["isCorrect"] as? Boolean ?: false
+                val gesturePredicted = result["predictedLetter"] as? String ?: ""
                 isStudentWriting = false // Recording finished, student is no longer writing
-                showProgressCheck = true
+
+                // Send feedback to watch (phone is single source of truth)
+                watchConnectionManager.sendTutorialModeFeedback(gestureCorrect, gesturePredicted)
+
+                val itemIndex = currentStep - 1
+                val isRevisit = itemIndex in attemptedIndices
+                attemptedIndices = attemptedIndices + itemIndex
+
+                if (isRevisit) {
+                    // REVISIT: auto-advance or auto-retry (no dialog)
+                    val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                    if (gestureCorrect) {
+                        // Auto-mark complete and advance
+                        val newCompleted = completedIndices + itemIndex
+                        completedIndices = newCompleted
+                        // Dismiss feedback on watch immediately
+                        watchConnectionManager.notifyTutorialModeFeedbackDismissed()
+                        if (newCompleted.size >= maxSteps) {
+                            completeTutorialAndEnd()
+                        } else {
+                            // Auto-navigate to next unanswered
+                            val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in newCompleted }
+                                ?: (0 until currentStep - 1).firstOrNull { it !in newCompleted }
+                            if (nextIncomplete != null) {
+                                currentStep = nextIncomplete + 1
+                            }
+                        }
+                    } else {
+                        // Auto-retry: show wrong feedback briefly, then retry same item
+                        val letterToRetry = currentLetter
+                        val stepToRetry = currentStep
+                        showAnimation = false
+                        coroutineScope.launch {
+                            kotlinx.coroutines.delay(1500L)
+                            watchConnectionManager.notifyTutorialModeFeedbackDismissed()
+                            watchConnectionManager.notifyTutorialModeRetry()
+                            if (letterToRetry.isNotEmpty()) {
+                                watchConnectionManager.sendTutorialModeLetterData(
+                                    letter = letterToRetry,
+                                    letterCase = letterType,
+                                    currentIndex = stepToRetry,
+                                    totalLetters = calculatedTotalSteps,
+                                    dominantHand = dominantHand
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // FIRST ATTEMPT: show teacher-gated ProgressCheckDialog
+                    isCorrectGesture = gestureCorrect
+                    predictedLetter = gesturePredicted
+                    showProgressCheck = true
+                }
             }
         }
     }
@@ -522,6 +579,8 @@ fun TutorialSessionScreen(
                 // Reset Phase 3 air-writing state so next letter starts idle
                 isStudentWriting = false
                 showAnimation = false
+                // Notify watch to dismiss feedback (phone-driven SSOT)
+                watchConnectionManager.notifyTutorialModeFeedbackDismissed()
                 if (isCorrectGesture) {
                     // Mark current step as completed (green in progress bar)
                     val newCompletedIndices = completedIndices + (currentStep - 1)
@@ -751,8 +810,11 @@ fun TutorialSessionScreen(
                 onClick = {
                     if (!isStudentWriting) {
                         val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                        if (currentStep < maxSteps) {
-                            currentStep++
+                        // Wrap around to first unanswered item instead of stopping at end
+                        val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in completedIndices }
+                            ?: (0 until currentStep - 1).firstOrNull { it !in completedIndices }
+                        if (nextIncomplete != null) {
+                            currentStep = nextIncomplete + 1
                         }
                         onSkip()
                     }
@@ -1171,6 +1233,7 @@ fun TutorialSessionScreen(
                                     showAnimation = false
                                     currentStep = 1
                                     completedIndices = emptySet()
+                                    attemptedIndices = emptySet()
                                     resumedCompletedIndices = emptySet()
                                     coroutineScope.launch {
                                         withContext(Dispatchers.IO) {

@@ -168,6 +168,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
         private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
         private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING = "/tutorial_mode_gesture_recording"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK = "/tutorial_mode_show_feedback"
 
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
@@ -1104,6 +1105,35 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Mobile feedback dismissal sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to notify watch of feedback dismissal", e)
+            }
+        }
+    }
+
+    /**
+     * Send feedback result to watch so it shows the same correct/incorrect screen.
+     * Mirrors sendLearnModeFeedback() for single source of truth.
+     * @param isCorrect Whether the gesture was correct
+     * @param predictedLetter The letter that was predicted by the watch ML model
+     */
+    fun sendTutorialModeFeedback(isCorrect: Boolean, predictedLetter: String) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = org.json.JSONObject().apply {
+                    put("isCorrect", isCorrect)
+                    put("predictedLetter", predictedLetter)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Tutorial Mode feedback sent: correct=$isCorrect, letter=$predictedLetter")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Tutorial Mode feedback", e)
             }
         }
     }

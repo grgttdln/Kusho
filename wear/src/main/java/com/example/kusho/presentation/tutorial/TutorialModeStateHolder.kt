@@ -34,20 +34,11 @@ object TutorialModeStateHolder {
         val timestamp: Long = 0L
     )
 
-    data class FeedbackData(
-        val isCorrect: Boolean = false,
-        val timestamp: Long = 0L,
-        val shouldShow: Boolean = false
-    )
-
     private val _letterData = MutableStateFlow(LetterData())
     val letterData: StateFlow<LetterData> = _letterData.asStateFlow()
 
     private val _sessionData = MutableStateFlow(SessionData())
     val sessionData: StateFlow<SessionData> = _sessionData.asStateFlow()
-
-    private val _feedbackData = MutableStateFlow(FeedbackData())
-    val feedbackData: StateFlow<FeedbackData> = _feedbackData.asStateFlow()
 
     private val _isSessionComplete = MutableStateFlow(false)
     val isSessionComplete: StateFlow<Boolean> = _isSessionComplete.asStateFlow()
@@ -72,8 +63,6 @@ object TutorialModeStateHolder {
         runOnMainThread {
             try {
                 Log.d(TAG, "📝 Updating letter data: $letter ($letterCase), index: $currentIndex/$totalLetters, hand: $dominantHand")
-                // Clear feedback atomically when new letter arrives (teacher tapped Continue)
-                _feedbackData.value = FeedbackData(shouldShow = false)
                 _letterData.value = LetterData(
                     letter = letter,
                     letterCase = letterCase,
@@ -106,7 +95,6 @@ object TutorialModeStateHolder {
                 Log.d(TAG, "🎯 Starting session: $lessonTitle for $studentName")
                 // Clear all previous state first
                 _letterData.value = LetterData()
-                _feedbackData.value = FeedbackData()
                 _isSessionComplete.value = false
 
                 // Then set new session data
@@ -134,7 +122,6 @@ object TutorialModeStateHolder {
                     timestamp = System.currentTimeMillis()
                 )
                 _letterData.value = LetterData()
-                _feedbackData.value = FeedbackData()
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error ending session", e)
             }
@@ -156,40 +143,11 @@ object TutorialModeStateHolder {
     }
 
     /**
-     * Show feedback on watch (correct/incorrect)
-     */
-    fun showFeedback(isCorrect: Boolean) {
-        runOnMainThread {
-            try {
-                Log.d(TAG, if (isCorrect) "✅ Showing correct feedback" else "❌ Showing incorrect feedback")
-                _feedbackData.value = FeedbackData(
-                    isCorrect = isCorrect,
-                    timestamp = System.currentTimeMillis(),
-                    shouldShow = true
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Error showing feedback", e)
-            }
-        }
-    }
-
-    /**
-     * Clear feedback display
-     */
-    fun clearFeedback() {
-        runOnMainThread {
-            _feedbackData.value = FeedbackData(shouldShow = false)
-        }
-    }
-    
-    /**
      * Trigger retry from mobile app
      */
     fun triggerRetry() {
         runOnMainThread {
             Log.d(TAG, "🔄 Retry triggered from mobile")
-            // Clear feedback atomically when retry arrives (teacher tapped Continue on incorrect)
-            _feedbackData.value = FeedbackData(shouldShow = false)
             _retryTrigger.value = System.currentTimeMillis()
         }
     }
@@ -202,7 +160,6 @@ object TutorialModeStateHolder {
             Log.d(TAG, "♻️ Resetting entire session state")
             _letterData.value = LetterData()
             _sessionData.value = SessionData()
-            _feedbackData.value = FeedbackData()
             _isSessionComplete.value = false
             _retryTrigger.value = 0L
         }
@@ -215,7 +172,6 @@ object TutorialModeStateHolder {
         runOnMainThread {
             _letterData.value = LetterData()
             _sessionData.value = SessionData()
-            _feedbackData.value = FeedbackData()
             _isSessionComplete.value = false
         }
     }
