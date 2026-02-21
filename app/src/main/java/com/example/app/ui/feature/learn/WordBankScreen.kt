@@ -25,9 +25,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
-import com.example.app.ui.components.wordbank.ActivityCreationModal
 import com.example.app.ui.components.wordbank.WordAddedConfirmationModal
 import com.example.app.ui.components.wordbank.WordBankEditModal
+import com.example.app.ui.components.wordbank.WordBankGenerationModal
 import com.example.app.ui.components.wordbank.WordBankModal
 
 @Composable
@@ -35,12 +35,14 @@ fun WordBankScreen(
     onNavigate: (Int) -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onNavigateToAIGenerate: (String) -> Unit = {},
     viewModel: LessonViewModel = viewModel()
 ) {
     // Collect UI state from ViewModel
     val uiState by viewModel.uiState.collectAsState()
-    val generationPhase by viewModel.generationPhase.collectAsState()
+
+    // Local state for WordBankGenerationModal
+    var isGenerationModalVisible by remember { mutableStateOf(false) }
+    var generationPrompt by remember { mutableStateOf("") }
 
     // Image picker launcher for add modal
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -143,7 +145,7 @@ fun WordBankScreen(
 
             // Magic Wand Button
             IconButton(
-                onClick = { viewModel.showActivityCreationModal() },
+                onClick = { isGenerationModalVisible = true },
                 modifier = Modifier
                     .size(75.dp)
                     .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
@@ -189,7 +191,9 @@ fun WordBankScreen(
             },
             onDismiss = {
                 viewModel.hideWordBankModal()
-            }
+            },
+            dictionarySuggestions = uiState.dictionarySuggestions,
+            onSuggestionClick = { viewModel.onSuggestionClick(it) }
         )
 
         // Word Added Confirmation Modal
@@ -198,6 +202,19 @@ fun WordBankScreen(
             addedWord = uiState.confirmedWord,
             onDismiss = {
                 viewModel.dismissConfirmation()
+            }
+        )
+
+        // Word Bank Generation Modal (AI CVC word generation)
+        WordBankGenerationModal(
+            isVisible = isGenerationModalVisible,
+            promptInput = generationPrompt,
+            isLoading = false,
+            onPromptInputChanged = { generationPrompt = it },
+            onGenerate = { /* TODO: Wire to generation logic */ },
+            onDismiss = {
+                isGenerationModalVisible = false
+                generationPrompt = ""
             }
         )
 
@@ -228,30 +245,11 @@ fun WordBankScreen(
             },
             onDismiss = {
                 viewModel.hideEditModal()
-            }
+            },
+            dictionarySuggestions = uiState.editDictionarySuggestions,
+            onSuggestionClick = { viewModel.onEditSuggestionClick(it) }
         )
 
-        // Activity Creation Modal (AI wand)
-        ActivityCreationModal(
-            isVisible = uiState.isActivityCreationModalVisible,
-            activityInput = uiState.activityInput,
-            words = uiState.words,
-            selectedWordIds = uiState.selectedActivityWordIds,
-            isLoading = uiState.isActivityCreationLoading,
-            generationPhase = generationPhase,
-            error = uiState.activityError,
-            onActivityInputChanged = { viewModel.onActivityInputChanged(it) },
-            onWordSelectionChanged = { wordId, isSelected ->
-                viewModel.onActivityWordSelectionChanged(wordId, isSelected)
-            },
-            onSelectAll = { viewModel.onSelectAllActivityWords() },
-            onCreateActivity = {
-                viewModel.createActivity { jsonResult ->
-                    onNavigateToAIGenerate(jsonResult)
-                }
-            },
-            onDismiss = { viewModel.hideActivityCreationModal() }
-        )
     }
 }
 
