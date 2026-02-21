@@ -317,6 +317,83 @@ Generate a concise 2-4 sentence summary. Reference specific ${itemLabel.lowercas
         }
     }
 
+    // ========== Suggested Prompts ==========
+
+    /**
+     * Generate 2 contextual prompt suggestions for the CVC word generation modal.
+     *
+     * @param words Current word bank contents (may be empty)
+     * @return List of exactly 2 prompt suggestion strings, or empty list on failure
+     */
+    suspend fun generateSuggestedPrompts(words: List<Word>): List<String> = withContext(Dispatchers.IO) {
+        try {
+            val validWords = words.filter { it.word.isNotBlank() }
+            val systemInstruction: String
+            val userPrompt: String
+
+            if (validWords.isEmpty()) {
+                systemInstruction = """
+You are a reading teacher's assistant for young learners (ages 4-8). The teacher has an empty word bank and wants to generate CVC (Consonant-Vowel-Consonant) words using AI.
+
+Suggest exactly 2 concise, helpful prompts that the teacher could use to generate their first batch of CVC words. Each prompt should be a natural sentence describing what kind of CVC words to create.
+
+Good examples: "Common short vowel 'a' words like cat, bat, hat", "Animal-themed CVC words for beginners"
+Bad examples: "Generate words" (too vague), "Create a comprehensive phonics curriculum" (too broad)
+
+Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
+                """.trimIndent()
+
+                userPrompt = "The teacher's word bank is empty. Suggest 2 helpful starter prompts for generating CVC words."
+            } else {
+                val analyses = analyzeCVCWords(validWords)
+                val patterns = detectCVCPatterns(analyses)
+                val wordList = if (validWords.size > 30) {
+                    "${validWords.take(30).joinToString(", ") { it.word }} (and ${validWords.size - 30} more)"
+                } else {
+                    validWords.joinToString(", ") { it.word }
+                }
+                val patternsSummary = buildPatternsSummary(patterns)
+
+                systemInstruction = """
+You are a reading teacher's assistant for young learners (ages 4-8). The teacher already has CVC words in their word bank. Suggest exactly 2 concise prompts for generating NEW CVC words that would complement their existing collection.
+
+EXISTING WORDS: $wordList
+
+DETECTED PATTERNS IN EXISTING WORDS:
+$patternsSummary
+
+RULES:
+1. Suggest prompts that fill GAPS in the existing collection (missing vowel sounds, missing word families, missing themes)
+2. Each prompt should be a natural sentence (10-20 words) describing what CVC words to create
+3. Do NOT suggest words that overlap with existing patterns — focus on what's MISSING
+4. Keep suggestions practical for ages 4-8
+
+Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
+                """.trimIndent()
+
+                userPrompt = "Based on the existing word bank, suggest 2 prompts for generating complementary CVC words."
+            }
+
+            val model = createModel(systemInstruction)
+            val response = model.generateContent(userPrompt)
+            val json = response.text ?: throw Exception("Empty response from suggested prompts")
+
+            Log.d(TAG, "Suggested prompts response: $json")
+            val parsed = gson.fromJson(json, SuggestedPromptsResponse::class.java)
+
+            val prompts = parsed.prompts.filter { it.isNotBlank() }.take(2)
+            if (prompts.size < 2) {
+                Log.w(TAG, "Fewer than 2 prompts returned: ${prompts.size}")
+                return@withContext emptyList()
+            }
+
+            prompts
+        } catch (e: Exception) {
+            Log.e(TAG, "Suggested prompts generation failed: ${e.message}", e)
+            emptyList()
+        }
+    }
+
     // ========== Step Functions ==========
 
     /**
@@ -1073,6 +1150,12 @@ Assign appropriate configuration types and letter indices to each word based on 
         val word: String = "",
         val configurationType: String = "",
         val selectedLetterIndex: Int = 0
+    )
+
+    // ========== Suggested Prompts ==========
+
+    private data class SuggestedPromptsResponse(
+        val prompts: List<String> = emptyList()
     )
 
     // ========== CVC Word Analysis ==========
