@@ -33,11 +33,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 import com.example.app.data.repository.GenerationPhase
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.ui.text.style.TextOverflow
 
@@ -314,36 +309,18 @@ fun WordBankGenerationModal(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         if (isSuggestionsLoading) {
-                            // Shimmer loading placeholders
-                            val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-                            val alpha = infiniteTransition.animateFloat(
-                                initialValue = 0.3f,
-                                targetValue = 0.7f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(800),
-                                    repeatMode = RepeatMode.Reverse
-                                ),
-                                label = "shimmerAlpha"
-                            )
-
-                            repeat(2) { index ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(44.dp)
-                                        .background(
-                                            color = Color(0xFFF0F7FF).copy(alpha = alpha.value),
-                                            shape = RoundedCornerShape(16.dp)
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = Color(0xFF49A9FF).copy(alpha = alpha.value * 0.5f),
-                                            shape = RoundedCornerShape(16.dp)
-                                        )
+                            // Loading spinner
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(60.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = Color(0xFF49A9FF),
+                                    strokeWidth = 2.dp
                                 )
-                                if (index == 0) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
                             }
                         } else {
                             // Suggestion chips

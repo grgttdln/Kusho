@@ -381,9 +381,12 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
             Log.d(TAG, "Suggested prompts response: $json")
             val parsed = gson.fromJson(json, SuggestedPromptsResponse::class.java)
 
-            val prompts = parsed.prompts.filter { it.isNotBlank() }.take(2)
+            val prompts = parsed.prompts
+                .filter { it.isNotBlank() }
+                .filter { isValidPromptSuggestion(it) }
+                .take(2)
             if (prompts.size < 2) {
-                Log.w(TAG, "Fewer than 2 prompts returned: ${prompts.size}")
+                Log.w(TAG, "Fewer than 2 valid prompts returned: ${prompts.size}")
                 return@withContext emptyList()
             }
 
@@ -392,6 +395,28 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
             Log.e(TAG, "Suggested prompts generation failed: ${e.message}", e)
             emptyList()
         }
+    }
+
+    /**
+     * Validate that a suggested prompt is coherent and not repetitive garbage.
+     * Rejects prompts where any 3+ character substring repeats excessively.
+     */
+    private fun isValidPromptSuggestion(prompt: String): Boolean {
+        if (prompt.length > 200) {
+            Log.w(TAG, "Prompt too long (${prompt.length} chars), rejecting")
+            return false
+        }
+
+        // Check for repeated words: if any word appears more than 3 times, it's garbage
+        val words = prompt.lowercase().split(Regex("[\\s,.'\"]+")).filter { it.length >= 2 }
+        val wordCounts = words.groupingBy { it }.eachCount()
+        val maxRepeats = wordCounts.values.maxOrNull() ?: 0
+        if (maxRepeats > 3) {
+            Log.w(TAG, "Prompt has excessive word repetition ($maxRepeats repeats), rejecting: ${prompt.take(80)}")
+            return false
+        }
+
+        return true
     }
 
     // ========== Step Functions ==========
