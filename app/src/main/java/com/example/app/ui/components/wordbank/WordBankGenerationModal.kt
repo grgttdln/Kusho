@@ -33,6 +33,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.app.R
 import com.example.app.data.repository.GenerationPhase
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun WordBankGenerationModal(
@@ -43,6 +50,9 @@ fun WordBankGenerationModal(
     error: String? = null,
     wordCount: Int = 5,
     onWordCountChanged: (Int) -> Unit = {},
+    suggestedPrompts: List<String> = emptyList(),
+    isSuggestionsLoading: Boolean = false,
+    onSuggestionClick: (String) -> Unit = {},
     onPromptInputChanged: (String) -> Unit,
     onGenerate: () -> Unit,
     onDismiss: () -> Unit
@@ -289,6 +299,102 @@ fun WordBankGenerationModal(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Suggested prompts section
+                    if (isSuggestionsLoading || suggestedPrompts.isNotEmpty()) {
+                        Text(
+                            text = "Suggested for you",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF0B0B0B),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (isSuggestionsLoading) {
+                            // Shimmer loading placeholders
+                            val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+                            val alpha = infiniteTransition.animateFloat(
+                                initialValue = 0.3f,
+                                targetValue = 0.7f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(800),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "shimmerAlpha"
+                            )
+
+                            repeat(2) { index ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(44.dp)
+                                        .background(
+                                            color = Color(0xFFF0F7FF).copy(alpha = alpha.value),
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = Color(0xFF49A9FF).copy(alpha = alpha.value * 0.5f),
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                )
+                                if (index == 0) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+                        } else {
+                            // Suggestion chips
+                            suggestedPrompts.forEachIndexed { index, prompt ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 44.dp)
+                                        .background(
+                                            color = Color(0xFFF0F7FF),
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = Color(0xFF49A9FF),
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .then(
+                                            if (!isLoading) Modifier.clickable {
+                                                onSuggestionClick(prompt)
+                                            } else Modifier
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_wand),
+                                            contentDescription = null,
+                                            tint = Color(0xFF49A9FF),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = prompt,
+                                            fontSize = 14.sp,
+                                            color = Color(0xFF333333),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                if (index < suggestedPrompts.lastIndex) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(32.dp))
 
                     // Generate button
@@ -378,6 +484,12 @@ fun WordBankGenerationModalPreview() {
         isLoading = false,
         wordCount = 5,
         onWordCountChanged = {},
+        suggestedPrompts = listOf(
+            "Short vowel 'a' words like cat, bat, hat",
+            "Animal-themed CVC words for beginners"
+        ),
+        isSuggestionsLoading = false,
+        onSuggestionClick = {},
         onPromptInputChanged = {},
         onGenerate = {},
         onDismiss = {}
@@ -393,6 +505,9 @@ fun WordBankGenerationModalWithInputPreview() {
         isLoading = false,
         wordCount = 10,
         onWordCountChanged = {},
+        suggestedPrompts = emptyList(),
+        isSuggestionsLoading = false,
+        onSuggestionClick = {},
         onPromptInputChanged = {},
         onGenerate = {},
         onDismiss = {}
@@ -408,6 +523,9 @@ fun WordBankGenerationModalLoadingPreview() {
         isLoading = true,
         wordCount = 15,
         onWordCountChanged = {},
+        suggestedPrompts = emptyList(),
+        isSuggestionsLoading = true,
+        onSuggestionClick = {},
         onPromptInputChanged = {},
         onGenerate = {},
         onDismiss = {}
