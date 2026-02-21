@@ -54,6 +54,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private var lastGenerationPrompt: String = ""
     private var lastSelectedWords: List<Word> = emptyList()
 
+    // Cached suggested prompts for generation modal
+    private var cachedSuggestedPrompts: List<String> = emptyList()
+    private var cachedWordCountForPrompts: Int = -1
+
     init {
         // Observe the current user session
         viewModelScope.launch {
@@ -775,6 +779,49 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    /**
+     * Load suggested prompts for the generation modal.
+     * Uses cached prompts if word bank size hasn't changed.
+     */
+    fun loadSuggestedPrompts() {
+        val currentWords = _uiState.value.words
+        val currentWordCount = currentWords.size
+
+        // Use cache if word bank size hasn't changed
+        if (currentWordCount == cachedWordCountForPrompts && cachedSuggestedPrompts.isNotEmpty()) {
+            _uiState.update { it.copy(suggestedPrompts = cachedSuggestedPrompts) }
+            return
+        }
+
+        // Generate new suggestions
+        _uiState.update { it.copy(isSuggestionsLoading = true, suggestedPrompts = emptyList()) }
+
+        viewModelScope.launch {
+            try {
+                val prompts = geminiRepository.generateSuggestedPrompts(currentWords)
+
+                if (prompts.isNotEmpty()) {
+                    cachedSuggestedPrompts = prompts
+                    cachedWordCountForPrompts = currentWordCount
+                }
+
+                _uiState.update {
+                    it.copy(
+                        suggestedPrompts = prompts,
+                        isSuggestionsLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        suggestedPrompts = emptyList(),
+                        isSuggestionsLoading = false
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -808,6 +855,9 @@ data class LessonUiState(
     // Dictionary suggestion state (add modal)
     val dictionarySuggestions: List<String> = emptyList(),
     // Dictionary suggestion state (edit modal)
-    val editDictionarySuggestions: List<String> = emptyList()
+    val editDictionarySuggestions: List<String> = emptyList(),
+    // Suggested prompts state (generation modal)
+    val suggestedPrompts: List<String> = emptyList(),
+    val isSuggestionsLoading: Boolean = false
 )
 
