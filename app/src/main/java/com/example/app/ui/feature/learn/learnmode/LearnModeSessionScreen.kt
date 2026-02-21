@@ -1098,7 +1098,10 @@ fun LearnModeSessionScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // Large Content Card (yellow border, matching tutorial mode)
+        val isNameThePicture = currentWord?.configurationType == "Name the Picture"
+
+        // Large Content Card (purple border) - hidden for Name the Picture mode
+        if (!isNameThePicture) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1161,9 +1164,8 @@ fun LearnModeSessionScreen(
             modifier = Modifier
                 .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
+            verticalArrangement = Arrangement.Center
         ) {
-            Spacer(Modifier.weight(0.3f))
             // Large Content Card with Image (Square) - only show if there's an image
             val imageExists = currentWord?.imagePath?.let { File(it).exists() } ?: false
             if (imageExists) {
@@ -1265,8 +1267,113 @@ fun LearnModeSessionScreen(
                 }
             }
 
-            Spacer(Modifier.weight(0.7f))
         }
+            }
+        }
+        } else {
+            // Name the Picture - no card wrapper, just the content with weight
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
+            ) {
+                val imageExists = currentWord?.imagePath?.let { File(it).exists() } ?: false
+
+                // Replay question button row (same alignment as skip button)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            if (currentInstructionText.isNotEmpty()) {
+                                coroutineScope.launch {
+                                    try {
+                                        if (useDeepgram) {
+                                            deepgramTtsManager.stop()
+                                        } else {
+                                            nativeTtsManager.stop()
+                                        }
+                                        isTtsPlaying = true
+                                        if (useDeepgram) {
+                                            deepgramTtsManager.speak(currentInstructionText) {
+                                                isTtsPlaying = false
+                                            }
+                                        } else {
+                                            nativeTtsManager.speak(currentInstructionText) {
+                                                coroutineScope.launch(Dispatchers.Main.immediate) {
+                                                    isTtsPlaying = false
+                                                }
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e("LearnModeSession", "Error replaying TTS", e)
+                                        isTtsPlaying = false
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Replay,
+                            contentDescription = "Replay question",
+                            modifier = Modifier.size(28.dp),
+                            tint = PurpleColor
+                        )
+                    }
+                }
+
+                // Image card for Name the Picture (bigger)
+                if (imageExists) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .aspectRatio(1f),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFFBF9FF)
+                        ),
+                        border = BorderStroke(4.dp, Color(0xFFAE8EFB))
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(
+                                    ImageRequest.Builder(context)
+                                        .data(File(currentWord.imagePath))
+                                        .crossfade(true)
+                                        .build()
+                                ),
+                                contentDescription = "Word image",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                // Word display
+                if (currentWord != null) {
+                    NameThePictureDisplay(
+                        word = currentWord.word,
+                        completedIndices = completedLetterIndices,
+                        currentIndex = currentLetterIndex,
+                        hasImage = imageExists,
+                        wrongLetterText = wrongLetterText,
+                        wrongLetterAnimationActive = wrongLetterAnimationActive,
+                        wrongLetterShakeOffset = wrongLetterShakeOffset.value,
+                        wrongLetterAlpha = wrongLetterAlpha.value
+                    )
+                }
             }
         }
 
@@ -1546,8 +1653,35 @@ fun LearnModeSessionScreen(
 }
 
 /**
+ * Bouncing hand pointer that appears below the current letter to indicate where to write next.
+ */
+@Composable
+private fun BouncingHandPointer(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "handBounce")
+    val bounceOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "handBounceOffset"
+    )
+
+    Image(
+        painter = painterResource(id = R.drawable.ic_kusho_hand),
+        contentDescription = "Write here",
+        modifier = modifier
+            .size(40.dp)
+            .offset(y = bounceOffset.dp),
+        contentScale = ContentScale.Fit
+    )
+}
+
+/**
  * Display for Write the Word mode showing each letter with color based on completion status.
  * Current letter has an underline. Completed letters turn purple (#AE8EFB), pending letters are gray.
+ * A bouncing hand pointer indicates the current letter to write.
  */
 @Composable
 private fun WriteTheWordDisplay(
@@ -1565,7 +1699,7 @@ private fun WriteTheWordDisplay(
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(letterSpacing),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
         word.forEachIndexed { index, letter ->
             Column(
@@ -1599,6 +1733,14 @@ private fun WriteTheWordDisplay(
                             .background(Color.Black, RoundedCornerShape(2.dp))
                     )
                 }
+
+                // Bouncing hand below current letter
+                if (index == currentIndex) {
+                    Spacer(Modifier.height(4.dp))
+                    BouncingHandPointer()
+                } else {
+                    Spacer(Modifier.height(44.dp))
+                }
             }
         }
     }
@@ -1607,7 +1749,7 @@ private fun WriteTheWordDisplay(
 /**
  * Display for Fill in the Blank mode showing the word with a masked letter.
  * When the correct letter is written, it's revealed in violet/purple color.
- * Uses the same underline style as Write the Word for consistency.
+ * A bouncing hand pointer indicates the blank letter to fill in.
  */
 @Composable
 private fun FillInTheBlankDisplay(
@@ -1625,7 +1767,7 @@ private fun FillInTheBlankDisplay(
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(letterSpacing),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
         word.forEachIndexed { index, letter ->
             Column(
@@ -1663,6 +1805,14 @@ private fun FillInTheBlankDisplay(
                             .background(Color.Black, RoundedCornerShape(2.dp))
                     )
                 }
+
+                // Bouncing hand below the masked letter
+                if (index == maskedIndex && !isCorrect) {
+                    Spacer(Modifier.height(4.dp))
+                    BouncingHandPointer()
+                } else {
+                    Spacer(Modifier.height(44.dp))
+                }
             }
         }
     }
@@ -1671,7 +1821,7 @@ private fun FillInTheBlankDisplay(
 /**
  * Display for Name the Picture mode showing blanks initially.
  * Completed letters are revealed in purple, pending letters show as underlines.
- * Current letter has an underline (same style as Write the Word).
+ * A bouncing hand pointer indicates the current letter to write.
  */
 @Composable
 private fun NameThePictureDisplay(
@@ -1689,7 +1839,7 @@ private fun NameThePictureDisplay(
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(letterSpacing),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
         word.forEachIndexed { index, letter ->
             Column(
@@ -1726,6 +1876,14 @@ private fun NameThePictureDisplay(
                             .height(4.dp)
                             .background(Color.Black, RoundedCornerShape(2.dp))
                     )
+                }
+
+                // Bouncing hand below current letter
+                if (index == currentIndex && index !in completedIndices) {
+                    Spacer(Modifier.height(4.dp))
+                    BouncingHandPointer()
+                } else {
+                    Spacer(Modifier.height(44.dp))
                 }
             }
         }
