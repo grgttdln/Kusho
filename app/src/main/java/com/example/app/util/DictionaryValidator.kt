@@ -7,7 +7,9 @@ import android.view.textservice.SpellCheckerSession
 import android.view.textservice.SuggestionsInfo
 import android.view.textservice.TextInfo
 import android.view.textservice.TextServicesManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -74,89 +76,87 @@ class DictionaryValidator(context: Context) {
             return DictionaryResult.Unavailable
         }
 
-        // Use withTimeoutOrNull to avoid blocking users
+        // Use withTimeoutOrNull to avoid blocking users.
+        // Must run on Main dispatcher because SpellCheckerSession internally
+        // creates a Handler which requires a Looper on the current thread.
         val result = withTimeoutOrNull(TIMEOUT_MS) {
-            suspendCancellableCoroutine { continuation ->
-                var session: SpellCheckerSession? = null
+            withContext(Dispatchers.Main) {
+                suspendCancellableCoroutine { continuation ->
+                    var session: SpellCheckerSession? = null
 
-                try {
-                    // Create session with callback listener
-                    session = textServicesManager.newSpellCheckerSession(
-                        null, // use default spell checker
-                        Locale.ENGLISH,
-                        object : SpellCheckerSession.SpellCheckerSessionListener {
-                            override fun onGetSuggestions(results: Array<out SuggestionsInfo>?) {
-                                // Not used - we use getSentenceSuggestions instead
-                            }
-
-                            override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>?) {
-                                // Check if continuation is still active before resuming
-                                if (!continuation.isActive) return
-
-                                try {
-                                    if (results == null || results.isEmpty()) {
-                                        continuation.resume(DictionaryResult.Unavailable)
-                                        session?.close()
-                                        return
-                                    }
-
-                                    val sentenceSuggestionsInfo = results[0]
-                                    if (sentenceSuggestionsInfo.suggestionsCount == 0) {
-                                        continuation.resume(DictionaryResult.Unavailable)
-                                        session?.close()
-                                        return
-                                    }
-
-                                    val suggestionsInfo = sentenceSuggestionsInfo.getSuggestionsInfoAt(0)
-
-                                    // Check if word is in dictionary
-                                    if (suggestionsInfo.suggestionsAttributes and
-                                        SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY != 0) {
-                                        continuation.resume(DictionaryResult.Valid)
-                                        session?.close()
-                                        return
-                                    }
-
-                                    // Word not in dictionary, filter suggestions through CVC pattern
-                                    val cvcSuggestions = (0 until suggestionsInfo.suggestionsCount)
-                                        .mapNotNull { suggestionsInfo.getSuggestionAt(it) }
-                                        .filter { WordValidator.isCVCPattern(it) }
-                                        .distinct()
-                                        .take(MAX_SUGGESTIONS)
-
-                                    continuation.resume(DictionaryResult.Invalid(cvcSuggestions))
-                                    session?.close()
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Exception during validation", e)
-                                    continuation.resume(DictionaryResult.Unavailable)
-                                    session?.close()
+                    try {
+                        session = textServicesManager.newSpellCheckerSession(
+                            null,
+                            Locale.ENGLISH,
+                            object : SpellCheckerSession.SpellCheckerSessionListener {
+                                override fun onGetSuggestions(results: Array<out SuggestionsInfo>?) {
+                                    // Not used - we use getSentenceSuggestions instead
                                 }
-                            }
-                        },
-                        true // means "return suggestions even if word is correct"
-                    )
 
-                    if (session == null) {
-                        Log.w(TAG, "Session creation failed")
-                        continuation.resume(DictionaryResult.Unavailable)
-                        return@suspendCancellableCoroutine
-                    }
+                                override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>?) {
+                                    if (!continuation.isActive) return
 
-                    // Set up cancellation handler to close session
-                    continuation.invokeOnCancellation {
+                                    try {
+                                        if (results == null || results.isEmpty()) {
+                                            continuation.resume(DictionaryResult.Unavailable)
+                                            session?.close()
+                                            return
+                                        }
+
+                                        val sentenceSuggestionsInfo = results[0]
+                                        if (sentenceSuggestionsInfo.suggestionsCount == 0) {
+                                            continuation.resume(DictionaryResult.Unavailable)
+                                            session?.close()
+                                            return
+                                        }
+
+                                        val suggestionsInfo = sentenceSuggestionsInfo.getSuggestionsInfoAt(0)
+
+                                        if (suggestionsInfo.suggestionsAttributes and
+                                            SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY != 0
+                                        ) {
+                                            continuation.resume(DictionaryResult.Valid)
+                                            session?.close()
+                                            return
+                                        }
+
+                                        val cvcSuggestions = (0 until suggestionsInfo.suggestionsCount)
+                                            .mapNotNull { suggestionsInfo.getSuggestionAt(it) }
+                                            .filter { WordValidator.isCVCPattern(it) }
+                                            .distinct()
+                                            .take(MAX_SUGGESTIONS)
+
+                                        continuation.resume(DictionaryResult.Invalid(cvcSuggestions))
+                                        session?.close()
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Exception during validation", e)
+                                        continuation.resume(DictionaryResult.Unavailable)
+                                        session?.close()
+                                    }
+                                }
+                            },
+                            true
+                        )
+
+                        if (session == null) {
+                            Log.w(TAG, "Session creation failed")
+                            continuation.resume(DictionaryResult.Unavailable)
+                            return@suspendCancellableCoroutine
+                        }
+
+                        continuation.invokeOnCancellation {
+                            session?.close()
+                        }
+
+                        session.getSentenceSuggestions(
+                            arrayOf(TextInfo(word.lowercase())),
+                            MAX_SUGGESTIONS
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Exception during validation setup", e)
                         session?.close()
+                        continuation.resume(DictionaryResult.Unavailable)
                     }
-
-                    // Request suggestions for the word
-                    session.getSentenceSuggestions(
-                        arrayOf(TextInfo(word.lowercase())),
-                        MAX_SUGGESTIONS
-                    )
-
-                } catch (e: Exception) {
-                    Log.w(TAG, "Exception during validation setup", e)
-                    session?.close()
-                    continuation.resume(DictionaryResult.Unavailable)
                 }
             }
         }
