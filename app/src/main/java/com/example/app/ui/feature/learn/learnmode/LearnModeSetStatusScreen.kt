@@ -37,7 +37,8 @@ import com.example.app.ui.components.learnmode.LearnModeStatusCard
 data class ActivitySetStatus(
     val setId: Long,
     val title: String,
-    val status: String
+    val status: String,
+    val completionPercentage: Int = 0
 )
 
 @Composable
@@ -125,6 +126,7 @@ fun LearnModeSetStatusScreen(
                 LearnModeStatusCard(
                     title = set.title,
                     status = set.status,
+                    completionPercentage = set.completionPercentage,
                     isSelected = isSelected,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -166,7 +168,16 @@ fun LearnModeSetStatusScreenPreview() {
             ActivitySetStatus(
                 setId = index.toLong(),
                 title = "Set ${index + 1}",
-                status = if (index % 3 == 0) "Completed" else if (index % 3 == 1) "25% Complete" else "Not Started"
+                status = when {
+                    index % 3 == 0 -> "Completed"
+                    index % 3 == 1 -> "${25 + index * 5}% Progress"
+                    else -> "Not Started"
+                },
+                completionPercentage = when {
+                    index % 3 == 0 -> 100
+                    index % 3 == 1 -> 25 + index * 5
+                    else -> 0
+                }
             )
         },
         onBack = {},

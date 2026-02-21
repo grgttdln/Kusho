@@ -624,15 +624,21 @@ fun MainNavigationContainer(
                 }
             }
             val progressList by progressFlow.collectAsState(initial = emptyList())
-            val completedSetIds = remember(progressList) {
-                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            val progressBySetId = remember(progressList) {
+                progressList.associateBy { it.setId }
             }
             val activitySetStatuses = sets.map { set ->
-                val isCompleted = completedSetIds.contains(set.id)
+                val progress = progressBySetId[set.id]
+                val percentage = progress?.completionPercentage ?: 0
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
                     setId = set.id,
                     title = set.title,
-                    status = if (isCompleted) "Completed" else "Not Started"
+                    status = when {
+                        progress?.isCompleted == true || percentage == 100 -> "Completed"
+                        percentage > 0 -> "$percentage% Progress"
+                        else -> "Not Started"
+                    },
+                    completionPercentage = percentage
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
@@ -752,15 +758,21 @@ fun MainNavigationContainer(
                 }
             }
             val progressList by progressFlow.collectAsState(initial = emptyList())
-            val completedSetIds = remember(progressList) {
-                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            val progressBySetId = remember(progressList) {
+                progressList.associateBy { it.setId }
             }
             val activitySetStatuses = sets.map { set ->
-                val isCompleted = completedSetIds.contains(set.id)
+                val progress = progressBySetId[set.id]
+                val percentage = progress?.completionPercentage ?: 0
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
                     setId = set.id,
                     title = set.title,
-                    status = if (isCompleted) "Completed" else "Not Started"
+                    status = when {
+                        progress?.isCompleted == true || percentage == 100 -> "Completed"
+                        percentage > 0 -> "$percentage% Progress"
+                        else -> "Not Started"
+                    },
+                    completionPercentage = percentage
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(

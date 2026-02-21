@@ -81,6 +81,7 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
         private const val MESSAGE_PATH_LEARN_MODE_PHONE_READY = "/learn_mode_phone_ready"
         private const val MESSAGE_PATH_LEARN_MODE_WATCH_READY = "/learn_mode_watch_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING = "/learn_mode_gesture_recording"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -500,6 +501,28 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                     messageClient.sendMessage(
                         node.id,
                         MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
+                        ByteArray(0)
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch has started recording a gesture in Learn Mode (student is writing)
+     */
+    suspend fun sendLearnModeGestureRecording() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING,
                         ByteArray(0)
                     ).await()
                 } catch (e: Exception) {

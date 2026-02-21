@@ -63,7 +63,6 @@ import androidx.compose.ui.window.PopupPositionProvider
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
-import com.example.app.ui.components.common.ProgressCheckDialog
 import com.example.app.ui.components.common.ProgressIndicator
 import com.example.app.ui.components.common.EndSessionDialog
 import com.example.app.ui.components.common.ResumeSessionDialog
@@ -173,9 +172,11 @@ fun TutorialSessionScreen(
     var showAnnotationDialog by remember { mutableStateOf(false) }
     var annotationsMap by remember { mutableStateOf<Map<Int, AnnotationData>>(emptyMap()) }
     
-    // Tooltip state for annotation button
+    // Tooltip state for grid/card-stack icon
     var showAnnotationTooltip by remember { mutableStateOf(true) }
     val tooltipState = rememberTooltipState(isPersistent = false)
+    // Tooltip state for annotation icon in progress check overlay
+    var showOverlayAnnotationTooltip by remember { mutableStateOf(true) }
 
     // Coroutine scope for async operations
     val coroutineScope = rememberCoroutineScope()
@@ -509,6 +510,13 @@ fun TutorialSessionScreen(
             targetLetter = currentLetter,
             targetCase = letterType,
             predictedLetter = predictedLetter,
+            showAnnotationTooltip = showOverlayAnnotationTooltip,
+            onAnnotateClick = {
+                showAnnotationDialog = true
+            },
+            onAnnotationTooltipDismissed = {
+                showOverlayAnnotationTooltip = false
+            },
             onContinue = {
                 showProgressCheck = false
                 // Reset Phase 3 air-writing state so next letter starts idle
@@ -546,9 +554,6 @@ fun TutorialSessionScreen(
                         )
                     }
                 }
-            },
-            onAddAnnotation = {
-                showAnnotationDialog = true
             }
         )
     }
@@ -1437,6 +1442,7 @@ fun TutorialSessionScreenPreview() {
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProgressCheckDialog(
     isCorrect: Boolean,
@@ -1444,8 +1450,10 @@ private fun ProgressCheckDialog(
     targetLetter: String,
     targetCase: String,
     predictedLetter: String,
-    onContinue: () -> Unit,
-    onAddAnnotation: () -> Unit = {}
+    showAnnotationTooltip: Boolean,
+    onAnnotateClick: () -> Unit,
+    onAnnotationTooltipDismissed: () -> Unit,
+    onContinue: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -1552,6 +1560,75 @@ private fun ProgressCheckDialog(
                 .background(Color.Black.copy(alpha = 0.7f)),
             contentAlignment = Alignment.Center
         ) {
+            // Annotation icon - top left (yellow for tutorial mode)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 48.dp)
+            ) {
+                if (showAnnotationTooltip) {
+                    val tooltipState = rememberTooltipState(isPersistent = false)
+
+                    LaunchedEffect(Unit) {
+                        tooltipState.show()
+                    }
+
+                    TooltipBox(
+                        positionProvider = object : PopupPositionProvider {
+                            override fun calculatePosition(
+                                anchorBounds: androidx.compose.ui.unit.IntRect,
+                                windowSize: androidx.compose.ui.unit.IntSize,
+                                layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                                popupContentSize: androidx.compose.ui.unit.IntSize
+                            ): androidx.compose.ui.unit.IntOffset {
+                                val x = anchorBounds.left + (anchorBounds.width / 2) - 15
+                                val y = anchorBounds.bottom + 16
+                                return androidx.compose.ui.unit.IntOffset(x, y)
+                            }
+                        },
+                        tooltip = {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = YellowIconColor
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Click here to Add Note",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    color = Color.Black,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        },
+                        state = tooltipState
+                    ) {
+                        IconButton(onClick = {
+                            onAnnotateClick()
+                            onAnnotationTooltipDismissed()
+                        }) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_annotate),
+                                contentDescription = "Annotate",
+                                modifier = Modifier.size(28.dp),
+                                colorFilter = ColorFilter.tint(YellowIconColor),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                } else {
+                    IconButton(onClick = { onAnnotateClick() }) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_annotate),
+                            contentDescription = "Annotate",
+                            modifier = Modifier.size(28.dp),
+                            colorFilter = ColorFilter.tint(YellowIconColor),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth(0.85f)
@@ -1638,40 +1715,27 @@ private fun ProgressCheckDialog(
                     )
                 }
 
-                Spacer(Modifier.height(20.dp))
+            }
 
-                // Add Annotations clickable text
+            // Teacher-led Continue button at the bottom
+            Button(
+                onClick = onContinue,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3FA9F8)
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
                 Text(
-                    text = "Add Annotations",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = BlueAnnotationColor,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .clickable { onAddAnnotation() }
-                        .padding(vertical = 4.dp)
+                    text = "Continue",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
                 )
-
-                Spacer(Modifier.height(20.dp))
-
-                // Teacher-led Continue button
-                Button(
-                    onClick = onContinue,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = OrangeButtonColor
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "Continue",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
             }
         }
     }

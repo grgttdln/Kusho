@@ -103,6 +103,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _learnModeWatchReady = MutableStateFlow(0L)
     val learnModeWatchReady: StateFlow<Long> = _learnModeWatchReady.asStateFlow()
 
+    // Gesture recording signal for Learn Mode - watch has started recording (student is writing)
+    private val _learnModeGestureRecording = MutableStateFlow(0L)
+    val learnModeGestureRecording: StateFlow<Long> = _learnModeGestureRecording.asStateFlow()
+
     // Pairing request from watch
     private val _pairingRequest = MutableStateFlow<PairingRequestEvent?>(null)
     val pairingRequest: StateFlow<PairingRequestEvent?> = _pairingRequest.asStateFlow()
@@ -149,6 +153,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
         private const val MESSAGE_PATH_LEARN_MODE_PHONE_READY = "/learn_mode_phone_ready"
         private const val MESSAGE_PATH_LEARN_MODE_WATCH_READY = "/learn_mode_watch_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING = "/learn_mode_gesture_recording"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -776,6 +781,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_LEARN_MODE_WATCH_READY -> {
                 Log.d(TAG, "✅ Watch is ready for Learn Mode")
                 _learnModeWatchReady.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING -> {
+                Log.d(TAG, "✍️ Watch started recording gesture in Learn Mode (student is writing)")
+                _learnModeGestureRecording.value = System.currentTimeMillis()
             }
         }
     }

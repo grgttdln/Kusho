@@ -22,7 +22,8 @@ import kotlinx.coroutines.launch
  */
 class LearnModeViewModel(
     private val sensorManager: MotionSensorManager,
-    private val classifierResult: ClassifierLoadResult
+    private val classifierResult: ClassifierLoadResult,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModel() {
 
     companion object {
@@ -153,6 +154,9 @@ class LearnModeViewModel(
                         recordingProgress = 0f
                     )
                 }
+
+                // Notify phone that recording has started (student is writing)
+                onRecordingStarted()
 
                 sensorManager.startRecording()
 
@@ -303,12 +307,13 @@ class LearnModeViewModel(
 
 class LearnModeViewModelFactory(
     private val sensorManager: MotionSensorManager,
-    private val classifierResult: ClassifierLoadResult
+    private val classifierResult: ClassifierLoadResult,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(LearnModeViewModel::class.java)) {
-            return LearnModeViewModel(sensorManager, classifierResult) as T
+            return LearnModeViewModel(sensorManager, classifierResult, onRecordingStarted) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

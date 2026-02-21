@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +23,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -142,9 +139,6 @@ fun LearnModeScreen() {
         }
     }
 
-    // Debouncing state for skip gesture
-    var lastSkipTime by remember { mutableLongStateOf(0L) }
-
     // "Tap to begin" wait screen - shown after handshake but before user taps
     var showWaitScreen by remember { mutableStateOf(true) }
 
@@ -172,15 +166,6 @@ fun LearnModeScreen() {
                         WaitScreenContent(
                             onTap = {
                                 showWaitScreen = false
-                            },
-                            onSkip = {
-                                val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastSkipTime >= 500) {
-                                    lastSkipTime = currentTime
-                                    scope.launch {
-                                        phoneCommunicationManager.sendSkipCommand()
-                                    }
-                                }
                             }
                         )
                     }
@@ -190,22 +175,7 @@ fun LearnModeScreen() {
                             wordData = wordData,
                             phoneCommunicationManager = phoneCommunicationManager,
                             showingFeedback = showingFeedback,
-                            feedbackIsCorrect = feedbackIsCorrect,
-                            onFeedbackDismissed = {
-                                showingFeedback = false
-                                scope.launch {
-                                    phoneCommunicationManager.sendLearnModeFeedbackDismissed()
-                                }
-                            },
-                            onSkip = {
-                                val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastSkipTime >= 500) {
-                                    lastSkipTime = currentTime
-                                    scope.launch {
-                                        phoneCommunicationManager.sendSkipCommand()
-                                    }
-                                }
-                            }
+                            feedbackIsCorrect = feedbackIsCorrect
                         )
                     }
                     isWriteTheWord && wordData.word.isNotEmpty() -> {
@@ -215,22 +185,7 @@ fun LearnModeScreen() {
                             writeTheWordState = writeTheWordState,
                             phoneCommunicationManager = phoneCommunicationManager,
                             showingFeedback = showingFeedback,
-                            feedbackIsCorrect = feedbackIsCorrect,
-                            onFeedbackDismissed = {
-                                showingFeedback = false
-                                scope.launch {
-                                    phoneCommunicationManager.sendLearnModeFeedbackDismissed()
-                                }
-                            },
-                            onSkip = {
-                                val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastSkipTime >= 500) {
-                                    lastSkipTime = currentTime
-                                    scope.launch {
-                                        phoneCommunicationManager.sendSkipCommand()
-                                    }
-                                }
-                            }
+                            feedbackIsCorrect = feedbackIsCorrect
                         )
                     }
                     isNameThePicture && wordData.word.isNotEmpty() -> {
@@ -240,37 +195,12 @@ fun LearnModeScreen() {
                             writeTheWordState = writeTheWordState,
                             phoneCommunicationManager = phoneCommunicationManager,
                             showingFeedback = showingFeedback,
-                            feedbackIsCorrect = feedbackIsCorrect,
-                            onFeedbackDismissed = {
-                                showingFeedback = false
-                                scope.launch {
-                                    phoneCommunicationManager.sendLearnModeFeedbackDismissed()
-                                }
-                            },
-                            onSkip = {
-                                val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastSkipTime >= 500) {
-                                    lastSkipTime = currentTime
-                                    scope.launch {
-                                        phoneCommunicationManager.sendSkipCommand()
-                                    }
-                                }
-                            }
+                            feedbackIsCorrect = feedbackIsCorrect
                         )
                     }
                     else -> {
-                        // Other modes or waiting for word data - show simple swipe to skip
-                        DefaultLearnModeContent(
-                            onSkip = {
-                                val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastSkipTime >= 500) {
-                                    lastSkipTime = currentTime
-                                    scope.launch {
-                                        phoneCommunicationManager.sendSkipCommand()
-                                    }
-                                }
-                            }
-                        )
+                        // Other modes or waiting for word data
+                        DefaultLearnModeContent()
                     }
                 }
             }
@@ -309,21 +239,12 @@ private fun WaitingContent() {
 
 @Composable
 private fun WaitScreenContent(
-    onTap: () -> Unit,
-    onSkip: () -> Unit
+    onTap: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount < -50f) {
-                        change.consume()
-                        onSkip()
-                    }
-                }
-            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -375,18 +296,10 @@ private fun ActivityCompleteContent() {
 }
 
 @Composable
-private fun DefaultLearnModeContent(onSkip: () -> Unit) {
+private fun DefaultLearnModeContent() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount < -50f) {
-                        change.consume()
-                        onSkip()
-                    }
-                }
-            }
     ) {
         Column(
             modifier = Modifier
@@ -404,7 +317,7 @@ private fun DefaultLearnModeContent(onSkip: () -> Unit) {
             )
 
             Text(
-                text = "Swipe left to skip",
+                text = "Waiting for teacher...",
                 color = AppColors.LearnModeColor.copy(alpha = 0.7f),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
@@ -419,9 +332,7 @@ private fun FillInTheBlankContent(
     wordData: LearnModeStateHolder.WordData,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean,
-    onFeedbackDismissed: () -> Unit,
-    onSkip: () -> Unit
+    feedbackIsCorrect: Boolean
 ) {
     val context = LocalContext.current
 
@@ -484,9 +395,7 @@ private fun FillInTheBlankContent(
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
             showingFeedback = showingFeedback,
-            feedbackIsCorrect = feedbackIsCorrect,
-            onFeedbackDismissed = onFeedbackDismissed,
-            onSkip = onSkip
+            feedbackIsCorrect = feedbackIsCorrect
         )
     }
 }
@@ -499,12 +408,19 @@ private fun FillInTheBlankMainContent(
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean,
-    onFeedbackDismissed: () -> Unit,
-    onSkip: () -> Unit
+    feedbackIsCorrect: Boolean
 ) {
+    val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
-        factory = LearnModeViewModelFactory(sensorManager, classifierResult)
+        factory = LearnModeViewModelFactory(
+            sensorManager = sensorManager,
+            classifierResult = classifierResult,
+            onRecordingStarted = {
+                scope.launch {
+                    phoneCommunicationManager.sendLearnModeGestureRecording()
+                }
+            }
+        )
     )
 
     val uiState by viewModel.uiState.collectAsState()
@@ -550,14 +466,6 @@ private fun FillInTheBlankMainContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount < -50f) {
-                        change.consume()
-                        onSkip()
-                    }
-                }
-            }
     ) {
         Column(
             modifier = Modifier
@@ -569,8 +477,7 @@ private fun FillInTheBlankMainContent(
             // Show feedback image if we're in feedback state (synced with phone)
             if (showingFeedback) {
                 LearnModeFeedbackContent(
-                    isCorrect = feedbackIsCorrect,
-                    onDismiss = onFeedbackDismissed
+                    isCorrect = feedbackIsCorrect
                 )
             } else {
                 when (uiState.state) {
@@ -720,9 +627,7 @@ private fun WriteTheWordContent(
     writeTheWordState: LearnModeStateHolder.WriteTheWordState,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean,
-    onFeedbackDismissed: () -> Unit,
-    onSkip: () -> Unit
+    feedbackIsCorrect: Boolean
 ) {
     val context = LocalContext.current
 
@@ -786,9 +691,7 @@ private fun WriteTheWordContent(
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
             showingFeedback = showingFeedback,
-            feedbackIsCorrect = feedbackIsCorrect,
-            onFeedbackDismissed = onFeedbackDismissed,
-            onSkip = onSkip
+            feedbackIsCorrect = feedbackIsCorrect
         )
     }
 }
@@ -802,12 +705,19 @@ private fun WriteTheWordMainContent(
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean,
-    onFeedbackDismissed: () -> Unit,
-    onSkip: () -> Unit
+    feedbackIsCorrect: Boolean
 ) {
+    val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
-        factory = LearnModeViewModelFactory(sensorManager, classifierResult)
+        factory = LearnModeViewModelFactory(
+            sensorManager = sensorManager,
+            classifierResult = classifierResult,
+            onRecordingStarted = {
+                scope.launch {
+                    phoneCommunicationManager.sendLearnModeGestureRecording()
+                }
+            }
+        )
     )
 
     val uiState by viewModel.uiState.collectAsState()
@@ -853,14 +763,6 @@ private fun WriteTheWordMainContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount < -50f) {
-                        change.consume()
-                        onSkip()
-                    }
-                }
-            }
     ) {
         Column(
             modifier = Modifier
@@ -872,8 +774,7 @@ private fun WriteTheWordMainContent(
             // Show feedback image if we're in feedback state
             if (showingFeedback) {
                 LearnModeFeedbackContent(
-                    isCorrect = feedbackIsCorrect,
-                    onDismiss = onFeedbackDismissed
+                    isCorrect = feedbackIsCorrect
                 )
             } else {
                 when (uiState.state) {
@@ -967,31 +868,65 @@ private fun WriteTheWordLetterDisplay(
 }
 
 /**
- * Feedback content for Learn Mode - shows correct/wrong image
- * User can tap to dismiss (syncs with phone dialog)
+ * Feedback content for Learn Mode - briefly shows correct/wrong image,
+ * then transitions to a waiting state until the teacher continues on the phone.
  */
 @Composable
-private fun LearnModeFeedbackContent(isCorrect: Boolean, onDismiss: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { onDismiss() },
-        contentAlignment = Alignment.Center
-    ) {
-        // Show correct or wrong mascot image
-        Image(
-            painter = painterResource(
-                id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
-            ),
-            contentDescription = if (isCorrect) "Correct" else "Wrong",
+private fun LearnModeFeedbackContent(isCorrect: Boolean) {
+    var showWaiting by remember { mutableStateOf(false) }
+
+    // After 2 seconds, transition from feedback to waiting state
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2000L)
+        showWaiting = true
+    }
+
+    if (showWaiting) {
+        // Waiting for teacher state
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Text(
+                    text = "Waiting for teacher...",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Image(
+                    painter = painterResource(id = R.drawable.dis_watch_wait),
+                    contentDescription = "Waiting for teacher",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
+        }
+    } else {
+        // Brief correct/wrong feedback flash
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentScale = ContentScale.Fit
-        )
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(
+                    id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
+                ),
+                contentDescription = if (isCorrect) "Correct" else "Wrong",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentScale = ContentScale.Fit
+            )
+        }
     }
 }
 
@@ -1005,9 +940,7 @@ private fun NameThePictureContent(
     writeTheWordState: LearnModeStateHolder.WriteTheWordState,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean,
-    onFeedbackDismissed: () -> Unit,
-    onSkip: () -> Unit
+    feedbackIsCorrect: Boolean
 ) {
     val context = LocalContext.current
 
@@ -1071,9 +1004,7 @@ private fun NameThePictureContent(
             ttsManager = ttsManager,
             phoneCommunicationManager = phoneCommunicationManager,
             showingFeedback = showingFeedback,
-            feedbackIsCorrect = feedbackIsCorrect,
-            onFeedbackDismissed = onFeedbackDismissed,
-            onSkip = onSkip
+            feedbackIsCorrect = feedbackIsCorrect
         )
     }
 }
@@ -1087,12 +1018,19 @@ private fun NameThePictureMainContent(
     ttsManager: TextToSpeechManager,
     phoneCommunicationManager: PhoneCommunicationManager,
     showingFeedback: Boolean,
-    feedbackIsCorrect: Boolean,
-    onFeedbackDismissed: () -> Unit,
-    onSkip: () -> Unit
+    feedbackIsCorrect: Boolean
 ) {
+    val scope = rememberCoroutineScope()
     val viewModel: LearnModeViewModel = viewModel(
-        factory = LearnModeViewModelFactory(sensorManager, classifierResult)
+        factory = LearnModeViewModelFactory(
+            sensorManager = sensorManager,
+            classifierResult = classifierResult,
+            onRecordingStarted = {
+                scope.launch {
+                    phoneCommunicationManager.sendLearnModeGestureRecording()
+                }
+            }
+        )
     )
 
     val uiState by viewModel.uiState.collectAsState()
@@ -1138,14 +1076,6 @@ private fun NameThePictureMainContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount < -50f) {
-                        change.consume()
-                        onSkip()
-                    }
-                }
-            }
     ) {
         Column(
             modifier = Modifier
@@ -1157,8 +1087,7 @@ private fun NameThePictureMainContent(
             // Show feedback image if we're in feedback state
             if (showingFeedback) {
                 LearnModeFeedbackContent(
-                    isCorrect = feedbackIsCorrect,
-                    onDismiss = onFeedbackDismissed
+                    isCorrect = feedbackIsCorrect
                 )
             } else {
                 when (uiState.state) {

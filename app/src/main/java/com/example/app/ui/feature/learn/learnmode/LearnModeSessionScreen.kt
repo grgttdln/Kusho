@@ -8,6 +8,11 @@ import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -22,11 +27,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.PlainTooltip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +83,7 @@ private val CompletedLetterColor = Color(0xFFAE8EFB)
 private val PendingLetterColor = Color(0xFF808080)
 private val BlueColor = Color(0xFF42A5F5)
 private val WrongLetterColor = Color(0xFFFF6B6B)
+private val YellowColor = Color(0xFFEDBB00)
 
 private val wrongAffirmativeAudioResources = listOf(
     R.raw.wrong_youre_learning_so_keep_going,
@@ -216,6 +223,13 @@ fun LearnModeSessionScreen(
     // State for watch handshake - blocks session until watch is ready
     var isWatchReady by remember(sessionKey) { mutableStateOf(false) }
 
+    // State for "student is writing" indicator + UI lock
+    var isStudentWriting by remember(sessionKey) { mutableStateOf(false) }
+
+    // State for TTS instruction text and playback animation
+    var isTtsPlaying by remember(sessionKey) { mutableStateOf(false) }
+    var currentInstructionText by remember(sessionKey) { mutableStateOf("") }
+
     val context = LocalContext.current
 
     // Coroutine scope for async operations
@@ -328,9 +342,9 @@ fun LearnModeSessionScreen(
         }
     }
     
-    // Auto-dismiss annotation tooltip after 5 seconds
-    LaunchedEffect(showAnnotationTooltip) {
-        if (showAnnotationTooltip) {
+    // Auto-dismiss annotation tooltip after 5 seconds (only when overlay is visible)
+    LaunchedEffect(showAnnotationTooltip, showProgressCheckDialog) {
+        if (showAnnotationTooltip && showProgressCheckDialog) {
             kotlinx.coroutines.delay(5000)
             showAnnotationTooltip = false
         }
@@ -583,24 +597,38 @@ fun LearnModeSessionScreen(
                 dominantHand = dominantHand
             )
 
-            // Speak random phrase based on question type
+            // Stop any ongoing TTS before starting new phrase
+            if (useDeepgram) {
+                deepgramTtsManager.stop()
+            } else {
+                nativeTtsManager.stop()
+            }
+            isTtsPlaying = false
+
+            // Generate instruction text and speak it with TTS
+            val wordForPhrase = if (currentWord.configurationType == "Name the Picture") null else currentWord.word
+            val phrase = getInstructionText(currentWord.configurationType, wordForPhrase)
+            currentInstructionText = phrase
+
             launch {
                 try {
+                    isTtsPlaying = true
                     if (useDeepgram) {
                         Log.d("LearnModeSession", "Using Deepgram TTS")
-                        deepgramTtsManager.speakRandomPhrase(
-                            currentWord.configurationType,
-                            if (currentWord.configurationType == "Name the Picture") null else currentWord.word
-                        )
+                        deepgramTtsManager.speak(phrase) {
+                            isTtsPlaying = false
+                        }
                     } else {
                         Log.d("LearnModeSession", "Using Native TTS")
-                        nativeTtsManager.speakRandomPhrase(
-                            currentWord.configurationType,
-                            if (currentWord.configurationType == "Name the Picture") null else currentWord.word
-                        )
+                        nativeTtsManager.speak(phrase) {
+                            coroutineScope.launch(Dispatchers.Main.immediate) {
+                                isTtsPlaying = false
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("LearnModeSession", "Error playing TTS", e)
+                    isTtsPlaying = false
                 }
             }
         }
@@ -615,6 +643,7 @@ fun LearnModeSessionScreen(
             // Process event only if timestamp is valid (> 0) and newer than last processed event
             if (event.timestamp > 0L && event.timestamp > lastEventTime) {
                 lastEventTime = event.timestamp
+                isStudentWriting = false  // Student finished writing, reset indicator
 
                 // Block input while wrong letter animation is playing
                 if (wrongLetterAnimationActive) {
@@ -696,28 +725,22 @@ fun LearnModeSessionScreen(
 
                             if (isCorrect) {
                                 predictedLetter = event.letter.toString()
-                                android.util.Log.d("LearnModeSession", "🎭 Setting showProgressCheckDialog = true for Write the Word/Name the Picture (correct)")
-                                showProgressCheckDialog = true
-                            } else {
-                                android.util.Log.d("LearnModeSession", "🎭 Starting wrong letter animation for Write the Word/Name the Picture")
-                                wrongLetterText = event.letter.toString()
-                                wrongLetterAnimationActive = true
-                                wrongLetterAnimationTrigger++
-                            }
-
-                            // Store pending action to execute on dialog dismiss
-                            if (isCorrect) {
                                 val newLetterIndex = currentLetterIndex + 1
-                                pendingCorrectAction = {
-                                    // Mark letter as completed
-                                    completedLetterIndices = completedLetterIndices + currentLetterIndex
-                                    currentLetterIndex = newLetterIndex
+                                val isWordComplete = newLetterIndex >= currentWord.word.length
 
-                                    if (newLetterIndex >= currentWord.word.length) {
+                                // Mark letter as completed immediately (turns purple)
+                                completedLetterIndices = completedLetterIndices + currentLetterIndex
+                                currentLetterIndex = newLetterIndex
+
+                                if (isWordComplete) {
+                                    // Word complete - show the full correct overlay
+                                    android.util.Log.d("LearnModeSession", "🎭 Word complete! Showing overlay for Write the Word/Name the Picture")
+                                    showProgressCheckDialog = true
+                                    pendingCorrectAction = {
                                         // Flag this word as correctly answered
                                         correctlyAnsweredWords = correctlyAnsweredWords + currentWordIndex
 
-                                        // Word complete - notify watch and move to next word
+                                        // Notify watch and move to next word
                                         watchConnectionManager.sendWordComplete()
 
                                         if (currentWordIndex < words.size - 1) {
@@ -727,12 +750,30 @@ fun LearnModeSessionScreen(
                                             watchConnectionManager.notifyActivityComplete()
                                             shouldSaveAndComplete = true
                                         }
-                                    } else {
-                                        // Send correct result and move to next letter
-                                        watchConnectionManager.sendLetterResult(true, newLetterIndex, currentWord.word.length)
                                     }
+                                } else {
+                                    // Letter correct but word not done - play correct sound, no overlay
+                                    android.util.Log.d("LearnModeSession", "📝 Letter correct, advancing to next letter (no overlay)")
+                                    try {
+                                        val mp = MediaPlayer()
+                                        val afd = context.resources.openRawResourceFd(R.raw.correct)
+                                        mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                                        afd.close()
+                                        mp.prepare()
+                                        mp.setOnCompletionListener { mp.release() }
+                                        mp.start()
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("LearnModeSession", "Error playing correct sound", e)
+                                    }
+                                    // Notify watch and move to next letter
+                                    watchConnectionManager.sendLetterResult(true, newLetterIndex, currentWord.word.length)
+                                    watchConnectionManager.notifyLearnModeFeedbackDismissed()
                                 }
                             } else {
+                                android.util.Log.d("LearnModeSession", "🎭 Starting wrong letter animation for Write the Word/Name the Picture")
+                                wrongLetterText = event.letter.toString()
+                                wrongLetterAnimationActive = true
+                                wrongLetterAnimationTrigger++
                                 pendingCorrectAction = {
                                     // Wrong letter - send incorrect feedback so watch stays on same letter
                                     watchConnectionManager.sendLetterResult(false, currentLetterIndex, currentWord.word.length)
@@ -745,53 +786,14 @@ fun LearnModeSessionScreen(
         }
     }
 
-    // Listen for feedback dismissal from watch
+    // Listen for gesture recording signal from watch (student started writing)
     LaunchedEffect(Unit) {
-        var lastDismissTime = 0L
-        watchConnectionManager.learnModeFeedbackDismissed.collect { timestamp ->
-            if (timestamp > lastDismissTime && timestamp > 0L) {
-                lastDismissTime = timestamp
-                if (showProgressCheckDialog) {
-                    android.util.Log.d("LearnModeSession", "👆 Watch dismissed feedback - dismissing mobile dialog")
-                    showProgressCheckDialog = false
-                    // Execute pending action
-                    pendingCorrectAction?.invoke()
-                    pendingCorrectAction = null
-                } else if (wrongLetterAnimationActive) {
-                    android.util.Log.d("LearnModeSession", "👆 Watch dismissed feedback - cancelling wrong letter animation")
-                    wrongLetterAnimationActive = false
-                    wrongLetterText = ""
-                    pendingCorrectAction?.invoke()
-                    pendingCorrectAction = null
-                }
-            }
-        }
-    }
-
-    // Listen for skip commands from watch with debouncing
-    LaunchedEffect(sessionKey) {
         val sessionStartTime = System.currentTimeMillis()
-        var lastSkipTime = 0L
-        watchConnectionManager.learnModeSkipTrigger.collect { skipTime ->
-            // Only process skip events that happened AFTER this session started (prevents stale events)
-            // and at least 500ms since last skip (debouncing)
-            val timeSinceLastSkip = skipTime - lastSkipTime
-            if (skipTime > sessionStartTime && skipTime > lastSkipTime && timeSinceLastSkip >= 500) {
-                lastSkipTime = skipTime
-                // Cancel any ongoing wrong letter animation
-                if (wrongLetterAnimationActive) {
-                    wrongLetterAnimationActive = false
-                    wrongLetterText = ""
-                    pendingCorrectAction = null
-                }
-                onSkip()
-                if (currentWordIndex < words.size - 1) {
-                    currentWordIndex++
-                } else {
-                    // All items complete - save annotations, notify watch and navigate away
-                    watchConnectionManager.notifyActivityComplete()
-                    shouldSaveAndComplete = true
-                }
+        var lastRecordingTime = 0L
+        watchConnectionManager.learnModeGestureRecording.collect { timestamp ->
+            if (timestamp > sessionStartTime && timestamp > lastRecordingTime && timestamp > 0L) {
+                lastRecordingTime = timestamp
+                isStudentWriting = true
             }
         }
     }
@@ -888,6 +890,13 @@ fun LearnModeSessionScreen(
             targetLetter = targetLetter,
             targetCase = targetCase,
             predictedLetter = predictedLetter,
+            showAnnotationTooltip = showAnnotationTooltip,
+            onAnnotateClick = {
+                showAnnotationDialog = true
+            },
+            onAnnotationTooltipDismissed = {
+                showAnnotationTooltip = false
+            },
             onDismiss = {
                 showProgressCheckDialog = false
                 // Notify watch that mobile dismissed feedback
@@ -967,6 +976,7 @@ fun LearnModeSessionScreen(
 
     // Function to handle skip/next
     fun handleSkipOrNext() {
+        isStudentWriting = false
         // Cancel any ongoing wrong letter animation
         if (wrongLetterAnimationActive) {
             wrongLetterAnimationActive = false
@@ -995,106 +1005,47 @@ fun LearnModeSessionScreen(
         ProgressIndicator(
             currentStep = currentStep,
             totalSteps = totalWords,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isStudentWriting) Modifier.alpha(0.35f) else Modifier),
             completedIndices = correctlyAnsweredWords,
             activeColor = PurpleColor,
             inactiveColor = LightPurpleColor,
             completedColor = Color(0xFF4CAF50),
             onSegmentClick = { index ->
-                // Cancel any ongoing wrong letter animation
-                if (wrongLetterAnimationActive) {
-                    wrongLetterAnimationActive = false
-                    wrongLetterText = ""
-                    pendingCorrectAction = null
+                if (!isStudentWriting) {
+                    // Cancel any ongoing wrong letter animation
+                    if (wrongLetterAnimationActive) {
+                        wrongLetterAnimationActive = false
+                        wrongLetterText = ""
+                        pendingCorrectAction = null
+                    }
+                    // Navigate to the clicked item
+                    currentWordIndex = index
                 }
-                // Navigate to the clicked item
-                currentWordIndex = index
             }
         )
 
         Spacer(Modifier.height(12.dp))
 
-        // Tooltip state for annotation button
-        val tooltipState = rememberTooltipState(isPersistent = false)
-
-        // Show tooltip on first load
-        LaunchedEffect(showAnnotationTooltip) {
-            if (showAnnotationTooltip) {
-                tooltipState.show()
-            }
-        }
-
-        // Annotate and Skip Button Row
+        // Skip Button Row
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isStudentWriting) Modifier.alpha(0.35f) else Modifier),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Annotate button (left) - opens learner profile annotation dialog
-            if (showAnnotationTooltip) {
-                TooltipBox(
-                    positionProvider = object : PopupPositionProvider {
-                        override fun calculatePosition(
-                            anchorBounds: androidx.compose.ui.unit.IntRect,
-                            windowSize: androidx.compose.ui.unit.IntSize,
-                            layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-                            popupContentSize: androidx.compose.ui.unit.IntSize
-                        ): androidx.compose.ui.unit.IntOffset {
-                            // Position tooltip below the icon with a right offset
-                            val x = anchorBounds.left + (anchorBounds.width / 2) - 15
-                            val y = anchorBounds.bottom + 16 // spacing below
-                            return androidx.compose.ui.unit.IntOffset(x, y)
-                        }
-                    },
-                    tooltip = {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color(0xFFE7DDFE) // Light purple color
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "Click here to Add Note",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                color = Color.Black,
-                                fontSize = 14.sp
-                            )
-                        }
-                    },
-                    state = tooltipState
-                ) {
-                    IconButton(onClick = {
-                        showAnnotationDialog = true
-                        showAnnotationTooltip = false
-                        onAudioClick()
-                    }) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_annotate),
-                            contentDescription = "Annotate",
-                            modifier = Modifier.size(28.dp),
-                            contentScale = ContentScale.Fit
-                        )
+            // Skip button
+            IconButton(
+                onClick = {
+                    if (!isStudentWriting) {
+                        onSkip()
+                        handleSkipOrNext()
                     }
-                }
-            } else {
-                IconButton(onClick = {
-                    showAnnotationDialog = true
-                    onAudioClick()
-                }) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_annotate),
-                        contentDescription = "Annotate",
-                        modifier = Modifier.size(28.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-            }
-
-            // Skip button (right)
-            IconButton(onClick = {
-                onSkip()
-                handleSkipOrNext()
-            }) {
+                },
+                enabled = !isStudentWriting
+            ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_skip),
                     contentDescription = "Skip",
@@ -1114,21 +1065,101 @@ fun LearnModeSessionScreen(
             color = Color.Black
         )
 
-        // Activity Type Subtitle (dynamic from database)
+        // Instruction text with pulsing animation during TTS playback
+        Spacer(Modifier.height(4.dp))
+
+        val subtitleAlpha = if (isTtsPlaying) {
+            val infiniteTransition = rememberInfiniteTransition(label = "voicePulse")
+            infiniteTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 0.4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "subtitlePulse"
+            ).value
+        } else {
+            1f
+        }
+        val subtitleColor = animateColorAsState(
+            targetValue = if (isTtsPlaying) PurpleColor else Color.Gray,
+            animationSpec = tween(300),
+            label = "subtitleColor"
+        ).value
+
         Text(
-            text = currentWord?.configurationType ?: "",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Medium,
-            color = PurpleColor
+            text = currentInstructionText,
+            fontSize = 16.sp,
+            fontWeight = if (isTtsPlaying) FontWeight.SemiBold else FontWeight.Medium,
+            color = subtitleColor.copy(alpha = subtitleAlpha),
+            textAlign = TextAlign.Center
         )
 
         Spacer(Modifier.height(24.dp))
 
-        // Centered content area (slightly raised)
-        Column(
+        // Large Content Card (yellow border, matching tutorial mode)
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            border = BorderStroke(3.dp, Color(0xFFAE8EFB))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Replay question button - top end
+                IconButton(
+                    onClick = {
+                        if (currentInstructionText.isNotEmpty()) {
+                            coroutineScope.launch {
+                                try {
+                                    if (useDeepgram) {
+                                        deepgramTtsManager.stop()
+                                    } else {
+                                        nativeTtsManager.stop()
+                                    }
+                                    isTtsPlaying = true
+                                    if (useDeepgram) {
+                                        deepgramTtsManager.speak(currentInstructionText) {
+                                            isTtsPlaying = false
+                                        }
+                                    } else {
+                                        nativeTtsManager.speak(currentInstructionText) {
+                                            coroutineScope.launch(Dispatchers.Main.immediate) {
+                                                isTtsPlaying = false
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("LearnModeSession", "Error replaying TTS", e)
+                                    isTtsPlaying = false
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Replay,
+                        contentDescription = "Replay question",
+                        modifier = Modifier.size(24.dp),
+                        tint = PurpleColor
+                    )
+                }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
@@ -1236,26 +1267,56 @@ fun LearnModeSessionScreen(
 
             Spacer(Modifier.weight(0.7f))
         }
+            }
+        }
 
         Spacer(Modifier.height(24.dp))
 
-        // End Session Button
-        Button(
-            onClick = { showEndSessionConfirmation = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = BlueColor
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                text = "End Session",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
+        // "Student is air writing..." indicator or End Session button
+        if (isStudentWriting) {
+            val writingPulse = rememberInfiniteTransition(label = "writingPulse")
+            val writingAlpha by writingPulse.animateFloat(
+                initialValue = 1f,
+                targetValue = 0.4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(800),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "writingAlpha"
             )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${studentName.ifEmpty { "Student" }} is air writing...",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PurpleColor.copy(alpha = writingAlpha),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            // End Session Button
+            Button(
+                onClick = { showEndSessionConfirmation = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BlueColor
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "End Session",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 
@@ -1672,6 +1733,42 @@ private fun NameThePictureDisplay(
 }
 
 
+private fun getInstructionText(configurationType: String, word: String?): String {
+    return when (configurationType) {
+        "Write the Word" -> {
+            val phrases = listOf(
+                "Can you write the word %s?",
+                "Let's write the word %s!",
+                "Try writing the word %s.",
+                "Can you spell the word %s?",
+                "Trace and write the word %s."
+            )
+            word?.let { phrases.random().format(it) } ?: phrases.random()
+        }
+        "Fill in the Blank" -> {
+            val phrases = listOf(
+                "Fill in the missing letter to make the word %s!",
+                "What letter is missing in the word %s?",
+                "Can you complete the word %s?",
+                "Trace the right letter to finish the word %s."
+            )
+            word?.let { phrases.random().format(it) } ?: phrases.random()
+        }
+        "Name the Picture" -> {
+            listOf(
+                "What is this picture? Trace and write its name!",
+                "Look at the picture. What is it? Trace the word!",
+                "What do you see? Trace and write the name!",
+                "Can you name this picture? Let's trace it!",
+                "What is shown in the picture? Trace its name!",
+                "Name the picture and trace the word.",
+                "Do you know what this is? Trace and write it!"
+            ).random()
+        }
+        else -> word?.let { "Can you write the word $it?" } ?: "What should you write?"
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun LearnModeSessionScreenPreview() {
@@ -1683,12 +1780,16 @@ fun LearnModeSessionScreenPreview() {
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProgressCheckDialog(
     studentName: String,
     targetLetter: String,
     targetCase: String,
     predictedLetter: String,
+    showAnnotationTooltip: Boolean,
+    onAnnotateClick: () -> Unit,
+    onAnnotationTooltipDismissed: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1769,6 +1870,73 @@ private fun ProgressCheckDialog(
                 ) { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
+            // Annotation icon - top left
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 48.dp)
+            ) {
+                if (showAnnotationTooltip) {
+                    val tooltipState = rememberTooltipState(isPersistent = false)
+
+                    LaunchedEffect(Unit) {
+                        tooltipState.show()
+                    }
+
+                    TooltipBox(
+                        positionProvider = object : PopupPositionProvider {
+                            override fun calculatePosition(
+                                anchorBounds: androidx.compose.ui.unit.IntRect,
+                                windowSize: androidx.compose.ui.unit.IntSize,
+                                layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                                popupContentSize: androidx.compose.ui.unit.IntSize
+                            ): androidx.compose.ui.unit.IntOffset {
+                                val x = anchorBounds.left + (anchorBounds.width / 2) - 15
+                                val y = anchorBounds.bottom + 16
+                                return androidx.compose.ui.unit.IntOffset(x, y)
+                            }
+                        },
+                        tooltip = {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFFE7DDFE)
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Click here to Add Note",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    color = Color.Black,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        },
+                        state = tooltipState
+                    ) {
+                        IconButton(onClick = {
+                            onAnnotateClick()
+                            onAnnotationTooltipDismissed()
+                        }) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_annotate),
+                                contentDescription = "Annotate",
+                                modifier = Modifier.size(28.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                } else {
+                    IconButton(onClick = { onAnnotateClick() }) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_annotate),
+                            contentDescription = "Annotate",
+                            modifier = Modifier.size(28.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth(0.85f)
@@ -1822,6 +1990,27 @@ private fun ProgressCheckDialog(
                         lineHeight = 20.sp
                     )
                 }
+            }
+
+            // Continue button at the bottom
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3FA9F8)
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = "Continue",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
