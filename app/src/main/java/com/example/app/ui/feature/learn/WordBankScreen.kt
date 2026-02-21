@@ -43,6 +43,7 @@ fun WordBankScreen(
     // Local state for WordBankGenerationModal
     var isGenerationModalVisible by remember { mutableStateOf(false) }
     var generationPrompt by remember { mutableStateOf("") }
+    var generationWordCount by remember { mutableIntStateOf(5) }
 
     // Image picker launcher for add modal
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -210,11 +211,14 @@ fun WordBankScreen(
             isVisible = isGenerationModalVisible,
             promptInput = generationPrompt,
             isLoading = false,
+            wordCount = generationWordCount,
+            onWordCountChanged = { generationWordCount = it },
             onPromptInputChanged = { generationPrompt = it },
             onGenerate = { /* TODO: Wire to generation logic */ },
             onDismiss = {
                 isGenerationModalVisible = false
                 generationPrompt = ""
+                generationWordCount = 5
             }
         )
 
