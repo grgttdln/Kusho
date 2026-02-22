@@ -116,9 +116,9 @@ fun ActivitySetsScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // Title - Activity name + "Sets"
+            // Title - Activity Set name + "Activities"
             Text(
-                text = "$activityTitle Sets",
+                text = "$activityTitle Activities",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -150,7 +150,7 @@ fun ActivitySetsScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No sets in this activity.\nAdd sets to get started!",
+                            text = "No activities in this activity set.\nAdd activities to get started!",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color(0xFF808080),
@@ -214,7 +214,7 @@ fun ActivitySetsScreen(
             Spacer(Modifier.height(32.dp))
         }
 
-        // Floating "Add Sets" Button
+        // Floating "Add Activities" Button
         Button(
             onClick = onAddSetClick,
             modifier = Modifier
@@ -236,7 +236,7 @@ fun ActivitySetsScreen(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "Add Sets",
+                text = "Add Activities",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.White

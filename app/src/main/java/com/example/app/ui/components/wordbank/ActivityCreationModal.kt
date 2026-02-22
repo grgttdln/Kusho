@@ -100,8 +100,8 @@ fun ActivityCreationModal(
                 ) {
                     // Title
                     Text(
-                        text = "Activity Creation with Kuu",
-                        fontSize = 22.sp,
+                        text = "Let Kuu Create your Activities!",
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0B0B0B),
                         textAlign = TextAlign.Center
@@ -192,10 +192,12 @@ private fun ActivityInputSection(
     ) {
         // Label
         Text(
-            text = "What activity do you want to create?",
+            text = "What kind of Activity should Kuu Create?",
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
-            color = Color(0xFF0B0B0B)
+            color = Color(0xFF0B0B0B),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -284,7 +286,7 @@ private fun SuggestedPromptsSection(
     if (!isSuggestionsLoading && suggestedPrompts.isEmpty()) return
 
     Text(
-        text = "Need ideas? Start with these!",
+        text = "Not sure? Try these Activity Ideas!",
         fontSize = 16.sp,
         fontWeight = FontWeight.Medium,
         color = Color(0xFF0B0B0B),
@@ -389,7 +391,7 @@ private fun MagicButton(
             Text(
                 text = when (generationPhase) {
                     is GenerationPhase.Filtering -> "Filtering words... (1/3)"
-                    is GenerationPhase.Grouping -> "Grouping sets... (2/3)"
+                    is GenerationPhase.Grouping -> "Grouping activities... (2/3)"
                     is GenerationPhase.Configuring -> "Configuring... (3/3)"
                     else -> "Generating..."
                 },
@@ -407,7 +409,7 @@ private fun MagicButton(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Do the magic!",
+                text = "Generate Activity",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White

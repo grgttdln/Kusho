@@ -167,7 +167,7 @@ fun SelectSetsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No sets available.\nCreate a set to get started!",
+                        text = "No activities available.\nCreate an activity to get started!",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color(0xFF808080),
@@ -239,7 +239,7 @@ fun SelectSetsScreen(
             enabled = selectedSets.isNotEmpty()
         ) {
             Text(
-                text = "Add ${selectedSets.size} Activities",
+                text = if (selectedSets.size == 1) "Add 1 Activity" else "Add ${selectedSets.size} Activities",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,

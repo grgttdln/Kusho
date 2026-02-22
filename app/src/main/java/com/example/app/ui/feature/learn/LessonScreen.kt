@@ -86,7 +86,7 @@ fun LessonScreen(
             Spacer(Modifier.height(20.dp))
 
             NavigationTile(
-                title = "Your Sets",
+                title = "My Activities",
                 backgroundColor = Color(0xFF5DB7FF),
                 imageRes = R.drawable.ic_activities,
                 onClick = onNavigateToSets
@@ -95,7 +95,7 @@ fun LessonScreen(
             Spacer(Modifier.height(20.dp))
 
             NavigationTile(
-                title = "Your Activities",
+                title = "My Activity Sets",
                 backgroundColor = Color(0xFF5DB7FF),
                 imageRes = R.drawable.ic_activity_set,
                 onClick = onNavigateToActivities
