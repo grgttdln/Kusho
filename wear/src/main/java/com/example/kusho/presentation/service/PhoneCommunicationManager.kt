@@ -58,6 +58,19 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
     private val _learnModeFeedbackDismissed = MutableStateFlow(0L)
     val learnModeFeedbackDismissed: StateFlow<Long> = _learnModeFeedbackDismissed.asStateFlow()
 
+    // StateFlow for Tutorial Mode feedback from phone (to show correct/incorrect screen)
+    data class TutorialModeFeedbackEvent(
+        val isCorrect: Boolean = false,
+        val predictedLetter: String = "",
+        val timestamp: Long = 0L
+    )
+    private val _tutorialModeFeedbackEvent = MutableStateFlow(TutorialModeFeedbackEvent())
+    val tutorialModeFeedbackEvent: StateFlow<TutorialModeFeedbackEvent> = _tutorialModeFeedbackEvent.asStateFlow()
+
+    // StateFlow for Tutorial Mode feedback dismissed from phone
+    private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
+    val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
+
     // StateFlow to track if mobile app is in Tutorial Mode session
     private val _isPhoneInTutorialMode = MutableStateFlow(false)
     val isPhoneInTutorialMode: StateFlow<Boolean> = _isPhoneInTutorialMode.asStateFlow()
@@ -79,6 +92,9 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
         private const val MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED = "/learn_mode_feedback_dismissed"
         private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
+        private const val MESSAGE_PATH_LEARN_MODE_PHONE_READY = "/learn_mode_phone_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_WATCH_READY = "/learn_mode_watch_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING = "/learn_mode_gesture_recording"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -90,6 +106,10 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
         private const val MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED = "/tutorial_mode_feedback_dismissed"
         private const val MESSAGE_PATH_TUTORIAL_MODE_RETRY = "/tutorial_mode_retry"
         private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING = "/tutorial_mode_gesture_recording"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK = "/tutorial_mode_show_feedback"
 
         private const val BATTERY_UPDATE_INTERVAL_MS = 60000L // 1 minute
     }
@@ -278,9 +298,13 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                 android.util.Log.d("PhoneCommunicationMgr", "🎊 Session complete")
                 com.example.kusho.presentation.tutorial.TutorialModeStateHolder.markSessionComplete()
             }
+            MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK -> {
+                android.util.Log.d("PhoneCommunicationMgr", "🎯 Tutorial Mode feedback received")
+                handleTutorialModeFeedback(messageEvent.data)
+            }
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED -> {
-                android.util.Log.d("PhoneCommunicationMgr", "👆 Mobile dismissed feedback - clearing watch feedback")
-                com.example.kusho.presentation.tutorial.TutorialModeStateHolder.clearFeedback()
+                android.util.Log.d("PhoneCommunicationMgr", "👆 Mobile dismissed Tutorial Mode feedback")
+                _tutorialModeFeedbackDismissed.value = System.currentTimeMillis()
             }
             MESSAGE_PATH_TUTORIAL_MODE_RETRY -> {
                 android.util.Log.d("PhoneCommunicationMgr", "🔄 Mobile requested retry")
@@ -289,6 +313,38 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET -> {
                 android.util.Log.d("PhoneCommunicationMgr", "♻️ Mobile requested session reset - clearing all state")
                 com.example.kusho.presentation.tutorial.TutorialModeStateHolder.resetSession()
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY -> {
+                // Phone is sending phone_ready pings, so it's in Tutorial Mode.
+                // Set this unconditionally so new PhoneCommunicationManager instances
+                // (created when watch re-enters TutorialModeScreen) learn the phone's state
+                // even if they missed the original /tutorial_mode_started message.
+                _isPhoneInTutorialMode.value = true
+                // Only reply if watch user is actually on the Tutorial Mode screen
+                if (com.example.kusho.presentation.tutorial.TutorialModeStateHolder.isWatchOnTutorialScreen.value) {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready & watch is on Tutorial screen - replying with watch ready")
+                    scope.launch {
+                        sendTutorialModeWatchReady()
+                    }
+                } else {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready but watch is NOT on Tutorial screen - ignoring")
+                }
+            }
+            MESSAGE_PATH_LEARN_MODE_PHONE_READY -> {
+                // Phone is sending phone_ready pings, so it's in Learn Mode.
+                // Set this unconditionally so new PhoneCommunicationManager instances
+                // (created when watch re-enters LearnModeScreen) learn the phone's state
+                // even if they missed the original /learn_mode_started message.
+                _isPhoneInLearnMode.value = true
+                // Only reply if watch user is actually on the Learn Mode screen
+                if (com.example.kusho.presentation.learn.LearnModeStateHolder.isWatchOnLearnScreen.value) {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready & watch is on Learn screen - replying with watch ready")
+                    scope.launch {
+                        sendLearnModeWatchReady()
+                    }
+                } else {
+                    android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready but watch is NOT on Learn screen - ignoring")
+                }
             }
         }
     }
@@ -345,6 +401,27 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
     }
 
     /**
+     * Handle Tutorial Mode feedback from phone
+     */
+    private fun handleTutorialModeFeedback(data: ByteArray) {
+        try {
+            val json = org.json.JSONObject(String(data))
+            val isCorrect = json.optBoolean("isCorrect", false)
+            val predictedLetter = json.optString("predictedLetter", "")
+
+            android.util.Log.d("PhoneCommunicationMgr", "🎯 Tutorial Mode feedback: correct=$isCorrect, letter=$predictedLetter")
+
+            _tutorialModeFeedbackEvent.value = TutorialModeFeedbackEvent(
+                isCorrect = isCorrect,
+                predictedLetter = predictedLetter,
+                timestamp = System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("PhoneCommunicationMgr", "Error parsing tutorial mode feedback", e)
+        }
+    }
+
+    /**
      * Handle incoming word data for fill-in-the-blanks
      */
     private fun handleWordData(data: ByteArray) {
@@ -395,9 +472,10 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             val letterCase = json.optString("letterCase", "")
             val currentIndex = json.optInt("currentIndex", 0)
             val totalLetters = json.optInt("totalLetters", 0)
+            val dominantHand = json.optString("dominantHand", "RIGHT")
 
             com.example.kusho.presentation.tutorial.TutorialModeStateHolder.updateLetterData(
-                letter, letterCase, currentIndex, totalLetters
+                letter, letterCase, currentIndex, totalLetters, dominantHand
             )
         } catch (e: Exception) {
             android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing letter data", e)
@@ -447,6 +525,94 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                         node.id,
                         MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
                         jsonPayload.toByteArray()
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch has started recording a gesture (student is writing)
+     */
+    suspend fun sendTutorialModeGestureRecording() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
+                        ByteArray(0)
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch has started recording a gesture in Learn Mode (student is writing)
+     */
+    suspend fun sendLearnModeGestureRecording() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING,
+                        ByteArray(0)
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch is on the Tutorial Mode screen and ready to receive data
+     */
+    suspend fun sendTutorialModeWatchReady() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY,
+                        ByteArray(0)
+                    ).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Notify phone that watch is on the Learn Mode screen and ready to receive data
+     */
+    suspend fun sendLearnModeWatchReady() {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            nodes.forEach { node ->
+                try {
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_WATCH_READY,
+                        ByteArray(0)
                     ).await()
                 } catch (e: Exception) {
                     e.printStackTrace()

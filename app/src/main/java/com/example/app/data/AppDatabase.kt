@@ -58,7 +58,7 @@ import com.example.app.data.entity.ActivityDescriptionCache
         TutorialCompletion::class,
         ActivityDescriptionCache::class
     ],
-    version = 16, // Added activity description cache
+    version = 17, // Added completedIndicesJson to TutorialCompletion for non-linear progress tracking
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

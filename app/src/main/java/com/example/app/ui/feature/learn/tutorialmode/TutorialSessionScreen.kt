@@ -2,13 +2,27 @@ package com.example.app.ui.feature.learn.tutorialmode
 
 import android.media.MediaPlayer
 import android.util.Log
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PanToolAlt
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -16,14 +30,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -52,11 +63,14 @@ import androidx.compose.ui.window.PopupPositionProvider
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
-import com.example.app.ui.components.common.ProgressCheckDialog
 import com.example.app.ui.components.common.ProgressIndicator
+import com.example.app.ui.components.common.EndSessionDialog
+import com.example.app.ui.components.common.ResumeSessionDialog
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
 import com.example.app.ui.components.tutorial.AnimatedLetterView
+import com.example.app.data.entity.getCompletedIndices
+import com.example.app.data.entity.serializeCompletedIndices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +80,8 @@ private val LightYellowColor = Color(0xFFFFF3C4)
 private val BlueButtonColor = Color(0xFF3FA9F8)
 private val YellowIconColor = Color(0xFFFFC700) // #FFC700 for tutorial mode icons
 private val OrangeButtonColor = Color(0xFFFF8C42) // Orange for tutorial mode button
+private val GreenCompletedColor = Color(0xFF4CAF50) // Green for completed letters
+private val PendingYellowBorder = Color(0xFFFFC107) // Yellow border for pending tiles
 private val LightYellowTooltipColor = Color(0xFFFFF9E6) // Light yellow for tooltip
 private val BlueAnnotationColor = Color(0xFF42A5F5) // Blue for annotation dialog
 
@@ -78,6 +94,7 @@ fun TutorialSessionScreen(
     studentId: Long = 0L,
     dominantHand: String = "RIGHT",
     onEndSession: () -> Unit,
+    onEarlyExit: () -> Unit = onEndSession,
     modifier: Modifier = Modifier,
     initialStep: Int = 1,
     totalSteps: Int = 0, // Will be calculated from letters
@@ -133,13 +150,35 @@ fun TutorialSessionScreen(
     var predictedLetter by remember { mutableStateOf("") }
     var showAnimation by remember { mutableStateOf(false) } // Toggle for animation vs static image
     
+    // Phase 1: Watch ready state and end session confirmation
+    var isWatchReady by remember { mutableStateOf(false) }
+    var showEndSessionConfirmation by remember { mutableStateOf(false) }
+    var showResumeDialog by remember { mutableStateOf(false) }
+    var resumeChecked by remember { mutableStateOf(false) }
+    
+    // Phase 2: Track completed letter indices (for green progress bar segments)
+    var completedIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    // Track which items the student has attempted air-writing (for revisit auto-advance)
+    var attemptedIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    // Phase 2: Card stack grid navigation overlay
+    var showCardStackGrid by remember { mutableStateOf(false) }
+    // Voice playback highlight state
+    var isVoicePlaying by remember { mutableStateOf(false) }
+    // Restart confirmation (second layer after ResumeSessionDialog)
+    var showRestartConfirmation by remember { mutableStateOf(false) }
+    
+    // Phase 3: "Student is writing" indicator + UI lock
+    var isStudentWriting by remember { mutableStateOf(false) }
+    
     // Annotation dialog state
     var showAnnotationDialog by remember { mutableStateOf(false) }
     var annotationsMap by remember { mutableStateOf<Map<Int, AnnotationData>>(emptyMap()) }
     
-    // Tooltip state for annotation button
+    // Tooltip state for grid/card-stack icon
     var showAnnotationTooltip by remember { mutableStateOf(true) }
     val tooltipState = rememberTooltipState(isPersistent = false)
+    // Tooltip state for annotation icon in progress check overlay
+    var showOverlayAnnotationTooltip by remember { mutableStateOf(true) }
 
     // Coroutine scope for async operations
     val coroutineScope = rememberCoroutineScope()
@@ -150,6 +189,15 @@ fun TutorialSessionScreen(
     val annotationSummaryDao = remember { database.annotationSummaryDao() }
     val tutorialCompletionDao = remember { database.tutorialCompletionDao() }
     val geminiRepository = remember { com.example.app.data.repository.GeminiRepository() }
+
+    // Pre-compute total letter count (needed by lambdas defined before the full letter lists)
+    val letterCount = remember(title, letterType) {
+        when (title.lowercase()) {
+            "vowels" -> 5
+            "consonants" -> 21
+            else -> 0
+        }
+    }
 
     // Generate a unique setId based on tutorial session (title + letterType)
     // This ensures annotations are saved per tutorial section
@@ -166,18 +214,53 @@ fun TutorialSessionScreen(
 
     // Save completion record and end session
     val completeTutorialAndEnd: () -> Unit = {
+        // Notify watch immediately so it shows the completion screen (dis_watch_complete)
+        // while the phone transitions to the analytics screen — matches Learn Mode behavior
+        watchConnectionManager.notifyTutorialModeSessionComplete()
         coroutineScope.launch {
             if (studentId > 0L) {
                 withContext(Dispatchers.IO) {
+                    // Delete any in-progress row first, then insert a completed one
+                    tutorialCompletionDao.deleteInProgress(studentId, tutorialSetId)
+                    val allIndices = (0 until letterCount).toSet()
                     tutorialCompletionDao.insertIfNotExists(
                         com.example.app.data.entity.TutorialCompletion(
                             studentId = studentId,
-                            tutorialSetId = tutorialSetId
+                            tutorialSetId = tutorialSetId,
+                            lastCompletedStep = letterCount,
+                            totalSteps = letterCount,
+                            completedAt = System.currentTimeMillis(),
+                            completedIndicesJson = serializeCompletedIndices(allIndices)
                         )
                     )
                 }
             }
             onEndSession()
+        }
+    }
+
+    // Save partial progress and exit early (non-linear safe: saves exact completed indices)
+    val saveProgressAndExit: () -> Unit = {
+        coroutineScope.launch {
+            if (studentId > 0L && completedIndices.isNotEmpty()) {
+                withContext(Dispatchers.IO) {
+                    // Upsert in-progress record (completedAt = null)
+                    val existingProgress = tutorialCompletionDao.getInProgressSession(studentId, tutorialSetId)
+                    tutorialCompletionDao.upsertProgress(
+                        com.example.app.data.entity.TutorialCompletion(
+                            id = existingProgress?.id ?: 0,
+                            studentId = studentId,
+                            tutorialSetId = tutorialSetId,
+                            lastCompletedStep = completedIndices.size, // Actual count of completed letters
+                            totalSteps = letterCount,
+                            completedAt = null, // null = in-progress
+                            completedIndicesJson = serializeCompletedIndices(completedIndices)
+                        )
+                    )
+                }
+            }
+            watchConnectionManager.notifyTutorialModeEnded()
+            onEarlyExit()
         }
     }
 
@@ -202,6 +285,27 @@ fun TutorialSessionScreen(
                 }
                 annotationsMap = loadedMap
             }
+        }
+    }
+
+    // Check for existing in-progress session and show resume dialog
+    // Stores parsed completed indices for use in the resume dialog
+    var resumedCompletedIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    LaunchedEffect(studentId, tutorialSetId) {
+        if (studentId > 0L && !resumeChecked) {
+            val inProgress = withContext(Dispatchers.IO) {
+                tutorialCompletionDao.getInProgressSession(studentId, tutorialSetId)
+            }
+            if (inProgress != null && inProgress.lastCompletedStep > 0) {
+                // Parse the specific completed indices from JSON
+                resumedCompletedIndices = inProgress.getCompletedIndices()
+                // Find the first uncompleted letter to position the cursor
+                val maxSteps = letterCount
+                val firstIncomplete = (0 until maxSteps).firstOrNull { it !in resumedCompletedIndices } ?: 0
+                currentStep = firstIncomplete + 1
+                showResumeDialog = true
+            }
+            resumeChecked = true
         }
     }
     
@@ -283,6 +387,28 @@ fun TutorialSessionScreen(
         watchConnectionManager.notifyTutorialModeStarted(studentName, title)
     }
 
+    // Two-way handshake: send phone_ready immediately and heartbeat every 2s until watch replies
+    LaunchedEffect(Unit) {
+        // Send initial phone_ready signal
+        watchConnectionManager.sendTutorialModePhoneReady()
+        // Heartbeat: keep pinging every 2 seconds until watch responds
+        while (!isWatchReady) {
+            kotlinx.coroutines.delay(2000)
+            if (!isWatchReady) {
+                watchConnectionManager.sendTutorialModePhoneReady()
+            }
+        }
+    }
+
+    // Listen for watch ready signal (watch replies to our phone_ready or sends its own on entry)
+    LaunchedEffect(Unit) {
+        watchConnectionManager.tutorialModeWatchReady.collect { timestamp ->
+            if (timestamp > 0L) {
+                isWatchReady = true
+            }
+        }
+    }
+
     // Auto-show and auto-dismiss annotation tooltip after 5 seconds
     LaunchedEffect(showAnnotationTooltip) {
         if (showAnnotationTooltip) {
@@ -299,8 +425,9 @@ fun TutorialSessionScreen(
     // when the user leaves (Practice Again or Continue).
     
     // Send current letter data to watch whenever it changes AND play pre-recorded voice prompt
-    LaunchedEffect(currentStep, currentLetter) {
-        if (currentLetter.isNotEmpty()) {
+    // Gated behind isWatchReady so we don't send data before the watch is listening
+    LaunchedEffect(currentStep, currentLetter, isWatchReady, showResumeDialog) {
+        if (currentLetter.isNotEmpty() && isWatchReady && !showResumeDialog) {
             watchConnectionManager.sendTutorialModeLetterData(
                 letter = currentLetter,
                 letterCase = letterType,
@@ -319,9 +446,12 @@ fun TutorialSessionScreen(
                     voiceMediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                     afd.close()
                     voiceMediaPlayer.prepare()
+                    isVoicePlaying = true
+                    voiceMediaPlayer.setOnCompletionListener { isVoicePlaying = false }
                     voiceMediaPlayer.start()
                     Log.d("TutorialSession", "Playing pre-recorded voice for: $currentLetter ($letterType)")
                 } catch (e: Exception) {
+                    isVoicePlaying = false
                     Log.e("TutorialSession", "Error playing voice prompt", e)
                 }
             }
@@ -337,8 +467,11 @@ fun TutorialSessionScreen(
             if (skipTime > sessionStartTime && skipTime > lastSkipTime && timeSinceLastSkip >= 500) {
                 lastSkipTime = skipTime
                 val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                if (currentStep < maxSteps) {
-                    currentStep++
+                // Wrap around to first unanswered item instead of stopping at end
+                val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in completedIndices }
+                    ?: (0 until currentStep - 1).firstOrNull { it !in completedIndices }
+                if (nextIncomplete != null) {
+                    currentStep = nextIncomplete + 1
                 }
                 onSkip()
             }
@@ -347,41 +480,86 @@ fun TutorialSessionScreen(
     
     // Listen for gesture results from watch
     LaunchedEffect(Unit) {
+        val sessionStartTime = System.currentTimeMillis()
         var lastGestureTime = 0L
         watchConnectionManager.tutorialModeGestureResult.collect { result ->
             val timestamp = result["timestamp"] as? Long ?: 0L
-            if (timestamp > lastGestureTime && result.isNotEmpty()) {
+            if (timestamp > sessionStartTime && timestamp > lastGestureTime && result.isNotEmpty()) {
                 lastGestureTime = timestamp
-                isCorrectGesture = result["isCorrect"] as? Boolean ?: false
-                predictedLetter = result["predictedLetter"] as? String ?: ""
-                showProgressCheck = true
-            }
-        }
-    }
-    
-    // Listen for feedback dismissal from watch
-    LaunchedEffect(Unit) {
-        var lastDismissTime = 0L
-        watchConnectionManager.tutorialModeFeedbackDismissed.collect { timestamp ->
-            if (timestamp > lastDismissTime && timestamp > 0L) {
-                lastDismissTime = timestamp
-                if (showProgressCheck) {
-                    showProgressCheck = false
-                    // If correct, move to next letter
-                    if (isCorrectGesture) {
-                        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                        if (currentStep < maxSteps) {
-                            currentStep++
-                        } else {
+                val gestureCorrect = result["isCorrect"] as? Boolean ?: false
+                val gesturePredicted = result["predictedLetter"] as? String ?: ""
+                isStudentWriting = false // Recording finished, student is no longer writing
+
+                // Send feedback to watch (phone is single source of truth)
+                watchConnectionManager.sendTutorialModeFeedback(gestureCorrect, gesturePredicted)
+
+                val itemIndex = currentStep - 1
+                val isRevisit = itemIndex in attemptedIndices
+                attemptedIndices = attemptedIndices + itemIndex
+
+                if (isRevisit) {
+                    // REVISIT: auto-advance or auto-retry (no dialog)
+                    val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                    if (gestureCorrect) {
+                        // Auto-mark complete and advance
+                        val newCompleted = completedIndices + itemIndex
+                        completedIndices = newCompleted
+                        // Dismiss feedback on watch immediately
+                        watchConnectionManager.notifyTutorialModeFeedbackDismissed()
+                        if (newCompleted.size >= maxSteps) {
                             completeTutorialAndEnd()
+                        } else {
+                            // Auto-navigate to next unanswered
+                            val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in newCompleted }
+                                ?: (0 until currentStep - 1).firstOrNull { it !in newCompleted }
+                            if (nextIncomplete != null) {
+                                currentStep = nextIncomplete + 1
+                            }
+                        }
+                    } else {
+                        // Auto-retry: show wrong feedback briefly, then retry same item
+                        val letterToRetry = currentLetter
+                        val stepToRetry = currentStep
+                        showAnimation = false
+                        coroutineScope.launch {
+                            kotlinx.coroutines.delay(1500L)
+                            watchConnectionManager.notifyTutorialModeFeedbackDismissed()
+                            watchConnectionManager.notifyTutorialModeRetry()
+                            if (letterToRetry.isNotEmpty()) {
+                                watchConnectionManager.sendTutorialModeLetterData(
+                                    letter = letterToRetry,
+                                    letterCase = letterType,
+                                    currentIndex = stepToRetry,
+                                    totalLetters = calculatedTotalSteps,
+                                    dominantHand = dominantHand
+                                )
+                            }
                         }
                     }
+                } else {
+                    // FIRST ATTEMPT: show teacher-gated ProgressCheckDialog
+                    isCorrectGesture = gestureCorrect
+                    predictedLetter = gesturePredicted
+                    showProgressCheck = true
                 }
             }
         }
     }
-
-    // Progress Check Dialog
+    
+    // Phase 3: Listen for gesture recording signal from watch (student started writing)
+    LaunchedEffect(Unit) {
+        val sessionStartTime = System.currentTimeMillis()
+        var lastRecordingTime = 0L
+        watchConnectionManager.tutorialModeGestureRecording.collect { timestamp ->
+            if (timestamp > sessionStartTime && timestamp > lastRecordingTime && timestamp > 0L) {
+                lastRecordingTime = timestamp
+                isStudentWriting = true
+                showAnimation = true // Auto-play the letter trace animation
+            }
+        }
+    }
+    
+    // Progress Check Dialog (teacher-gated: only Continue button advances)
     if (showProgressCheck) {
         ProgressCheckDialog(
             isCorrect = isCorrectGesture,
@@ -389,20 +567,41 @@ fun TutorialSessionScreen(
             targetLetter = currentLetter,
             targetCase = letterType,
             predictedLetter = predictedLetter,
-            onDismiss = {
+            showAnnotationTooltip = showOverlayAnnotationTooltip,
+            onAnnotateClick = {
+                showAnnotationDialog = true
+            },
+            onAnnotationTooltipDismissed = {
+                showOverlayAnnotationTooltip = false
+            },
+            onContinue = {
                 showProgressCheck = false
-                // Notify watch that mobile dismissed feedback
+                // Reset Phase 3 air-writing state so next letter starts idle
+                isStudentWriting = false
+                showAnimation = false
+                // Notify watch to dismiss feedback (phone-driven SSOT)
                 watchConnectionManager.notifyTutorialModeFeedbackDismissed()
                 if (isCorrectGesture) {
-                    // Move to next letter on correct gesture
+                    // Mark current step as completed (green in progress bar)
+                    val newCompletedIndices = completedIndices + (currentStep - 1)
+                    completedIndices = newCompletedIndices
                     val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                    if (currentStep < maxSteps) {
-                        currentStep++
-                    } else {
+                    // Check if ALL letters are now completed (non-linear safe)
+                    if (newCompletedIndices.size >= maxSteps) {
                         completeTutorialAndEnd()
+                    } else {
+                        // Find the next incomplete letter, starting from the next sequential position
+                        val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in newCompletedIndices }
+                            ?: (0 until currentStep - 1).firstOrNull { it !in newCompletedIndices }
+                        if (nextIncomplete != null) {
+                            currentStep = nextIncomplete + 1
+                        }
+                        // sendTutorialModeLetterData is triggered by LaunchedEffect on currentStep change
                     }
                 } else {
                     // On incorrect, notify watch to retry and resend letter data
+                    isStudentWriting = false
+                    showAnimation = false
                     watchConnectionManager.notifyTutorialModeRetry()
                     if (currentLetter.isNotEmpty()) {
                         watchConnectionManager.sendTutorialModeLetterData(
@@ -495,31 +694,51 @@ fun TutorialSessionScreen(
         )
     }
 
+    Box(modifier = modifier.fillMaxSize()) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
             .padding(top = 40.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Progress Bar
+        // Phase 2.2: Interactive Progress Bar — green for completed, yellow for current, clickable to navigate
+        // Grayed out and non-interactive when student is air writing
         ProgressIndicator(
             currentStep = currentStep,
             totalSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isStudentWriting) Modifier.alpha(0.35f) else Modifier),
+            completedIndices = completedIndices,
             activeColor = YellowColor,
-            inactiveColor = LightYellowColor
+            inactiveColor = LightYellowColor,
+            completedColor = GreenCompletedColor,
+            onSegmentClick = { clickedIndex ->
+                if (!isStudentWriting) {
+                    // Navigate to the clicked letter (1-based step)
+                    val newStep = clickedIndex + 1
+                    val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                    if (newStep in 1..maxSteps) {
+                        currentStep = newStep
+                        // Watch sync is handled automatically by LaunchedEffect(currentStep, ...)
+                    }
+                }
+            }
         )
 
         Spacer(Modifier.height(12.dp))
 
-        // Annotate and Skip Button Row (matching Learn Mode layout)
+        // Phase 2.3: Card Stack icon (left) and Skip icon (right) row
+        // Grayed out when student is air writing
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isStudentWriting) Modifier.alpha(0.35f) else Modifier),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Annotate button (left) - opens learner profile annotation dialog
+            // Card Stack / Grid icon (left) - opens full-screen grid navigation
             if (showAnnotationTooltip) {
                 TooltipBox(
                     positionProvider = object : PopupPositionProvider {
@@ -529,21 +748,20 @@ fun TutorialSessionScreen(
                             layoutDirection: androidx.compose.ui.unit.LayoutDirection,
                             popupContentSize: androidx.compose.ui.unit.IntSize
                         ): androidx.compose.ui.unit.IntOffset {
-                            // Position tooltip below the icon with a right offset
                             val x = anchorBounds.left + (anchorBounds.width / 2) - 15
-                            val y = anchorBounds.bottom + 16 // spacing below
+                            val y = anchorBounds.bottom + 16
                             return androidx.compose.ui.unit.IntOffset(x, y)
                         }
                     },
                     tooltip = {
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = LightYellowTooltipColor // Light yellow color
+                                containerColor = LightYellowTooltipColor
                             ),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "Click here to Add Note",
+                                text = "View all letters",
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 color = Color.Black,
                                 fontSize = 14.sp
@@ -552,49 +770,63 @@ fun TutorialSessionScreen(
                     },
                     state = tooltipState
                 ) {
-                    IconButton(onClick = {
-                        showAnnotationDialog = true
-                        showAnnotationTooltip = false
-                        onAudioClick()
-                    }) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_annotate),
-                            contentDescription = "Annotate",
+                    IconButton(
+                        onClick = {
+                            if (!isStudentWriting) {
+                                showCardStackGrid = true
+                                showAnnotationTooltip = false
+                            }
+                        },
+                        enabled = !isStudentWriting
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ViewModule,
+                            contentDescription = "Card Stack",
                             modifier = Modifier.size(28.dp),
-                            contentScale = ContentScale.Fit,
-                            colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
+                            tint = YellowIconColor.copy(alpha = 0.5f)
                         )
                     }
                 }
             } else {
-                IconButton(onClick = {
-                    showAnnotationDialog = true
-                    onAudioClick()
-                }) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_annotate),
-                        contentDescription = "Annotate",
+                IconButton(
+                    onClick = {
+                        if (!isStudentWriting) {
+                            showCardStackGrid = true
+                        }
+                    },
+                    enabled = !isStudentWriting
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ViewModule,
+                        contentDescription = "Card Stack",
                         modifier = Modifier.size(28.dp),
-                        contentScale = ContentScale.Fit,
-                        colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
+                        tint = YellowIconColor.copy(alpha = 0.5f)
                     )
                 }
             }
 
             // Skip button (right) - icon instead of text
-            IconButton(onClick = {
-                val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                if (currentStep < maxSteps) {
-                    currentStep++
-                }
-                onSkip()
-            }) {
+            IconButton(
+                onClick = {
+                    if (!isStudentWriting) {
+                        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+                        // Wrap around to first unanswered item instead of stopping at end
+                        val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in completedIndices }
+                            ?: (0 until currentStep - 1).firstOrNull { it !in completedIndices }
+                        if (nextIncomplete != null) {
+                            currentStep = nextIncomplete + 1
+                        }
+                        onSkip()
+                    }
+                },
+                enabled = !isStudentWriting
+            ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_skip),
                     contentDescription = "Skip",
                     modifier = Modifier.size(28.dp),
                     contentScale = ContentScale.Fit,
-                    colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f)) // #FFC700 @ 50% opacity
+                    colorFilter = ColorFilter.tint(YellowIconColor.copy(alpha = 0.5f))
                 )
             }
         }
@@ -607,6 +839,38 @@ fun TutorialSessionScreen(
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black
+        )
+
+        // Phase 2.1: Dynamic Voice Subtitle — per-letter prompt with voice highlight
+        Spacer(Modifier.height(4.dp))
+
+        // Pulsing alpha animation while voice is playing
+        val subtitleAlpha = if (isVoicePlaying) {
+            val infiniteTransition = rememberInfiniteTransition(label = "voicePulse")
+            infiniteTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 0.4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "subtitlePulse"
+            ).value
+        } else {
+            1f
+        }
+        val subtitleColor = animateColorAsState(
+            targetValue = if (isVoicePlaying) YellowColor else Color.Gray,
+            animationSpec = tween(300),
+            label = "subtitleColor"
+        ).value
+
+        Text(
+            text = getVoicePromptText(currentLetter, letterType),
+            fontSize = 16.sp,
+            fontWeight = if (isVoicePlaying) FontWeight.SemiBold else FontWeight.Medium,
+            color = subtitleColor.copy(alpha = subtitleAlpha),
+            textAlign = TextAlign.Center
         )
 
         Spacer(Modifier.height(24.dp))
@@ -628,47 +892,95 @@ fun TutorialSessionScreen(
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Toggle switch in top-right corner
-                Switch(
-                    checked = showAnimation,
-                    onCheckedChange = { showAnimation = it },
+                // Phase 2.4: Replay (left) and Hand/Animation toggle (right) icons in top-right row
+                // Grayed out when student is air writing
+                Row(
                     modifier = Modifier
-                        .align(Alignment.TopEnd),
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = BlueButtonColor,
-                        uncheckedThumbColor = Color.White,
-                        uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f)
-                    )
-                )
-
-                if (showAnimation) {
-                    // Display animated letter for current step
-                    if (currentLetter.isNotEmpty()) {
-                        AnimatedLetterView(
-                            letter = currentLetter.first(),
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .aspectRatio(1f),
-                            isUpperCase = letterType.lowercase() == "capital",
-                            strokeColor = Color.Black,
-                            numberColor = Color.White,
-                            circleColor = Color.Black,
-                            loopAnimation = true,
-                            loopDelay = 2000
+                        .align(Alignment.TopEnd)
+                        .then(if (isStudentWriting) Modifier.alpha(0.35f) else Modifier),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Replay voice prompt icon
+                    IconButton(
+                        enabled = !isStudentWriting,
+                        onClick = {
+                            // Replay the pre-recorded voice prompt for the current letter
+                            val voiceMap = if (letterType.lowercase() == "capital") capitalVoiceMap else smallVoiceMap
+                            val voiceResId = voiceMap[currentLetter.uppercase()]
+                            if (voiceResId != null) {
+                                try {
+                                    voiceMediaPlayer.reset()
+                                    val afd = context.resources.openRawResourceFd(voiceResId)
+                                    voiceMediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                                    afd.close()
+                                    voiceMediaPlayer.prepare()
+                                    isVoicePlaying = true
+                                    voiceMediaPlayer.setOnCompletionListener { isVoicePlaying = false }
+                                    voiceMediaPlayer.start()
+                                } catch (e: Exception) {
+                                    isVoicePlaying = false
+                                    Log.e("TutorialSession", "Error replaying voice prompt", e)
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Replay,
+                            contentDescription = "Replay voice prompt",
+                            modifier = Modifier.size(24.dp),
+                            tint = YellowIconColor
                         )
                     }
-                } else {
-                    // Display static drawable image
-                    currentLetterRes?.let { resId ->
-                        Image(
-                            painter = painterResource(id = resId),
-                            contentDescription = "Letter $currentLetter",
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .aspectRatio(1f),
-                            contentScale = ContentScale.Fit
+                    // Hand (pan_tool_alt) icon to toggle animation
+                    IconButton(
+                        onClick = { if (!isStudentWriting) showAnimation = !showAnimation },
+                        modifier = Modifier.size(40.dp),
+                        enabled = !isStudentWriting
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PanToolAlt,
+                            contentDescription = if (showAnimation) "Show static letter" else "Show animation",
+                            modifier = Modifier.size(24.dp),
+                            tint = if (showAnimation) YellowIconColor else Color.LightGray
                         )
+                    }
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    if (showAnimation) {
+                        // Display animated letter for current step
+                        if (currentLetter.isNotEmpty()) {
+                            AnimatedLetterView(
+                                letter = currentLetter.first(),
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .aspectRatio(1f),
+                                isUpperCase = letterType.lowercase() == "capital",
+                                strokeColor = Color.Black,
+                                numberColor = Color.White,
+                                circleColor = Color.Black,
+                                loopAnimation = true,
+                                loopDelay = 2000
+                            )
+                        }
+                    } else {
+                        // Display static drawable image
+                        currentLetterRes?.let { resId ->
+                            Image(
+                                painter = painterResource(id = resId),
+                                contentDescription = "Letter $currentLetter",
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .aspectRatio(1f),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     }
                 }
             }
@@ -676,48 +988,506 @@ fun TutorialSessionScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // End Session Button
-        Button(
-            onClick = onEndSession,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = BlueButtonColor
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                text = "End Session",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
+        // Phase 3: "Student is air writing..." indicator — replaces End Session button while active
+        if (isStudentWriting) {
+            val writingPulse = rememberInfiniteTransition(label = "writingPulse")
+            val writingAlpha by writingPulse.animateFloat(
+                initialValue = 1f,
+                targetValue = 0.4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(800),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "writingAlpha"
             )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${studentName.ifEmpty { "Student" }} is air writing...",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = YellowColor.copy(alpha = writingAlpha),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            // End Session Button
+            Button(
+                onClick = { showEndSessionConfirmation = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BlueButtonColor
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "End Session",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+
+    // Phase 1: Waiting for watch overlay
+    if (!isWatchReady) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {} // Block clicks through overlay
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                Spacer(Modifier.weight(1f))
+
+                Image(
+                    painter = painterResource(id = R.drawable.dis_pairing_tutorial),
+                    contentDescription = "Waiting for watch",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                    contentScale = ContentScale.Fit
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = "Waiting for $studentName...",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = YellowColor,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "Please open Tutorial Mode\non the watch to connect.",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White.copy(alpha = 0.85f),
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // Cancel Session button (same position as End Session)
+                Button(
+                    onClick = {
+                        watchConnectionManager.notifyTutorialModeEnded()
+                        onEarlyExit()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BlueButtonColor
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Cancel Session",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+
+    // Phase 1: End Session confirmation dialog
+    if (showEndSessionConfirmation) {
+        EndSessionDialog(
+            mascotDrawable = R.drawable.dis_end_session,
+            onEndSession = {
+                showEndSessionConfirmation = false
+                saveProgressAndExit()
+            },
+            onCancel = { showEndSessionConfirmation = false }
+        )
+    }
+
+    // Resume dialog — shown when there's saved progress from a previous session
+    if (showResumeDialog) {
+        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+        ResumeSessionDialog(
+            mascotDrawable = R.drawable.dis_pairing_tutorial,
+            studentName = studentName,
+            completedCount = resumedCompletedIndices.size,
+            totalCount = maxSteps,
+            unitLabel = "letters",
+            onResume = {
+                showResumeDialog = false
+                // Reset Phase 3 air-writing state to idle on resume
+                isStudentWriting = false
+                showAnimation = false
+                // Restore the exact completed indices (non-linear safe)
+                completedIndices = resumedCompletedIndices
+                // currentStep is already set to the first incomplete letter
+            },
+            onRestart = {
+                // Show a second confirmation before wiping progress
+                showRestartConfirmation = true
+            }
+        )
+    }
+
+    // Restart confirmation dialog (second layer)
+    if (showRestartConfirmation) {
+        Dialog(
+            onDismissRequest = { showRestartConfirmation = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .wrapContentHeight(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Restart Session?",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            text = "This will erase all progress (${resumedCompletedIndices.size} completed letter${if (resumedCompletedIndices.size != 1) "s" else ""}). Are you sure you want to start over?",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.DarkGray,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 21.sp
+                        )
+
+                        Spacer(Modifier.height(24.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Go Back button
+                            Button(
+                                onClick = { showRestartConfirmation = false },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.LightGray.copy(alpha = 0.3f)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Go Back",
+                                    color = Color.DarkGray,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            // Confirm Restart button
+                            Button(
+                                onClick = {
+                                    showRestartConfirmation = false
+                                    showResumeDialog = false
+                                    // Reset Phase 3 air-writing state to idle on restart
+                                    isStudentWriting = false
+                                    showAnimation = false
+                                    currentStep = 1
+                                    completedIndices = emptySet()
+                                    attemptedIndices = emptySet()
+                                    resumedCompletedIndices = emptySet()
+                                    coroutineScope.launch {
+                                        withContext(Dispatchers.IO) {
+                                            tutorialCompletionDao.deleteInProgress(studentId, tutorialSetId)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFE53935)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Restart",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Phase 2.3: Card Stack Grid Navigation overlay
+    if (showCardStackGrid) {
+        val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
+        val completedCount = completedIndices.size
+        CardStackGridDialog(
+            title = title,
+            letterNames = letterNames,
+            letterResources = letters,
+            completedIndices = completedIndices,
+            currentStep = currentStep,
+            totalSteps = maxSteps,
+            completedCount = completedCount,
+            onLetterSelected = { selectedIndex ->
+                currentStep = selectedIndex + 1
+                showCardStackGrid = false
+            },
+            onDismiss = { showCardStackGrid = false }
+        )
+    }
+
+    } // End of outer Box
+}
+
+/**
+ * Phase 2.3: Full-screen grid dialog showing all letter tiles for the session.
+ * Tiles are styled green (completed) or yellow (pending). Matches the reference UI:
+ * back arrow + title + "Select a Letter to navigate" + completion count + 2-column grid of letter tiles.
+ */
+@Composable
+private fun CardStackGridDialog(
+    title: String,
+    letterNames: List<String>,
+    letterResources: List<Int>,
+    completedIndices: Set<Int>,
+    currentStep: Int,
+    totalSteps: Int,
+    completedCount: Int,
+    onLetterSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 40.dp, bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Back button + Title row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = YellowColor,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = title,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Spacer(Modifier.weight(1f))
+                    // Invisible spacer to balance the back button
+                    Spacer(Modifier.size(48.dp))
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Subtitle
+                Text(
+                    text = "Select a Letter to navigate",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                // Completion count
+                Text(
+                    text = "$completedCount/$totalSteps Completed",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.DarkGray,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // 2-column grid of letter tiles
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    itemsIndexed(letterResources) { index, resId ->
+                        val isCompleted = index in completedIndices
+                        val borderColor = if (isCompleted) GreenCompletedColor else PendingYellowBorder
+
+                        Card(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .clickable { onLetterSelected(index) },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White
+                            ),
+                            border = BorderStroke(3.dp, borderColor)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = resId),
+                                    contentDescription = if (index < letterNames.size) "Letter ${letterNames[index]}" else "Letter",
+                                    modifier = Modifier
+                                        .fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-@Composable
-private fun ProgressIndicator(
-    currentStep: Int,
-    totalSteps: Int,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        repeat(totalSteps) { index ->
-            val isActive = index < currentStep
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        if (isActive) YellowColor else LightYellowColor
-                    )
-            )
+/**
+ * Returns the specific voice prompt subtitle text for a given letter and case.
+ * Each letter has a unique, varied phrase.
+ */
+private fun getVoicePromptText(letter: String, letterType: String): String {
+    if (letter.isEmpty()) return ""
+    val isCapital = letterType.lowercase() == "capital"
+    val key = letter.uppercase()
+    return if (isCapital) {
+        when (key) {
+            // Uppercase Vowels
+            "A" -> "Let's write a big A!"
+            "E" -> "Time for a capital E!"
+            "I" -> "Get ready for a big I!"
+            "O" -> "Let's draw a capital O!"
+            "U" -> "Here comes a big U!"
+            // Uppercase Consonants
+            "B" -> "Let's write a capital B!"
+            "C" -> "Time for a big C!"
+            "D" -> "Get ready for a capital D!"
+            "F" -> "Let's draw a big F!"
+            "G" -> "Here comes a capital G!"
+            "H" -> "Let's write a big H!"
+            "J" -> "Time for a capital J!"
+            "K" -> "Get ready for a big K!"
+            "L" -> "Let's draw a capital L!"
+            "M" -> "Here comes a big M!"
+            "N" -> "Let's write a capital N!"
+            "P" -> "Time for a big P!"
+            "Q" -> "Get ready for a capital Q!"
+            "R" -> "Let's draw a big R!"
+            "S" -> "Here comes a capital S!"
+            "T" -> "Let's write a big T!"
+            "V" -> "Time for a capital V!"
+            "W" -> "Get ready for a big W!"
+            "X" -> "Let's draw a big X!"
+            "Y" -> "Here comes a big Y!"
+            "Z" -> "Let's write a capital Z!"
+            else -> "Let's write a big $key!"
+        }
+    } else {
+        val lower = key.lowercase()
+        when (key) {
+            // Lowercase Vowels
+            "A" -> "Let's write a small a!"
+            "E" -> "Time for a lowercase e!"
+            "I" -> "Get ready for a small i!"
+            "O" -> "Let's draw a lowercase o!"
+            "U" -> "Here comes a small u!"
+            // Lowercase Consonants
+            "B" -> "Let's write a lowercase b!"
+            "C" -> "Time for a small c!"
+            "D" -> "Get ready for a lowercase d!"
+            "F" -> "Let's draw a small f!"
+            "G" -> "Here comes a lowercase g!"
+            "H" -> "Let's write a small h!"
+            "J" -> "Time for a lowercase j!"
+            "K" -> "Get ready for a small k!"
+            "L" -> "Let's draw a lowercase l!"
+            "M" -> "Here comes a small m!"
+            "N" -> "Let's write a lowercase n!"
+            "P" -> "Time for a small p!"
+            "Q" -> "Get ready for a lowercase q!"
+            "R" -> "Let's draw a small r!"
+            "S" -> "Here comes a lowercase s!"
+            "T" -> "Let's write a small t!"
+            "V" -> "Time for a lowercase v!"
+            "W" -> "Get ready for a small w!"
+            "X" -> "Let's draw a lowercase x!"
+            "Y" -> "Here comes a small y!"
+            "Z" -> "Let's write a lowercase z!"
+            else -> "Let's write a small $lower!"
         }
     }
 }
@@ -735,6 +1505,7 @@ fun TutorialSessionScreenPreview() {
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProgressCheckDialog(
     isCorrect: Boolean,
@@ -742,7 +1513,10 @@ private fun ProgressCheckDialog(
     targetLetter: String,
     targetCase: String,
     predictedLetter: String,
-    onDismiss: () -> Unit
+    showAnnotationTooltip: Boolean,
+    onAnnotateClick: () -> Unit,
+    onAnnotationTooltipDismissed: () -> Unit,
+    onContinue: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -828,21 +1602,96 @@ private fun ProgressCheckDialog(
                          predictedLetter.isNotEmpty() && 
                          !predictedLetter.equals(expectedCase, ignoreCase = false)
     
+    // Compute display letter with correct case for dynamic feedback text
+    val displayLetter = when (targetCase.lowercase()) {
+        "small", "lowercase" -> targetLetter.lowercase()
+        else -> targetLetter.uppercase()
+    }
+
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = { /* Teacher-gated: no dismiss on back or outside tap */ },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        )
     ) {
-        // Full-screen dark overlay
+        // Full-screen dark overlay (non-dismissable)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.7f))
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
+                .background(Color.Black.copy(alpha = 0.7f)),
             contentAlignment = Alignment.Center
         ) {
+            // Annotation icon - top left (yellow for tutorial mode)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 48.dp)
+            ) {
+                if (showAnnotationTooltip) {
+                    val tooltipState = rememberTooltipState(isPersistent = false)
+
+                    LaunchedEffect(Unit) {
+                        tooltipState.show()
+                    }
+
+                    TooltipBox(
+                        positionProvider = object : PopupPositionProvider {
+                            override fun calculatePosition(
+                                anchorBounds: androidx.compose.ui.unit.IntRect,
+                                windowSize: androidx.compose.ui.unit.IntSize,
+                                layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                                popupContentSize: androidx.compose.ui.unit.IntSize
+                            ): androidx.compose.ui.unit.IntOffset {
+                                val x = anchorBounds.left + (anchorBounds.width / 2) - 15
+                                val y = anchorBounds.bottom + 16
+                                return androidx.compose.ui.unit.IntOffset(x, y)
+                            }
+                        },
+                        tooltip = {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = YellowIconColor
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Click here to Add Note",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    color = Color.Black,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        },
+                        state = tooltipState
+                    ) {
+                        IconButton(onClick = {
+                            onAnnotateClick()
+                            onAnnotationTooltipDismissed()
+                        }) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_annotate),
+                                contentDescription = "Annotate",
+                                modifier = Modifier.size(28.dp),
+                                colorFilter = ColorFilter.tint(YellowIconColor),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                } else {
+                    IconButton(onClick = { onAnnotateClick() }) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_annotate),
+                            contentDescription = "Annotate",
+                            modifier = Modifier.size(28.dp),
+                            colorFilter = ColorFilter.tint(YellowIconColor),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth(0.85f)
@@ -864,12 +1713,12 @@ private fun ProgressCheckDialog(
                 
                 Spacer(Modifier.height(24.dp))
                 
-                // Title with first name only
+                // Main label: student name greeting
                 Text(
                     text = if (isCorrect) {
-                        "Great Job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                        "Great job${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
                     } else {
-                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}!"
+                        "Not quite${if (firstName.isNotEmpty()) ", $firstName" else ""}."
                     },
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
@@ -877,50 +1726,79 @@ private fun ProgressCheckDialog(
                     textAlign = TextAlign.Center
                 )
                 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 
-                // Body text with optional case mismatch disclaimer
-                if (isCorrect && hasCaseMismatch) {
+                // Sub label: letter-specific message
+                Text(
+                    text = if (isCorrect) {
+                        "You traced the letter $displayLetter!"
+                    } else {
+                        "Let's try the letter $displayLetter again!"
+                    },
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(Modifier.height(8.dp))
+                
+                // Sub label: encouragement text
+                if (isCorrect) {
                     Text(
-                        text = "You're doing super!\nKeep up the amazing work!",
+                        text = "Keep up the amazing work!",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
-                    )
-                    
-                    Spacer(Modifier.height(16.dp))
-                    
-                    Text(
-                        text = "Psst... you wrote ${if (predictedLetter.first().isUpperCase()) "uppercase" else "lowercase"} ${predictedLetter.uppercase()}, " +
-                              "but we're practicing ${if (targetCase.lowercase() in listOf("small", "lowercase")) "lowercase" else "uppercase"} letters! " +
-                              "They look similar, so that's still great! 😊",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.9f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
-                    )
-                } else if (isCorrect) {
-                    Text(
-                        text = "You're doing super!\nKeep up the amazing work!",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center
                     )
                 } else {
                     Text(
                         text = "Let's give it another go!",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 24.sp
+                        color = Color.White.copy(alpha = 0.85f),
+                        textAlign = TextAlign.Center
                     )
                 }
+                
+                // Case mismatch disclaimer (if applicable)
+                if (isCorrect && hasCaseMismatch) {
+                    Spacer(Modifier.height(12.dp))
+                    
+                    Text(
+                        text = "Psst... you wrote ${if (predictedLetter.first().isUpperCase()) "uppercase" else "lowercase"} ${predictedLetter.uppercase()}, " +
+                              "but we're practicing ${if (targetCase.lowercase() in listOf("small", "lowercase")) "lowercase" else "uppercase"} letters! " +
+                              "They look similar, so that's still great! \uD83D\uDE0A",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                }
+
+            }
+
+            // Teacher-led Continue button at the bottom
+            Button(
+                onClick = onContinue,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3FA9F8)
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = "Continue",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

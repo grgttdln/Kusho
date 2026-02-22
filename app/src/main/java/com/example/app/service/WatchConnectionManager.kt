@@ -91,6 +91,22 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
     val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
 
+    // Watch ready signal - watch has entered Tutorial Mode screen and is ready to receive data
+    private val _tutorialModeWatchReady = MutableStateFlow(0L)
+    val tutorialModeWatchReady: StateFlow<Long> = _tutorialModeWatchReady.asStateFlow()
+
+    // Gesture recording signal - watch has started recording (student is writing)
+    private val _tutorialModeGestureRecording = MutableStateFlow(0L)
+    val tutorialModeGestureRecording: StateFlow<Long> = _tutorialModeGestureRecording.asStateFlow()
+
+    // Watch ready signal for Learn Mode - watch has entered Learn Mode screen and is ready
+    private val _learnModeWatchReady = MutableStateFlow(0L)
+    val learnModeWatchReady: StateFlow<Long> = _learnModeWatchReady.asStateFlow()
+
+    // Gesture recording signal for Learn Mode - watch has started recording (student is writing)
+    private val _learnModeGestureRecording = MutableStateFlow(0L)
+    val learnModeGestureRecording: StateFlow<Long> = _learnModeGestureRecording.asStateFlow()
+
     // Pairing request from watch
     private val _pairingRequest = MutableStateFlow<PairingRequestEvent?>(null)
     val pairingRequest: StateFlow<PairingRequestEvent?> = _pairingRequest.asStateFlow()
@@ -135,6 +151,9 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
         private const val MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED = "/learn_mode_feedback_dismissed"
         private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
+        private const val MESSAGE_PATH_LEARN_MODE_PHONE_READY = "/learn_mode_phone_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_WATCH_READY = "/learn_mode_watch_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING = "/learn_mode_gesture_recording"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -146,6 +165,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED = "/tutorial_mode_feedback_dismissed"
         private const val MESSAGE_PATH_TUTORIAL_MODE_RETRY = "/tutorial_mode_retry"
         private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING = "/tutorial_mode_gesture_recording"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK = "/tutorial_mode_show_feedback"
 
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
     }
@@ -366,6 +389,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * Notify watch that Learn Mode session has started
      */
     fun notifyLearnModeStarted() {
+        _learnModeWatchReady.value = 0L // Reset handshake state for fresh session
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
@@ -634,6 +658,8 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_TUTORIAL_MODE_SKIP,
             MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED,
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY,
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
             MESSAGE_PATH_BATTERY_STATUS
         )
         
@@ -744,6 +770,22 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED -> {
                 Log.d(TAG, "👆 Watch dismissed feedback - dismissing mobile dialog")
                 _tutorialModeFeedbackDismissed.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY -> {
+                Log.d(TAG, "✅ Watch is ready for Tutorial Mode")
+                _tutorialModeWatchReady.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING -> {
+                Log.d(TAG, "✍️ Watch started recording gesture (student is writing)")
+                _tutorialModeGestureRecording.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_LEARN_MODE_WATCH_READY -> {
+                Log.d(TAG, "✅ Watch is ready for Learn Mode")
+                _learnModeWatchReady.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING -> {
+                Log.d(TAG, "✍️ Watch started recording gesture in Learn Mode (student is writing)")
+                _learnModeGestureRecording.value = System.currentTimeMillis()
             }
         }
     }
@@ -901,6 +943,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         // Clear previous state before starting new session
         _tutorialModeSkipTrigger.value = 0L
         _tutorialModeGestureResult.value = emptyMap()
+        _tutorialModeWatchReady.value = 0L
 
         scope.launch {
             try {
@@ -920,6 +963,50 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Tutorial Mode started notification sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to notify watch of Tutorial Mode start", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the phone is on TutorialSessionScreen and ready for handshake.
+     * The watch will reply with /tutorial_mode_watch_ready when it receives this.
+     */
+    fun sendTutorialModePhoneReady() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "\u2705 Phone ready signal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "\u274C Failed to send phone ready signal", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the phone is on LearnModeSessionScreen and ready for handshake.
+     * The watch will reply with /learn_mode_watch_ready when it receives this.
+     */
+    fun sendLearnModePhoneReady() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_PHONE_READY,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode phone ready signal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Learn Mode phone ready signal", e)
             }
         }
     }
@@ -1018,6 +1105,35 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Mobile feedback dismissal sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to notify watch of feedback dismissal", e)
+            }
+        }
+    }
+
+    /**
+     * Send feedback result to watch so it shows the same correct/incorrect screen.
+     * Mirrors sendLearnModeFeedback() for single source of truth.
+     * @param isCorrect Whether the gesture was correct
+     * @param predictedLetter The letter that was predicted by the watch ML model
+     */
+    fun sendTutorialModeFeedback(isCorrect: Boolean, predictedLetter: String) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = org.json.JSONObject().apply {
+                    put("isCorrect", isCorrect)
+                    put("predictedLetter", predictedLetter)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Tutorial Mode feedback sent: correct=$isCorrect, letter=$predictedLetter")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Tutorial Mode feedback", e)
             }
         }
     }

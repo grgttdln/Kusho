@@ -8,6 +8,7 @@ import com.example.kusho.R
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.sensors.SensorSample
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -51,6 +52,13 @@ class PracticeModeViewModel(
         private const val RECORDING_SECONDS = 3
         private const val RESULT_DISPLAY_SECONDS = 3
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
+        private const val NO_MOVEMENT_DISPLAY_SECONDS = 3
+
+        // Motion detection thresholds (tune on device via logcat "PracticeModeVM")
+        // Air writing produces rapid back-and-forth wrist rotation: high gyro variance + wide range.
+        // A tilt is slow and smooth: low variance even if range is moderate. Both must pass.
+        private const val GYRO_VARIANCE_THRESHOLD = 0.3f   // Gyro magnitude variance — must be high (rapid rotation)
+        private const val GYRO_RANGE_THRESHOLD = 1.0f      // Gyro magnitude peak-to-peak (rad/s) — must sweep wide
 
         // Practice questions
         private val PRACTICE_QUESTIONS = listOf(
@@ -149,6 +157,7 @@ class PracticeModeViewModel(
         COUNTDOWN,
         RECORDING,
         PROCESSING,
+        NO_MOVEMENT,            // User didn't move wrist during recording
         SHOWING_PREDICTION,  // Show the user's predicted letter
         RESULT
     }
@@ -334,6 +343,25 @@ class PracticeModeViewModel(
                 val samples = sensorManager.getCollectedSamples()
                 Log.d(TAG, "Collected ${samples.size} samples")
 
+                // Check for significant wrist movement
+                if (!hasSignificantMotion(samples)) {
+                    Log.w(TAG, "No significant wrist movement detected")
+                    _uiState.update {
+                        it.copy(
+                            state = State.NO_MOVEMENT,
+                            statusMessage = "Oops! You did not air write!",
+                            recordingProgress = 0f
+                        )
+                    }
+
+                    // Auto-return to QUESTION state after delay
+                    delay(NO_MOVEMENT_DISPLAY_SECONDS * 1000L)
+                    if (isActive && _uiState.value.state == State.NO_MOVEMENT) {
+                        returnToCurrentQuestion()
+                    }
+                    return@launch
+                }
+
                 // Check if we have enough data
                 val minSamples = classifier!!.windowSize / 2
                 if (samples.size < minSamples) {
@@ -496,6 +524,67 @@ class PracticeModeViewModel(
                 isAnswerCorrect = null
             )
         }
+    }
+
+    /**
+     * Retry the same question after no movement was detected.
+     * Cancels any pending auto-return and immediately goes back to QUESTION.
+     */
+    fun retryAfterNoMovement() {
+        if (_uiState.value.state != State.NO_MOVEMENT) return
+        Log.d(TAG, "Retrying after no movement")
+        recordingJob?.cancel()
+        recordingJob = null
+        returnToCurrentQuestion()
+    }
+
+    /**
+     * Return to QUESTION state with the current question preserved.
+     */
+    private fun returnToCurrentQuestion() {
+        val sameQuestion = _uiState.value.currentQuestion
+        _uiState.update {
+            it.copy(
+                state = State.QUESTION,
+                statusMessage = sameQuestion?.question ?: "Try again",
+                isAnswerCorrect = null,
+                prediction = null,
+                confidence = null
+            )
+        }
+    }
+
+    /**
+     * Check if the recorded sensor samples contain significant wrist movement.
+     *
+     * Uses gyroscope as the sole gate — air writing always involves rapid wrist rotation.
+     * Both variance AND range must exceed their thresholds (AND logic):
+     * - Variance catches rapid back-and-forth rotation (writing strokes)
+     * - Range catches overall rotational sweep (pen-like motion)
+     *
+     * A slight tilt is slow and smooth — it may have moderate range but very low variance,
+     * so it fails the AND check. Holding still fails both.
+     */
+    private fun hasSignificantMotion(samples: List<SensorSample>): Boolean {
+        if (samples.size < 2) return false
+
+        val n = samples.size.toFloat()
+
+        // Compute per-sample gyroscope magnitude: sqrt(gx² + gy² + gz²)
+        val gyroMagnitudes = samples.map {
+            kotlin.math.sqrt((it.gx * it.gx + it.gy * it.gy + it.gz * it.gz).toDouble()).toFloat()
+        }
+        val gyroMean = gyroMagnitudes.sum() / n
+        val gyroVariance = gyroMagnitudes.sumOf { ((it - gyroMean) * (it - gyroMean)).toDouble() }.toFloat() / n
+        val gyroRange = gyroMagnitudes.max() - gyroMagnitudes.min()
+
+        Log.d(TAG, "Gyro: variance=%.4f (need>=%.4f), range=%.4f (need>=%.4f)".format(
+            gyroVariance, GYRO_VARIANCE_THRESHOLD, gyroRange, GYRO_RANGE_THRESHOLD))
+
+        // Both must pass: rapid rotation (high variance) with meaningful sweep (high range)
+        val result = gyroVariance >= GYRO_VARIANCE_THRESHOLD && gyroRange >= GYRO_RANGE_THRESHOLD
+        Log.i(TAG, "Motion detected: $result (variance=${gyroVariance >= GYRO_VARIANCE_THRESHOLD}, range=${gyroRange >= GYRO_RANGE_THRESHOLD})")
+        return result
     }
 
     override fun onCleared() {

@@ -36,8 +36,8 @@ class WearMessageListenerService : WearableListenerService() {
 
         // Learn Mode message paths
         private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
-        private const val MESSAGE_PATH_LEARN_MODE_SESSION_START = "/learn_mode_session_start"
-        private const val MESSAGE_PATH_LEARN_MODE_SESSION_END = "/learn_mode_session_end"
+        private const val MESSAGE_PATH_LEARN_MODE_SESSION_START = "/learn_mode_started"
+        private const val MESSAGE_PATH_LEARN_MODE_SESSION_END = "/learn_mode_ended"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"

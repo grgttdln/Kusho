@@ -585,6 +585,7 @@ fun MainNavigationContainer(
             studentId = tutorialSessionStudentId,
             dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 29 },
+            onEarlyExit = { currentScreen = 27 },
             modifier = modifier
         )
         29 -> SessionAnalyticsScreen(
@@ -623,15 +624,21 @@ fun MainNavigationContainer(
                 }
             }
             val progressList by progressFlow.collectAsState(initial = emptyList())
-            val completedSetIds = remember(progressList) {
-                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            val progressBySetId = remember(progressList) {
+                progressList.associateBy { it.setId }
             }
             val activitySetStatuses = sets.map { set ->
-                val isCompleted = completedSetIds.contains(set.id)
+                val progress = progressBySetId[set.id]
+                val percentage = progress?.completionPercentage ?: 0
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
                     setId = set.id,
                     title = set.title,
-                    status = if (isCompleted) "Completed" else "Not Started"
+                    status = when {
+                        progress?.isCompleted == true || percentage == 100 -> "Completed"
+                        percentage > 0 -> "$percentage% Progress"
+                        else -> "Not Started"
+                    },
+                    completionPercentage = percentage
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
@@ -659,7 +666,8 @@ fun MainNavigationContainer(
                 studentName = selectedStudentName,
                 dominantHand = selectedDominantHand,
                 modifier = modifier,
-                onSessionComplete = { currentScreen = 34 }
+                onSessionComplete = { currentScreen = 34 },
+                onEarlyExit = { currentScreen = 1 }
             )
         }
         34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
@@ -708,6 +716,7 @@ fun MainNavigationContainer(
             studentId = tutorialSessionStudentId,
             dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 39 },
+            onEarlyExit = { currentScreen = 37 },
             modifier = modifier
         )
         39 -> SessionAnalyticsScreen(
@@ -749,15 +758,21 @@ fun MainNavigationContainer(
                 }
             }
             val progressList by progressFlow.collectAsState(initial = emptyList())
-            val completedSetIds = remember(progressList) {
-                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            val progressBySetId = remember(progressList) {
+                progressList.associateBy { it.setId }
             }
             val activitySetStatuses = sets.map { set ->
-                val isCompleted = completedSetIds.contains(set.id)
+                val progress = progressBySetId[set.id]
+                val percentage = progress?.completionPercentage ?: 0
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
                     setId = set.id,
                     title = set.title,
-                    status = if (isCompleted) "Completed" else "Not Started"
+                    status = when {
+                        progress?.isCompleted == true || percentage == 100 -> "Completed"
+                        percentage > 0 -> "$percentage% Progress"
+                        else -> "Not Started"
+                    },
+                    completionPercentage = percentage
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
@@ -784,7 +799,8 @@ fun MainNavigationContainer(
                 studentName = selectedStudentName,
                 dominantHand = selectedDominantHand,
                 modifier = modifier,
-                onSessionComplete = { currentScreen = 44 }
+                onSessionComplete = { currentScreen = 44 },
+                onEarlyExit = { currentScreen = 0 }
             )
         }
         44 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
