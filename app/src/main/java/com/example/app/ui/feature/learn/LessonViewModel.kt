@@ -822,6 +822,136 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    /**
+     * Generate CVC words using Gemini and add them to the word bank.
+     * Orchestrates: Gemini call → CVC filter → dedup → batch DB insert → success state.
+     *
+     * @param prompt Teacher's description of what CVC words to generate
+     * @param count Number of words requested (from stepper)
+     */
+    fun generateWords(prompt: String, count: Int) {
+        val userId = currentUserId
+        if (userId == null || userId == 0L) {
+            _uiState.update { it.copy(wordGenerationError = "Please log in to generate words") }
+            return
+        }
+
+        if (prompt.isBlank()) {
+            _uiState.update { it.copy(wordGenerationError = "Please enter a description") }
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                isWordGenerationLoading = true,
+                wordGenerationError = null,
+                generatedWords = emptyList(),
+                wordGenerationRequestedCount = count
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                // 1. Fetch existing words for dedup context
+                val existingWords = wordRepository.getWordsForUserOnce(userId)
+                val existingWordSet = existingWords.map { it.word.lowercase() }.toSet()
+
+                // 2. Call Gemini to generate CVC word candidates
+                val candidates = geminiRepository.generateCVCWords(prompt, count, existingWords)
+
+                // 3. CVC regex safety filter
+                val cvcValid = candidates.filter { com.example.app.util.WordValidator.isCVCPattern(it) }
+
+                // 4. Dedup against existing word bank
+                val deduped = cvcValid.filter { it.lowercase() !in existingWordSet }
+
+                // 5. Take requested count
+                val wordsToAdd = deduped.take(count)
+
+                if (wordsToAdd.isEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isWordGenerationLoading = false,
+                            wordGenerationError = if (cvcValid.isEmpty()) {
+                                "No valid CVC words could be generated. Try a different prompt."
+                            } else {
+                                "All generated words already exist in your word bank. Try a different prompt."
+                            }
+                        )
+                    }
+                    return@launch
+                }
+
+                // 6. Batch insert to DB
+                val wordDao = database.wordDao()
+                val addedWords = mutableListOf<String>()
+                for (word in wordsToAdd) {
+                    try {
+                        val id = wordDao.insertWord(
+                            com.example.app.data.entity.Word(
+                                userId = userId,
+                                word = word
+                            )
+                        )
+                        if (id > 0) {
+                            addedWords.add(word)
+                        }
+                    } catch (e: Exception) {
+                        // Skip words that fail insertion (e.g., unique constraint)
+                        android.util.Log.w("LessonViewModel", "Failed to insert word '$word': ${e.message}")
+                    }
+                }
+
+                // 7. Update state with results
+                if (addedWords.isEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isWordGenerationLoading = false,
+                            wordGenerationError = "Failed to add words to the word bank. Please try again."
+                        )
+                    }
+                } else {
+                    // Invalidate suggested prompts cache since word bank changed
+                    cachedWordCountForPrompts = -1
+
+                    _uiState.update {
+                        it.copy(
+                            isWordGenerationLoading = false,
+                            generatedWords = addedWords
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                val errorMsg = if (e.message?.contains("blocked", ignoreCase = true) == true ||
+                    e.message?.contains("safety", ignoreCase = true) == true) {
+                    "The request couldn't be processed. Please rephrase your description."
+                } else {
+                    "Word generation failed: ${e.message}"
+                }
+                _uiState.update {
+                    it.copy(
+                        isWordGenerationLoading = false,
+                        wordGenerationError = errorMsg
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Clear word generation state. Called when the generation modal is dismissed.
+     */
+    fun clearWordGenerationState() {
+        _uiState.update {
+            it.copy(
+                isWordGenerationLoading = false,
+                wordGenerationError = null,
+                generatedWords = emptyList(),
+                wordGenerationRequestedCount = 0
+            )
+        }
+    }
 }
 
 /**
@@ -858,6 +988,11 @@ data class LessonUiState(
     val editDictionarySuggestions: List<String> = emptyList(),
     // Suggested prompts state (generation modal)
     val suggestedPrompts: List<String> = emptyList(),
-    val isSuggestionsLoading: Boolean = false
+    val isSuggestionsLoading: Boolean = false,
+    // Word generation modal state
+    val isWordGenerationLoading: Boolean = false,
+    val wordGenerationError: String? = null,
+    val generatedWords: List<String> = emptyList(),
+    val wordGenerationRequestedCount: Int = 0
 )
 
