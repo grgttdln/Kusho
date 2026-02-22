@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.sensors.SensorSample
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,6 +36,8 @@ class TutorialModeViewModel(
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 3
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
+        private const val GYRO_VARIANCE_THRESHOLD = 0.3f
+        private const val GYRO_RANGE_THRESHOLD = 1.0f
 
         // Letters with similar shapes in uppercase and lowercase
         private val SIMILAR_SHAPE_LETTERS = setOf(
@@ -172,6 +175,23 @@ class TutorialModeViewModel(
                 val samples = sensorManager.getCollectedSamples()
                 Log.d(TAG, "Collected ${samples.size} samples")
 
+                // Check for significant wrist movement
+                if (!hasSignificantMotion(samples)) {
+                    Log.w(TAG, "No significant wrist movement detected — showing '?' as prediction")
+                    _uiState.update {
+                        it.copy(
+                            state = State.SHOWING_PREDICTION,
+                            prediction = "?",
+                            isCorrect = false,
+                            statusMessage = "?",
+                            errorMessage = null,
+                            recordingProgress = 0f
+                        )
+                    }
+                    onGestureResult(false, "?")
+                    return@launch
+                }
+
                 // Check if we have enough data
                 val minSamples = classifier.windowSize / 2
                 if (samples.size < minSamples) {
@@ -294,6 +314,26 @@ class TutorialModeViewModel(
         super.onCleared()
         recordingJob?.cancel()
         sensorManager.stopRecording()
+    }
+
+    private fun hasSignificantMotion(samples: List<SensorSample>): Boolean {
+        if (samples.size < 2) return false
+
+        val n = samples.size.toFloat()
+
+        val gyroMagnitudes = samples.map {
+            kotlin.math.sqrt((it.gx * it.gx + it.gy * it.gy + it.gz * it.gz).toDouble()).toFloat()
+        }
+        val gyroMean = gyroMagnitudes.sum() / n
+        val gyroVariance = gyroMagnitudes.sumOf { ((it - gyroMean) * (it - gyroMean)).toDouble() }.toFloat() / n
+        val gyroRange = gyroMagnitudes.max() - gyroMagnitudes.min()
+
+        Log.d(TAG, "Gyro: variance=%.4f (need>=%.4f), range=%.4f (need>=%.4f)".format(
+            gyroVariance, GYRO_VARIANCE_THRESHOLD, gyroRange, GYRO_RANGE_THRESHOLD))
+
+        val result = gyroVariance >= GYRO_VARIANCE_THRESHOLD && gyroRange >= GYRO_RANGE_THRESHOLD
+        Log.i(TAG, "Motion detected: $result (variance=${gyroVariance >= GYRO_VARIANCE_THRESHOLD}, range=${gyroRange >= GYRO_RANGE_THRESHOLD})")
+        return result
     }
 }
 

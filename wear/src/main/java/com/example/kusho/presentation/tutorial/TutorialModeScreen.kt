@@ -452,7 +452,9 @@ private fun GestureRecognitionContent(
     // Speak the prediction when we enter SHOWING_PREDICTION state
     LaunchedEffect(uiState.state, uiState.prediction, uiState.isCorrect) {
         if (uiState.state == TutorialModeViewModel.State.SHOWING_PREDICTION && uiState.prediction != null) {
-            if (uiState.isCorrect) {
+            if (uiState.prediction == "?") {
+                ttsManager.speak("Oops, you did not air write!")
+            } else if (uiState.isCorrect) {
                 ttsManager.speakLetter(uiState.prediction!!)
             } else {
                 ttsManager.speakTryAgain()
@@ -492,10 +494,18 @@ private fun GestureRecognitionContent(
         contentAlignment = Alignment.Center
     ) {
         // Phone-driven feedback overlay (mirrors Learn Mode pattern)
+        // Skip wrong avatar when prediction was "?" (no air-writing) — go straight to waiting
         if (showingFeedback) {
-            TutorialModeFeedbackContent(
-                isCorrect = feedbackIsCorrect
-            )
+            if (uiState.prediction == "?") {
+                TutorialModeFeedbackContent(
+                    isCorrect = feedbackIsCorrect,
+                    skipAvatar = true
+                )
+            } else {
+                TutorialModeFeedbackContent(
+                    isCorrect = feedbackIsCorrect
+                )
+            }
         } else {
             when (uiState.state) {
                 TutorialModeViewModel.State.IDLE -> {
@@ -584,12 +594,14 @@ private fun GestureRecognitionContent(
  * Mirrors LearnModeFeedbackContent for consistent behavior.
  */
 @Composable
-private fun TutorialModeFeedbackContent(isCorrect: Boolean) {
-    var showWaiting by remember { mutableStateOf(false) }
+private fun TutorialModeFeedbackContent(isCorrect: Boolean, skipAvatar: Boolean = false) {
+    var showWaiting by remember { mutableStateOf(skipAvatar) }
 
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(2000L)
-        showWaiting = true
+        if (!skipAvatar) {
+            kotlinx.coroutines.delay(2000L)
+            showWaiting = true
+        }
     }
 
     if (showWaiting) {

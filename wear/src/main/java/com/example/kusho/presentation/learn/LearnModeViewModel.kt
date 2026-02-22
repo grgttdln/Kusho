@@ -198,23 +198,27 @@ class LearnModeViewModel(
 
                 // Check for significant wrist movement
                 if (!hasSignificantMotion(samples)) {
-                    Log.w(TAG, "No significant wrist movement detected")
+                    Log.w(TAG, "No significant wrist movement detected — showing '?' as prediction")
                     _uiState.update {
                         it.copy(
-                            state = State.NO_MOVEMENT,
-                            statusMessage = "Oops! You did not air write!",
+                            state = State.SHOWING_PREDICTION,
+                            prediction = "?",
+                            confidence = 0f,
+                            errorMessage = null,
                             recordingProgress = 0f
                         )
                     }
 
-                    delay(NO_MOVEMENT_DISPLAY_SECONDS * 1000L)
-                    if (isActive && _uiState.value.state == State.NO_MOVEMENT) {
+                    // Show prediction briefly, then wait for phone feedback
+                    delay(PREDICTION_DISPLAY_MS)
+                    if (!isActive) return@launch
+
+                    // Safety timeout: if phone doesn't respond within 8 seconds, reset to idle
+                    delay(PHONE_FEEDBACK_TIMEOUT_MS)
+                    if (isActive && _uiState.value.state == State.SHOWING_PREDICTION) {
+                        Log.w(TAG, "Phone feedback timeout — resetting to idle")
                         _uiState.update {
-                            it.copy(
-                                state = State.IDLE,
-                                statusMessage = "Tap to guess",
-                                prediction = null
-                            )
+                            it.copy(state = State.IDLE, statusMessage = "Tap to guess")
                         }
                     }
                     return@launch

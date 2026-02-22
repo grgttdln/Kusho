@@ -482,7 +482,11 @@ private fun FillInTheBlankMainContent(
             // Only speak if we haven't already spoken this prediction
             if (lastSpokenPrediction != uiState.prediction) {
                 lastSpokenPrediction = uiState.prediction
-                ttsManager.speakLetter(uiState.prediction!!)
+                if (uiState.prediction == "?") {
+                    ttsManager.speak("Oops, you did not air write!")
+                } else {
+                    ttsManager.speakLetter(uiState.prediction!!)
+                }
             }
 
             // Send letter input to phone immediately for validation
@@ -495,15 +499,6 @@ private fun FillInTheBlankMainContent(
     LaunchedEffect(uiState.state) {
         if (uiState.state == LearnModeViewModel.State.IDLE) {
             lastSpokenPrediction = null
-        }
-    }
-
-    // Speak "oops" and notify phone when entering NO_MOVEMENT state
-    LaunchedEffect(uiState.state) {
-        if (uiState.state == LearnModeViewModel.State.NO_MOVEMENT) {
-            ttsManager.speak("Oops, you did not air write!")
-            // Send wrong letter to phone so it exits "is air writing" and plays wrong sound
-            phoneCommunicationManager.sendLetterInput("?", wordData.maskedIndex)
         }
     }
 
@@ -545,7 +540,7 @@ private fun FillInTheBlankMainContent(
                     LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
-                    LearnModeViewModel.State.NO_MOVEMENT -> LearnNoMovementContent(viewModel)
+                    LearnModeViewModel.State.NO_MOVEMENT -> { /* Unused in Learn mode */ }
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
                 }
             }
@@ -826,7 +821,11 @@ private fun WriteTheWordMainContent(
             // Only speak if we haven't already spoken this prediction
             if (lastSpokenPrediction != uiState.prediction) {
                 lastSpokenPrediction = uiState.prediction
-                ttsManager.speakLetter(uiState.prediction!!)
+                if (uiState.prediction == "?") {
+                    ttsManager.speak("Oops, you did not air write!")
+                } else {
+                    ttsManager.speakLetter(uiState.prediction!!)
+                }
             }
 
             // Send letter input to phone for validation (preserve exact case)
@@ -838,14 +837,6 @@ private fun WriteTheWordMainContent(
     LaunchedEffect(uiState.state) {
         if (uiState.state == LearnModeViewModel.State.IDLE) {
             lastSpokenPrediction = null
-        }
-    }
-
-    // Speak "oops" and notify phone when entering NO_MOVEMENT state
-    LaunchedEffect(uiState.state) {
-        if (uiState.state == LearnModeViewModel.State.NO_MOVEMENT) {
-            ttsManager.speak("Oops, you did not air write!")
-            phoneCommunicationManager.sendLetterInput("?", currentLetterIndex)
         }
     }
 
@@ -890,7 +881,7 @@ private fun WriteTheWordMainContent(
                     LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
-                    LearnModeViewModel.State.NO_MOVEMENT -> LearnNoMovementContent(viewModel)
+                    LearnModeViewModel.State.NO_MOVEMENT -> { /* Unused in Learn mode */ }
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
                 }
             }
@@ -1251,7 +1242,11 @@ private fun NameThePictureMainContent(
             // Only speak if we haven't already spoken this prediction
             if (lastSpokenPrediction != uiState.prediction) {
                 lastSpokenPrediction = uiState.prediction
-                ttsManager.speakLetter(uiState.prediction!!)
+                if (uiState.prediction == "?") {
+                    ttsManager.speak("Oops, you did not air write!")
+                } else {
+                    ttsManager.speakLetter(uiState.prediction!!)
+                }
             }
 
             // Send letter input to phone for validation (preserve exact case)
@@ -1263,14 +1258,6 @@ private fun NameThePictureMainContent(
     LaunchedEffect(uiState.state) {
         if (uiState.state == LearnModeViewModel.State.IDLE) {
             lastSpokenPrediction = null
-        }
-    }
-
-    // Speak "oops" and notify phone when entering NO_MOVEMENT state
-    LaunchedEffect(uiState.state) {
-        if (uiState.state == LearnModeViewModel.State.NO_MOVEMENT) {
-            ttsManager.speak("Oops, you did not air write!")
-            phoneCommunicationManager.sendLetterInput("?", currentLetterIndex)
         }
     }
 
@@ -1315,7 +1302,7 @@ private fun NameThePictureMainContent(
                     LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
-                    LearnModeViewModel.State.NO_MOVEMENT -> LearnNoMovementContent(viewModel)
+                    LearnModeViewModel.State.NO_MOVEMENT -> { /* Unused in Learn mode */ }
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
                 }
             }
