@@ -10,6 +10,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -51,7 +55,8 @@ fun ActivityCreationModal(
     onActivityInputChanged: (String) -> Unit,
     onSuggestionClick: (String) -> Unit = {},
     onCreateActivity: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onBackClick: () -> Unit = onDismiss
 ) {
     if (!isVisible) return
 
@@ -73,6 +78,20 @@ fun ActivityCreationModal(
                 .wrapContentHeight(),
             contentAlignment = Alignment.TopCenter
         ) {
+            // Back button positioned outside the modal card at top-left
+            IconButton(
+                onClick = onBackClick,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = (1).dp, y = 0.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color(0xFF3FA9F8)
+                )
+            }
+
             // Main card content (positioned below the mascot)
             Column(
                 modifier = Modifier

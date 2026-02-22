@@ -11,7 +11,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -53,6 +55,7 @@ fun WordBankGenerationModal(
     onPromptInputChanged: (String) -> Unit,
     onGenerate: () -> Unit,
     onDismiss: () -> Unit,
+    onBackClick: () -> Unit = onDismiss,
     generatedWords: List<String> = emptyList(),
     requestedCount: Int = 0,
     onDone: () -> Unit = {}
@@ -77,6 +80,20 @@ fun WordBankGenerationModal(
                 .wrapContentHeight(),
             contentAlignment = Alignment.TopCenter
         ) {
+            // Back button positioned outside the modal card at top-left
+            IconButton(
+                onClick = onBackClick,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = (1).dp, y = 26.5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color(0xFF3FA9F8)
+                )
+            }
+
             // Main card content (positioned below the mascot)
             Column(
                 modifier = Modifier

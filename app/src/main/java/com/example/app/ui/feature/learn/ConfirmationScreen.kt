@@ -96,11 +96,11 @@ fun ConfirmationScreen(
                     // Main Title
                     Text(
                         text = title,
-                        fontSize = 36.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF000000),
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 30.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
             }

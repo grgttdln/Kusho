@@ -235,6 +235,12 @@ fun WordBankScreen(
                 generationWordCount = 5
                 viewModel.clearWordGenerationState()
             },
+            onBackClick = {
+                isGenerationModalVisible = false
+                generationPrompt = ""
+                generationWordCount = 5
+                viewModel.clearWordGenerationState()
+            },
             generatedWords = uiState.generatedWords,
             requestedCount = uiState.wordGenerationRequestedCount,
             onDone = {
