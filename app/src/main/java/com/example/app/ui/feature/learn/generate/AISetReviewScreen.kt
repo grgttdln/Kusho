@@ -723,7 +723,7 @@ private fun SetReviewCard(
 
         OutlinedTextField(
             value = set.title,
-            onValueChange = { if (it.length <= 15) onSetChange(set.copy(title = it)) },
+            onValueChange = { if (it.length <= 30) onSetChange(set.copy(title = it)) },
             placeholder = {
                 Text(
                     text = "E.g, Tall letters",
@@ -751,7 +751,7 @@ private fun SetReviewCard(
             singleLine = true,
             supportingText = {
                 Text(
-                    text = "${set.title.length}/15",
+                    text = "${set.title.length}/30",
                     fontSize = 12.sp,
                     color = Color(0xFF999999),
                     modifier = Modifier.fillMaxWidth(),

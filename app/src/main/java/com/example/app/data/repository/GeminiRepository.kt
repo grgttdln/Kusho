@@ -633,7 +633,7 @@ ${existingSetTitles.joinToString("\n") { "- $it" }}
 
 CRITICAL: The generated set title MUST NOT be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.
 
-If the generated set title is semantically similar to an existing one (even if not identical), include a "titleSimilarity" field with "similarTo" (the existing title it resembles), "reason" (one-sentence explanation), and "alternateTitle" (a different 15-char-max title that avoids the similarity).
+If the generated set title is semantically similar to an existing one (even if not identical), include a "titleSimilarity" field with "similarTo" (the existing title it resembles), "reason" (one-sentence explanation), and "alternateTitle" (a different 30-char-max title that avoids the similarity).
 """
         } else ""
 
@@ -661,7 +661,7 @@ SELECTION STRATEGIES (use in priority order):
 RULES:
 1. Select 3-10 words that form ONE coherent grouping matching the teacher's request
 2. ONLY use words from the provided list
-3. Set title: max 15 characters. Be creative — vary your naming style. Examples: "-at Rhyme Time", "Cat Bat Hat!", "A Sound Fun", "Vowel 'e' Mix", "B Words Go!"
+3. Set title: max 30 characters. Be creative — vary your naming style. Examples: "-at Rhyme Time", "Cat Bat Hat!", "A Sound Fun", "Vowel 'e' Mix", "B Words Go!"
 4. A smaller, coherent set is better than a larger, mixed one
 $existingSetTitlesSection$avoidanceSection
 Respond with a JSON object containing:
@@ -710,7 +710,7 @@ Select a coherent subset of words for one focused activity.
                 appendLine()
                 appendLine("CRITICAL: The set title may not be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.")
                 appendLine()
-                appendLine("If the generated set title is semantically similar to an existing one (even if not identical), include a \"titleSimilarity\" field with \"similarTo\" (the existing title), \"reason\" (one-sentence explanation), and \"alternateTitle\" (a different 15-char-max title that avoids the similarity).")
+                appendLine("If the generated set title is semantically similar to an existing one (even if not identical), include a \"titleSimilarity\" field with \"similarTo\" (the existing title), \"reason\" (one-sentence explanation), and \"alternateTitle\" (a different 30-char-max title that avoids the similarity).")
             }
         } else ""
 
@@ -738,7 +738,7 @@ RULES:
 2. For "fill in the blanks": selectedLetterIndex must be 0, 1, or 2
 3. For "name the picture" and "write the word": always use selectedLetterIndex: 0
 4. NEVER use "name the picture" for words without images
-5. Set title: max 15 characters. Keep the title from the input unless it exceeds the limit or is too generic.
+5. Set title: max 30 characters. Keep the title from the input unless it exceeds the limit or is too generic.
 $existingTitlesSection
 Respond with a JSON object containing:
 - "sets": array with exactly ONE object having:
@@ -806,7 +806,7 @@ Assign appropriate configuration types and letter indices to each word based on 
 
     /**
      * Ensures a title is unique against existing titles and already-used titles (case-insensitive).
-     * Tries alternateTitle first, then appends suffixes. Respects 15-character max limit.
+     * Tries alternateTitle first, then appends suffixes. Respects 30-character max limit.
      */
     private fun ensureUniqueTitle(
         title: String,
@@ -823,7 +823,7 @@ Assign appropriate configuration types and letter indices to each word based on 
         }
 
         // Try AI-provided alternate title
-        if (alternateTitle.isNotBlank() && alternateTitle.length <= 15 &&
+        if (alternateTitle.isNotBlank() && alternateTitle.length <= 30 &&
             alternateTitle.lowercase() !in allTaken
         ) {
             usedTitles.add(alternateTitle)
@@ -833,16 +833,16 @@ Assign appropriate configuration types and letter indices to each word based on 
         // Suffix fallback — truncate at word boundary to avoid broken words
         val suffixes = listOf(" II", " III", " IV", " V")
         for (suffix in suffixes) {
-            val base = if (title.length + suffix.length <= 15) {
+            val base = if (title.length + suffix.length <= 30) {
                 title
             } else {
-                val maxBase = 15 - suffix.length
+                val maxBase = 30 - suffix.length
                 val truncated = title.take(maxBase)
                 val lastSpace = truncated.lastIndexOf(' ')
                 if (lastSpace > 3) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
             }
             val candidate = base + suffix
-            if (candidate.length <= 15 && candidate.lowercase() !in allTaken) {
+            if (candidate.length <= 30 && candidate.lowercase() !in allTaken) {
                 usedTitles.add(candidate)
                 return candidate
             }
@@ -851,11 +851,11 @@ Assign appropriate configuration types and letter indices to each word based on 
         // Last resort: truncate at word boundary and add number
         val num = existingTitles.size + usedTitles.size + 1
         val numSuffix = " $num"
-        val maxBase = 15 - numSuffix.length
+        val maxBase = 30 - numSuffix.length
         val truncated = title.take(maxBase)
         val lastSpace = truncated.lastIndexOf(' ')
         val base = if (lastSpace > 3) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
-        val candidate = (base + numSuffix).take(15)
+        val candidate = (base + numSuffix).take(30)
         usedTitles.add(candidate)
         return candidate
     }
@@ -884,8 +884,8 @@ Assign appropriate configuration types and letter indices to each word based on 
             // Auto-correct set title (truncate at word boundary)
             val setTitle = when {
                 set.title.isBlank() -> "Set ${index + 1}"
-                set.title.length > 15 -> {
-                    val truncated = set.title.take(15)
+                set.title.length > 30 -> {
+                    val truncated = set.title.take(30)
                     val lastSpace = truncated.lastIndexOf(' ')
                     if (lastSpace > 5) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
                 }

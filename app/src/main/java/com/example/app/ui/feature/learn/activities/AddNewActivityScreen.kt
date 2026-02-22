@@ -167,7 +167,7 @@ fun AddNewActivityScreen(
             // Activity Title Input Field
             OutlinedTextField(
                 value = activityTitle,
-                onValueChange = { if (it.length <= 15) viewModel.setActivityTitle(it) },
+                onValueChange = { if (it.length <= 30) viewModel.setActivityTitle(it) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 15.dp),
@@ -196,7 +196,7 @@ fun AddNewActivityScreen(
                 singleLine = true,
                 supportingText = {
                     Text(
-                        text = "${activityTitle.length}/15",
+                        text = "${activityTitle.length}/30",
                         fontSize = 12.sp,
                         color = Color(0xFF999999),
                         modifier = Modifier.fillMaxWidth(),
