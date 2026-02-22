@@ -36,6 +36,8 @@ import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.DeleteConfirmationDialog
 import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.SetItemCard
+import com.example.app.ui.components.wordbank.ActivityCreationModal
+import com.example.app.ui.feature.learn.LessonViewModel
 
 @Composable
 fun YourSetsScreen(
@@ -45,14 +47,25 @@ fun YourSetsScreen(
     onBackClick: () -> Unit,
     onAddSetClick: () -> Unit = {},
     onEditSetClick: (Long) -> Unit = {},
-    viewModel: YourSetsViewModel = viewModel()
+    onNavigateToAIGenerate: (String) -> Unit = {},
+    viewModel: YourSetsViewModel = viewModel(),
+    lessonViewModel: LessonViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val lessonUiState by lessonViewModel.uiState.collectAsState()
+    val generationPhase by lessonViewModel.generationPhase.collectAsState()
 
     // Edit mode state for delete functionality
     var isEditMode by remember { mutableStateOf(false) }
     var setToDelete by remember { mutableStateOf<Set?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // Load activity suggested prompts when creation modal becomes visible
+    LaunchedEffect(lessonUiState.isActivityCreationModalVisible) {
+        if (lessonUiState.isActivityCreationModalVisible) {
+            lessonViewModel.loadActivitySuggestedPrompts()
+        }
+    }
 
     // Create stable callback references using rememberUpdatedState
     // This ensures the lambda always has the latest callback reference
@@ -278,7 +291,7 @@ fun YourSetsScreen(
 
             // Magic Wand Button
             IconButton(
-                onClick = { /* TODO */ },
+                onClick = { lessonViewModel.showActivityCreationModal() },
                 modifier = Modifier
                     .size(75.dp)
                     .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
@@ -315,6 +328,28 @@ fun YourSetsScreen(
                 showDeleteDialog = false
                 setToDelete = null
             }
+        )
+
+        // Activity Creation Modal (AI wand)
+        ActivityCreationModal(
+            isVisible = lessonUiState.isActivityCreationModalVisible,
+            activityInput = lessonUiState.activityInput,
+            words = lessonUiState.words,
+            isLoading = lessonUiState.isActivityCreationLoading,
+            generationPhase = generationPhase,
+            error = lessonUiState.activityError,
+            suggestedPrompts = lessonUiState.activitySuggestedPrompts,
+            isSuggestionsLoading = lessonUiState.isActivitySuggestionsLoading,
+            onActivityInputChanged = { lessonViewModel.onActivityInputChanged(it) },
+            onSuggestionClick = { suggestion ->
+                lessonViewModel.onActivityInputChanged(suggestion)
+            },
+            onCreateActivity = {
+                lessonViewModel.createActivity { jsonResult ->
+                    onNavigateToAIGenerate(jsonResult)
+                }
+            },
+            onDismiss = { lessonViewModel.hideActivityCreationModal() }
         )
     }
 }
