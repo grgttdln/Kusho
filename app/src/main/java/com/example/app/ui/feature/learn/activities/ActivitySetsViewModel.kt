@@ -46,6 +46,7 @@ class ActivitySetsViewModel(application: Application) : AndroidViewModel(applica
     private var currentActivityId: Long? = null
 
     fun loadActivity(activityId: Long) {
+        currentActivityId = activityId
         viewModelScope.launch {
             try {
                 val result = activityRepository.getActivityById(activityId)
