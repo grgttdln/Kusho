@@ -201,8 +201,6 @@ fun WordBankScreen(
             onDismiss = {
                 viewModel.hideWordBankModal()
             },
-            dictionarySuggestions = uiState.dictionarySuggestions,
-            onSuggestionClick = { viewModel.onSuggestionClick(it) }
         )
 
         // Word Added Confirmation Modal
@@ -275,8 +273,6 @@ fun WordBankScreen(
             onDismiss = {
                 viewModel.hideEditModal()
             },
-            dictionarySuggestions = uiState.editDictionarySuggestions,
-            onSuggestionClick = { viewModel.onEditSuggestionClick(it) }
         )
 
     }

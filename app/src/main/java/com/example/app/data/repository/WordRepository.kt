@@ -2,8 +2,6 @@ package com.example.app.data.repository
 
 import com.example.app.data.dao.WordDao
 import com.example.app.data.entity.Word
-import com.example.app.util.DictionaryResult
-import com.example.app.util.DictionaryValidator
 import com.example.app.util.WordValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -16,8 +14,7 @@ import kotlinx.coroutines.withContext
  * All database operations are performed on the IO dispatcher.
  */
 class WordRepository(
-    private val wordDao: WordDao,
-    private val dictionaryValidator: DictionaryValidator? = null
+    private val wordDao: WordDao
 ) {
 
     /**
@@ -26,7 +23,6 @@ class WordRepository(
     sealed class AddWordResult {
         data class Success(val wordId: Long) : AddWordResult()
         data class Error(val message: String) : AddWordResult()
-        data class NotInDictionary(val suggestions: List<String>) : AddWordResult()
     }
 
     /**
@@ -35,7 +31,6 @@ class WordRepository(
     sealed class UpdateWordResult {
         data object Success : UpdateWordResult()
         data class Error(val message: String) : UpdateWordResult()
-        data class NotInDictionary(val suggestions: List<String>) : UpdateWordResult()
     }
 
     /**
@@ -59,17 +54,6 @@ class WordRepository(
             val (isValid, errorMessage) = WordValidator.validateWordForBank(trimmedWord)
             if (!isValid) {
                 return@withContext AddWordResult.Error(errorMessage ?: "Invalid word")
-            }
-
-            // Dictionary validation (only if validator is available)
-            if (dictionaryValidator != null) {
-                when (val dictResult = dictionaryValidator.validateWord(trimmedWord)) {
-                    is DictionaryResult.Invalid -> {
-                        return@withContext AddWordResult.NotInDictionary(dictResult.suggestions)
-                    }
-                    is DictionaryResult.Valid,
-                    is DictionaryResult.Unavailable -> { /* proceed */ }
-                }
             }
 
             // Check for duplicates (case-insensitive)
@@ -152,17 +136,6 @@ class WordRepository(
             val (isValid, errorMessage) = WordValidator.validateWordForBank(trimmedWord)
             if (!isValid) {
                 return@withContext UpdateWordResult.Error(errorMessage ?: "Invalid word")
-            }
-
-            // Dictionary validation (only if validator is available)
-            if (dictionaryValidator != null) {
-                when (val dictResult = dictionaryValidator.validateWord(trimmedWord)) {
-                    is DictionaryResult.Invalid -> {
-                        return@withContext UpdateWordResult.NotInDictionary(dictResult.suggestions)
-                    }
-                    is DictionaryResult.Valid,
-                    is DictionaryResult.Unavailable -> { /* proceed */ }
-                }
             }
 
             // Check for duplicates (case-insensitive), excluding current word

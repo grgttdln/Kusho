@@ -94,7 +94,6 @@ class GeminiRepository {
     suspend fun generateActivity(
         prompt: String,
         availableWords: List<Word>,
-        existingActivityTitles: List<String> = emptyList(),
         existingSetTitles: List<String> = emptyList(),
         onPhaseChange: suspend (GenerationPhase) -> Unit = {}
     ): AiGenerationResult = withContext(Dispatchers.IO) {
@@ -130,24 +129,24 @@ class GeminiRepository {
             val filteredAnalysisTable = buildWordAnalysisTable(filteredAnalyses)
             val filteredPatternsSummary = buildPatternsSummary(filteredPatterns)
 
-            // === Step 2: Group into Sets ===
+            // === Step 2: Select coherent subset for ONE set ===
             onPhaseChange(GenerationPhase.Grouping)
-            val groupedSets = retryStep(MAX_RETRIES, "Step 2: Group") {
-                stepGroupIntoSets(prompt, cachedFilteredWords!!, filteredAnalysisTable, filteredPatternsSummary, existingSetTitles)
+            val selectedSet = retryStep(MAX_RETRIES, "Step 2: Select") {
+                stepSelectSubset(prompt, cachedFilteredWords!!, filteredAnalysisTable, filteredPatternsSummary, existingSetTitles)
             }
 
             val setsToUse: GroupedSetsResponse
-            if (groupedSets == null || groupedSets.sets.isNullOrEmpty()) {
+            if (selectedSet == null || selectedSet.sets.isNullOrEmpty() || selectedSet.sets[0].words.size < 3) {
                 Log.w(TAG, "Step 2 failed, using algorithmic fallback")
-                setsToUse = algorithmicGrouping(filteredAnalyses, filteredPatterns)
+                setsToUse = algorithmicSingleSetSelection(filteredAnalyses, filteredPatterns)
             } else {
-                setsToUse = validateGroupedSets(groupedSets, wordBank)
+                setsToUse = validateGroupedSets(selectedSet, wordBank)
             }
 
-            // === Step 3: Assign Configurations ===
+            // === Step 3: Assign Configurations for ONE set ===
             onPhaseChange(GenerationPhase.Configuring)
             val result = retryStep(MAX_RETRIES, "Step 3: Configure") {
-                stepAssignConfigurations(setsToUse, filteredWordObjs, filteredAnalyses, existingActivityTitles, existingSetTitles)
+                stepConfigureSingleSet(setsToUse.sets[0], filteredWordObjs, filteredAnalyses, existingSetTitles)
             }
 
             if (result == null) {
@@ -192,16 +191,16 @@ class GeminiRepository {
             val analysisTable = buildWordAnalysisTable(analyses)
             val patternsSummary = buildPatternsSummary(patterns)
 
-            // Step 2: Regroup (skip Step 1)
+            // Step 2: Select new subset (skip Step 1)
             onPhaseChange(GenerationPhase.Grouping)
-            val groupedSets = retryStep(maxRetries, "Regen Step 2") {
-                stepRegroupSet(
+            val selectedSet = retryStep(maxRetries, "Regen Step 2") {
+                stepSelectSubset(
                     prompt, wordsToUse, analysisTable, patternsSummary,
-                    currentSetTitle, currentSetDescription, existingSetTitles
+                    existingSetTitles, avoidTitle = currentSetTitle, avoidDescription = currentSetDescription
                 )
             }
 
-            if (groupedSets == null || groupedSets.sets.isNullOrEmpty()) {
+            if (selectedSet == null || selectedSet.sets.isNullOrEmpty()) {
                 return@withContext AiGenerationResult.Error(
                     "Failed to regenerate set. Please try again.",
                     canRetry = true
@@ -209,12 +208,12 @@ class GeminiRepository {
             }
 
             val wordBank = availableWords.map { it.word }.toSet()
-            val validatedSets = validateGroupedSets(groupedSets, wordBank)
+            val validatedSets = validateGroupedSets(selectedSet, wordBank)
 
-            // Step 3: Configure
+            // Step 3: Configure single set
             onPhaseChange(GenerationPhase.Configuring)
             val result = retryStep(maxRetries, "Regen Step 3") {
-                stepAssignConfigurations(validatedSets, wordObjs, analyses, emptyList(), existingSetTitles)
+                stepConfigureSingleSet(validatedSets.sets[0], wordObjs, analyses, existingSetTitles)
             }
 
             if (result == null) {
@@ -416,7 +415,10 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
      * @param words Current word bank contents (must be non-empty)
      * @return List of exactly 2 activity prompt suggestion strings, or empty list on failure
      */
-    suspend fun generateActivitySuggestedPrompts(words: List<Word>): List<String> = withContext(Dispatchers.IO) {
+    suspend fun generateActivitySuggestedPrompts(
+        words: List<Word>,
+        existingSets: Map<String, List<String>> = emptyMap()
+    ): List<String> = withContext(Dispatchers.IO) {
         try {
             val validWords = words.filter { it.word.isNotBlank() }
             if (validWords.isEmpty()) return@withContext emptyList()
@@ -430,31 +432,43 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
             }
             val patternsSummary = buildPatternsSummary(patterns)
 
-            val systemInstruction = """
-You are a reading teacher's assistant for young learners (ages 4-8). The teacher wants to create an air-writing activity set using words from their word bank.
+            val existingSetsSummary = if (existingSets.isEmpty()) {
+                "None yet"
+            } else {
+                existingSets.entries.joinToString("\n") { (title, words) ->
+                    "- \"$title\": ${words.joinToString(", ")}"
+                }
+            }
 
-An activity set groups words into themed activities for air-writing practice. Each activity contains words that share a learning objective (e.g., same word family, same vowel sound, same theme).
+            val systemInstruction = """
+You are a reading teacher's assistant for young learners (ages 4-8). The teacher wants to create a single air-writing activity using words from their word bank.
+
+An activity is a focused word grouping for air-writing practice. It contains words that share a single learning objective (e.g., same word family, same vowel sound, same beginning consonant, or same theme). The teacher will later organize multiple activities into an activity set themselves.
 
 WORD BANK: $wordList
 
 DETECTED PATTERNS:
 $patternsSummary
 
-Suggest exactly 2 concise prompts the teacher could use to describe what kind of activity set to create. Each prompt should be a natural sentence (10-20 words) describing a learning objective or grouping strategy.
+EXISTING ACTIVITIES:
+$existingSetsSummary
 
-Good examples: "Practice the -at word family with rhyming words", "Group words by short vowel sounds for comparison"
-Bad examples: "Create an activity" (too vague), "Generate words" (wrong purpose — words already exist)
+Suggest exactly 2 concise prompts the teacher could use to describe what kind of activity to create. Each prompt should be a natural sentence (10-20 words) describing a single learning objective or word grouping.
+
+Good examples: "Practice the -at word family with rhyming words", "Group words by their short 'o' vowel sound"
+Bad examples: "Create an activity set with multiple groups" (too broad — suggest a single focus), "Generate new words" (wrong purpose — words already exist)
 
 RULES:
-1. Prompts must reference grouping or practicing EXISTING words, not generating new ones
+1. Each prompt must describe ONE focused grouping of EXISTING words, not multiple groupings
 2. Suggest strategies that leverage the detected patterns (word families, vowel sounds, themes)
-3. Keep suggestions practical and age-appropriate (ages 4-8)
-4. Each prompt should suggest a different grouping strategy
+3. AVOID suggesting activities that overlap with existing ones — check the existing activities list and suggest DIFFERENT patterns or angles
+4. Keep suggestions practical and age-appropriate (ages 4-8)
+5. Each prompt should suggest a different grouping strategy
 
 Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
             """.trimIndent()
 
-            val userPrompt = "Based on the word bank, suggest 2 prompts for creating air-writing activity sets."
+            val userPrompt = "Based on the word bank and existing activities, suggest 2 prompts for creating a new air-writing activity."
 
             val model = createModel(systemInstruction)
             val response = model.generateContent(userPrompt)
@@ -599,84 +613,17 @@ Respond with a JSON object containing:
     }
 
     /**
-     * Step 2: Group filtered words into coherent educational sets.
+     * Step 2: Select a coherent subset of words for ONE focused set.
+     * Used for both initial generation and regeneration (with avoidance context).
      */
-    private suspend fun stepGroupIntoSets(
+    private suspend fun stepSelectSubset(
         prompt: String,
         filteredWords: List<String>,
         analysisTable: String,
         patternsSummary: String,
-        existingSetTitles: List<String> = emptyList()
-    ): GroupedSetsResponse {
-        val existingSetTitlesSection = if (existingSetTitles.isNotEmpty()) {
-            """
-
-EXISTING SET TITLES:
-${existingSetTitles.joinToString("\n") { "- $it" }}
-
-CRITICAL: Generated set titles MUST NOT be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.
-
-If a generated set title is semantically similar to an existing one (even if not identical), include a "titleSimilarity" field in that set's JSON object with "similarTo" (the existing title it resembles), "reason" (one-sentence explanation), and "alternateTitle" (a different 15-char-max title that avoids the similarity).
-"""
-        } else ""
-
-        val systemInstruction = """
-You are a reading teacher's assistant. Group these CVC words into coherent educational sets.
-
-CRITICAL CONSTRAINT — EVERY set MUST contain AT LEAST 3 words. Sets with fewer than 3 words are INVALID and will be rejected. If a grouping pattern only matches 1-2 words, either merge those words into another set or find a broader pattern that includes at least 3 words.
-
-GROUPING STRATEGIES (use in priority order):
-1. Word Family Sets (highest priority): Group by same rime (cat/bat/hat = "-at" family)
-2. Vowel Sound Sets: Group by same middle vowel (cat/bag/hat = short 'a')
-3. Onset Consonant Sets: Group by same starting letter (cat/cup/can = 'c')
-4. Theme-Based Sets: Group by meaning if the teacher suggests a theme
-
-RULES:
-1. EVERY set MUST have at least 3 words — this is mandatory and non-negotiable
-2. ONLY use words from the provided list - do not invent words
-3. Every word in a set MUST belong to the set's theme - no filler words
-4. Maximum 10 words per set
-5. Create 1-5 sets to coherently group the words
-6. Set titles: max 15 characters. Be creative — vary your naming style, don't always use the same pattern. Examples: "-at Rhyme Time", "Cat Bat Hat!", "A Sound Fun", "Vowel 'e' Mix", "B Words Go!"
-7. A smaller, coherent set is always better than a larger, mixed one — but never fewer than 3 words
-$existingSetTitlesSection
-Respond with a JSON object containing:
-- "sets": array of objects, each with "title" (string), "description" (string), "words" (array of strings, minimum 3), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings)
-        """.trimIndent()
-
-        val userPrompt = """
-Teacher's request: $prompt
-
-Available words: ${filteredWords.joinToString(", ")}
-
-WORD ANALYSIS:
-$analysisTable
-
-DETECTED PATTERNS:
-$patternsSummary
-
-Group these words into coherent educational sets.
-        """.trimIndent()
-
-        val model = createModel(systemInstruction)
-        val response = model.generateContent(userPrompt)
-        val json = response.text ?: throw Exception("Empty response from Step 2")
-
-        Log.d(TAG, "Step 2 response: $json")
-        return gson.fromJson(json, GroupedSetsResponse::class.java)
-    }
-
-    /**
-     * Step 2 variant: Regroup words for set regeneration (avoids old set's theme).
-     */
-    private suspend fun stepRegroupSet(
-        prompt: String,
-        filteredWords: List<String>,
-        analysisTable: String,
-        patternsSummary: String,
-        oldSetTitle: String,
-        oldSetDescription: String,
-        existingSetTitles: List<String> = emptyList()
+        existingSetTitles: List<String> = emptyList(),
+        avoidTitle: String? = null,
+        avoidDescription: String? = null
     ): GroupedSetsResponse {
         val existingSetTitlesSection = if (existingSetTitles.isNotEmpty()) {
             """
@@ -690,40 +637,39 @@ If the generated set title is semantically similar to an existing one (even if n
 """
         } else ""
 
-        val systemInstruction = """
-You are a reading teacher's assistant. Create a SINGLE new educational set from these CVC words.
+        val avoidanceSection = if (avoidTitle != null) {
+            """
 
-CRITICAL CONSTRAINT — The set MUST contain AT LEAST 3 words. Sets with fewer than 3 words are INVALID and will be rejected.
-
-YOUR PRIMARY GOAL: The teacher originally asked for "$prompt". The new set MUST be tailored to this request. Re-read the teacher's instruction carefully and create a set that directly addresses what the teacher is looking for — the words you choose and how you group them should serve the teacher's intent.
-
-SECONDARY CONSTRAINT: Avoid duplicating the previous set:
-- Previous set title: "$oldSetTitle"
-- Previous set description: "$oldSetDescription"
+AVOIDANCE CONSTRAINT: Do NOT duplicate the previous set:
+- Previous set title: "$avoidTitle"
+- Previous set description: "${avoidDescription ?: ""}"
 Choose a different subset of words or a different angle on the teacher's request, but ALWAYS stay aligned with the original instruction.
+"""
+        } else ""
 
-GROUPING STRATEGIES (pick the one that best matches the teacher's request):
-1. Word Family Sets: Group by same rime (cat/bat/hat = "-at" family)
-2. Vowel Sound Sets: Group by same middle vowel
-3. Onset Consonant Sets: Group by same starting letter
-4. Theme-Based Sets: Group by meaning if the teacher suggests a theme
+        val systemInstruction = """
+You are a reading teacher's assistant. From the available words, select a coherent subset for ONE focused air-writing activity.
+
+CRITICAL CONSTRAINT — The set MUST contain AT LEAST 3 words and AT MOST 10 words.
+
+SELECTION STRATEGIES (use in priority order):
+1. Word Family (highest priority): Same rime (cat/bat/hat = "-at" family)
+2. Vowel Sound: Same middle vowel (cat/bag/hat = short 'a')
+3. Onset Consonant: Same starting letter (cat/cup/can = 'c')
+4. Theme-Based: Group by meaning if the teacher suggests a theme
 
 RULES:
-1. The set MUST have at least 3 words — this is mandatory and non-negotiable
+1. Select 3-10 words that form ONE coherent grouping matching the teacher's request
 2. ONLY use words from the provided list
-3. Every word must belong to the set's theme
-4. Maximum 10 words
-5. Set title: max 15 characters. Be creative and unique — don't reuse common patterns like "Short X Words" or "X Family". Examples: "-at Rhyme Time", "Cat Bat Hat!", "Vowel 'e' Mix", "B Words Go!". Do NOT include the teacher's full request in the title.
-6. Return ONLY ONE set
-$existingSetTitlesSection
+3. Set title: max 15 characters. Be creative — vary your naming style. Examples: "-at Rhyme Time", "Cat Bat Hat!", "A Sound Fun", "Vowel 'e' Mix", "B Words Go!"
+4. A smaller, coherent set is better than a larger, mixed one
+$existingSetTitlesSection$avoidanceSection
 Respond with a JSON object containing:
-- "sets": array with exactly ONE object having "title", "description", "words" (minimum 3), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings) fields
+- "sets": array with exactly ONE object having "title" (string), "description" (string), "words" (array of strings, minimum 3), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings)
         """.trimIndent()
 
         val userPrompt = """
-Teacher's original request: $prompt
-
-I want a new set that is tailored to this request. Pick words and a grouping strategy that best serve what the teacher is asking for.
+Teacher's request: $prompt
 
 Available words: ${filteredWords.joinToString(", ")}
 
@@ -733,56 +679,45 @@ $analysisTable
 DETECTED PATTERNS:
 $patternsSummary
 
-Create one new set aligned with the teacher's request (but different from "$oldSetTitle").
+Select a coherent subset of words for one focused activity.
         """.trimIndent()
 
         val model = createModel(systemInstruction)
         val response = model.generateContent(userPrompt)
-        val json = response.text ?: throw Exception("Empty response from Step 2 (regen)")
+        val json = response.text ?: throw Exception("Empty response from Step 2")
 
-        Log.d(TAG, "Step 2 (regen) response: $json")
+        Log.d(TAG, "Step 2 response: $json")
         return gson.fromJson(json, GroupedSetsResponse::class.java)
     }
 
     /**
-     * Step 3: Assign configuration types and letter indices to each word.
+     * Step 3: Assign configuration types and letter indices to words in a single set.
      */
-    private suspend fun stepAssignConfigurations(
-        groupedSets: GroupedSetsResponse,
+    private suspend fun stepConfigureSingleSet(
+        setGrouping: SetGroupingResponse,
         availableWords: List<Word>,
         analyses: List<CVCAnalysis>,
-        existingActivityTitles: List<String> = emptyList(),
         existingSetTitles: List<String> = emptyList()
     ): AiGenerationResult {
         val wordsWithImages = availableWords.filter { !it.imagePath.isNullOrBlank() }.map { it.word }
         val wordsWithoutImages = availableWords.filter { it.imagePath.isNullOrBlank() }.map { it.word }
-        val setsDescription = groupedSets.sets.joinToString("\n") { set ->
-            "Set \"${set.title}\" (${set.description}): ${set.words.joinToString(", ")}"
-        }
 
-        val existingTitlesSection = buildString {
-            if (existingActivityTitles.isNotEmpty()) {
-                appendLine()
-                appendLine("EXISTING ACTIVITY TITLES (avoid generating an activity title semantically similar to these):")
-                existingActivityTitles.forEach { appendLine("- $it") }
-            }
-            if (existingSetTitles.isNotEmpty()) {
+        val existingTitlesSection = if (existingSetTitles.isNotEmpty()) {
+            buildString {
                 appendLine()
                 appendLine("EXISTING SET TITLES (avoid generating set titles semantically similar to these):")
                 existingSetTitles.forEach { appendLine("- $it") }
-            }
-            if (existingActivityTitles.isNotEmpty() || existingSetTitles.isNotEmpty()) {
                 appendLine()
-                appendLine("CRITICAL: Neither the activity title nor any set title may be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.")
+                appendLine("CRITICAL: The set title may not be identical (case-insensitive) to any existing title listed above. If the best title matches an existing one exactly, choose a different but related title.")
                 appendLine()
-                appendLine("If a generated title (activity or set) is semantically similar to an existing one (even if not identical), include a \"titleSimilarity\" field in that object with \"similarTo\" (the existing title), \"reason\" (one-sentence explanation), and \"alternateTitle\" (a different 15-char-max title that avoids the similarity).")
+                appendLine("If the generated set title is semantically similar to an existing one (even if not identical), include a \"titleSimilarity\" field with \"similarTo\" (the existing title), \"reason\" (one-sentence explanation), and \"alternateTitle\" (a different 15-char-max title that avoids the similarity).")
             }
-        }
+        } else ""
 
         val systemInstruction = """
-You are a reading teacher's assistant. Assign configuration types and letter indices to each word in each set.
+You are a reading teacher's assistant. Assign configuration types and letter indices to each word in this set.
 
-CRITICAL CONSTRAINT — EVERY set MUST keep AT LEAST 3 words. Do NOT remove words from sets. Include ALL words from each set in your output with their configurations.
+CRITICAL CONSTRAINT — The set MUST keep AT LEAST 3 words. Do NOT remove words. Include ALL words in your output with their configurations.
 
 CONFIGURATION TYPES:
 1. "write the word": Air-write all 3 letters. Good for full word spelling practice.
@@ -799,20 +734,18 @@ WORDS WITHOUT IMAGES (CANNOT use "name the picture"):
 ${wordsWithoutImages.joinToString(", ").ifEmpty { "(none)" }}
 
 RULES:
-1. EVERY set MUST contain at least 3 words — include ALL words from the input sets
+1. The set MUST contain at least 3 words — include ALL words from the input
 2. For "fill in the blanks": selectedLetterIndex must be 0, 1, or 2
 3. For "name the picture" and "write the word": always use selectedLetterIndex: 0
 4. NEVER use "name the picture" for words without images
-5. Activity title: STRICTLY max 15 characters (count carefully!). Be creative — derive the title from the phonics pattern but vary your naming style. Examples: "-at Blast!", "A Sound Fun", "B Word Buzz", "Rhyme & Write". Do NOT use generic titles like "CVC Practice" or "Word Practice".
-6. Set titles: max 15 characters. Keep the set titles from the input unless they exceed the limit or are too generic.
+5. Set title: max 15 characters. Keep the title from the input unless it exceeds the limit or is too generic.
 $existingTitlesSection
 Respond with a JSON object containing:
-- "activity": object with "title" (string, STRICTLY max 15 chars), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings)
-- "sets": array of objects, each with:
+- "sets": array with exactly ONE object having:
   - "title" (string)
   - "description" (string)
   - "titleSimilarity" (optional object with "similarTo", "reason", and "alternateTitle" strings)
-  - "words": array of objects with "word" (string), "configurationType" (string), "selectedLetterIndex" (integer) — minimum 3 words per set
+  - "words": array of objects with "word" (string), "configurationType" (string), "selectedLetterIndex" (integer) — minimum 3 words
         """.trimIndent()
 
         val wordAnalysis = analyses.joinToString("\n") { a ->
@@ -820,13 +753,13 @@ Respond with a JSON object containing:
         }
 
         val userPrompt = """
-Here are the grouped sets to configure:
-$setsDescription
+Here is the set to configure:
+Set "${setGrouping.title}" (${setGrouping.description}): ${setGrouping.words.joinToString(", ")}
 
 WORD ANALYSIS:
 $wordAnalysis
 
-Assign appropriate configuration types and letter indices to each word based on its set's theme and the word's properties.
+Assign appropriate configuration types and letter indices to each word based on the set's theme and the word's properties.
         """.trimIndent()
 
         val model = createModel(systemInstruction)
@@ -835,7 +768,7 @@ Assign appropriate configuration types and letter indices to each word based on 
 
         Log.d(TAG, "Step 3 response: $json")
         val aiResponse = gson.fromJson(json, AiResponse::class.java)
-        return parseStep3Response(aiResponse, availableWords, existingActivityTitles, existingSetTitles)
+        return parseStep3Response(aiResponse, availableWords, existingSetTitles)
     }
 
     // ========== Retry Logic ==========
@@ -933,45 +866,12 @@ Assign appropriate configuration types and letter indices to each word based on 
     private fun parseStep3Response(
         response: AiResponse,
         availableWords: List<Word>,
-        existingActivityTitles: List<String> = emptyList(),
         existingSetTitles: List<String> = emptyList()
     ): AiGenerationResult {
         val wordMap = availableWords.associateBy { it.word }
 
         // Dedup tracking sets
-        val usedActivityTitles = mutableSetOf<String>()
         val usedSetTitles = mutableSetOf<String>()
-
-        // Auto-correct activity title (enforce 15-char limit)
-        val activityTitle = when {
-            response.activity.title.isBlank() -> "CVC Practice"
-            response.activity.title.length > 15 -> {
-                val truncated = response.activity.title.take(15)
-                val lastSpace = truncated.lastIndexOf(' ')
-                if (lastSpace > 5) truncated.substring(0, lastSpace).trimEnd() else truncated.trimEnd()
-            }
-            else -> response.activity.title
-        }
-
-        // Dedup activity title against existing activity titles
-        val dedupedActivityTitle = ensureUniqueTitle(
-            activityTitle,
-            response.activity.titleSimilarity?.alternateTitle ?: "",
-            existingActivityTitles.toSet(),
-            usedActivityTitles
-        )
-
-        // Extract activity-level title similarity
-        val activityTitleSimilarity = response.activity.titleSimilarity?.let { sim ->
-            if (sim.similarTo.isNotBlank()) {
-                TitleSimilarity(
-                    generatedTitle = dedupedActivityTitle,
-                    similarToExisting = sim.similarTo,
-                    reason = sim.reason,
-                    alternateTitle = sim.alternateTitle
-                )
-            } else null
-        }
 
         if (response.sets.isEmpty()) {
             return AiGenerationResult.Error("No sets in response", canRetry = true)
@@ -1103,9 +1003,8 @@ Assign appropriate configuration types and letter indices to each word based on 
         return AiGenerationResult.Success(
             AiGeneratedActivity(
                 activity = AiActivityInfo(
-                    title = dedupedActivityTitle,
-                    description = "",
-                    titleSimilarity = activityTitleSimilarity
+                    title = "",
+                    description = ""
                 ),
                 sets = validatedSets
             )
@@ -1170,104 +1069,86 @@ Assign appropriate configuration types and letter indices to each word based on 
     // ========== Fallbacks ==========
 
     /**
-     * Algorithmic grouping using CVC patterns when Step 2 fails.
+     * Algorithmic single-set selection using CVC patterns when Step 2 fails.
+     * Returns the FIRST valid grouping (>= 3 words) as a single set.
      */
-    private fun algorithmicGrouping(
+    private fun algorithmicSingleSetSelection(
         analyses: List<CVCAnalysis>,
         patterns: CVCPatterns
     ): GroupedSetsResponse {
-        val sets = mutableListOf<SetGroupingResponse>()
-        val used = mutableSetOf<String>()
-
-        // Priority 1: Word families
+        // Priority 1: First word family with >= 3 words
         for ((rime, words) in patterns.wordFamilies) {
-            val groupWords = words.filter { it.word !in used }.take(10)
+            val groupWords = words.take(10)
             if (groupWords.size >= 3) {
-                sets.add(
-                    SetGroupingResponse(
-                        title = "-$rime Family",
-                        description = "Words ending in -$rime",
-                        words = groupWords.map { it.word }
+                return GroupedSetsResponse(
+                    sets = listOf(
+                        SetGroupingResponse(
+                            title = "-$rime Family",
+                            description = "Words ending in -$rime",
+                            words = groupWords.map { it.word }
+                        )
                     )
                 )
-                used.addAll(groupWords.map { it.word })
             }
         }
 
-        // Priority 2: Same vowel groups (only if no word family sets found)
-        if (sets.isEmpty()) {
-            for ((vowel, words) in patterns.sameVowel) {
-                val groupWords = words.filter { it.word !in used }.take(10)
-                if (groupWords.size >= 3) {
-                    sets.add(
+        // Priority 2: First vowel group with >= 3 words
+        for ((vowel, words) in patterns.sameVowel) {
+            val groupWords = words.take(10)
+            if (groupWords.size >= 3) {
+                return GroupedSetsResponse(
+                    sets = listOf(
                         SetGroupingResponse(
                             title = "Short '$vowel' Words",
                             description = "Words with the '$vowel' vowel sound",
                             words = groupWords.map { it.word }
                         )
                     )
-                    used.addAll(groupWords.map { it.word })
-                }
+                )
             }
         }
 
-        // Remaining words in a mixed set
-        val remaining = analyses.filter { it.word !in used }
-        if (remaining.size >= 3) {
-            sets.add(
-                SetGroupingResponse(
-                    title = "CVC Practice",
-                    description = "Mixed CVC word practice",
-                    words = remaining.map { it.word }
-                )
-            )
-        }
-
-        // Ultimate fallback: everything in one set
-        if (sets.isEmpty()) {
-            sets.add(
+        // Fallback: first 3-10 filtered words as "CVC Practice"
+        val fallbackWords = analyses.take(10).map { it.word }
+        return GroupedSetsResponse(
+            sets = listOf(
                 SetGroupingResponse(
                     title = "CVC Practice",
                     description = "CVC word practice",
-                    words = analyses.map { it.word }
+                    words = fallbackWords
                 )
             )
-        }
-
-        return GroupedSetsResponse(sets = sets)
+        )
     }
 
     /**
      * Default configuration fallback when Step 3 fails.
-     * Assigns "write the word" to all words.
+     * Assigns "write the word" to all words in the first set.
      */
     private fun defaultConfigurations(
         groupedSets: GroupedSetsResponse,
         availableWords: List<Word>
     ): AiGenerationResult {
-        val sets = groupedSets.sets.map { set ->
-            AiGeneratedSet(
-                title = set.title,
-                description = set.description,
-                words = set.words.map { word ->
-                    AiWordConfig(
-                        word = word,
-                        configurationType = "write the word",
-                        selectedLetterIndex = 0
-                    )
-                }
-            )
-        }
-
-        val activityTitle = if (sets.size == 1) sets[0].title.take(15) else "CVC Practice"
+        val firstSet = groupedSets.sets.first()
+        val singleSet = AiGeneratedSet(
+            title = firstSet.title,
+            description = firstSet.description,
+            words = firstSet.words.map { word ->
+                AiWordConfig(
+                    word = word,
+                    configurationType = "write the word",
+                    selectedLetterIndex = 0
+                )
+            }
+        )
 
         return AiGenerationResult.Success(
             AiGeneratedActivity(
                 activity = AiActivityInfo(
-                    title = activityTitle,
+                    title = "",
                     description = ""
                 ),
-                sets = sets
+                sets = listOf(singleSet)
             )
         )
     }

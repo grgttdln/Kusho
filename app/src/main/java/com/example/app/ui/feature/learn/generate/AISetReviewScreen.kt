@@ -12,11 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.res.painterResource
@@ -59,10 +57,7 @@ fun AISetReviewScreen(
     userId: Long,
     editableSets: List<EditableSet>,
     onEditableSetsChange: (List<EditableSet>) -> Unit,
-    currentSetIndex: Int,
-    onCurrentSetIndexChange: (Int) -> Unit,
     onRegenerateSet: (currentSetTitle: String, currentSetDescription: String, onResult: (String?) -> Unit) -> Unit = { _, _, _ -> },
-    onAddMoreSet: (existingTitles: List<String>, existingDescriptions: List<String>, onResult: (String?) -> Unit) -> Unit = { _, _, _ -> },
     onDiscardSet: () -> Unit = {},
     onAddWordsClick: (existingWords: List<String>) -> Unit = {},
     additionalWords: List<SetRepository.SelectedWordConfig> = emptyList(),
@@ -85,6 +80,7 @@ fun AISetReviewScreen(
         }
     }
 
+    val currentSetIndex = 0
     val currentSet = editableSets.getOrNull(currentSetIndex)
     val totalSets = editableSets.size
 
@@ -116,9 +112,18 @@ fun AISetReviewScreen(
     // Loading states
     var isSaving by remember { mutableStateOf(false) }
     var isRegenerating by remember { mutableStateOf(false) }
-    var isAddingMoreSet by remember { mutableStateOf(false) }
-    var addMoreSetError by remember { mutableStateOf<String?>(null) }
     var regenerationError by remember { mutableStateOf<String?>(null) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    DeleteConfirmationDialog(
+        isVisible = showDiscardDialog,
+        deleteType = DeleteType.DISCARD_ACTIVITY,
+        onConfirm = {
+            showDiscardDialog = false
+            onDiscardSet()
+        },
+        onDismiss = { showDiscardDialog = false }
+    )
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -128,81 +133,41 @@ fun AISetReviewScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 100.dp),
+                .padding(bottom = 220.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Progress Bar (Set indicators) - Always show even with one set
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Header with back button and logo
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                repeat(totalSets) { index ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(8.dp)
-                            .background(
-                                color = if (index <= currentSetIndex) Color(0xFF3FA9F8) else Color(0xFFE0E0E0),
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Navigation Bar with Previous/Next Set buttons (below progress indicator)
-            if (totalSets > 1) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Back Button (left)
+                IconButton(
+                    onClick = { showDiscardDialog = true },
+                    modifier = Modifier.align(Alignment.CenterStart)
                 ) {
-                    // Previous Set Button (Icon only)
-                    if (currentSetIndex > 0) {
-                        IconButton(
-                            onClick = { onCurrentSetIndexChange(currentSetIndex - 1) },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Previous Set",
-                                tint = Color(0xFF3FA9F8),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.size(48.dp))
-                    }
-
-                    // Set indicator text
-                    Text(
-                        text = "${currentSetIndex + 1} / $totalSets",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF666666)
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF3FA9F8)
                     )
-
-                    // Next Set Button (Icon only)
-                    if (currentSetIndex < totalSets - 1) {
-                        IconButton(
-                            onClick = { onCurrentSetIndexChange(currentSetIndex + 1) },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = "Next Set",
-                                tint = Color(0xFF3FA9F8),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.size(48.dp))
-                    }
                 }
+
+                // Kusho Logo (centered)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_kusho),
+                    contentDescription = "Kusho Logo",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .offset(x = 10.dp)
+                        .align(Alignment.Center),
+                    alignment = Alignment.Center
+                )
             }
 
+            Spacer(modifier = Modifier.height(32.dp))
 
 
             // Current Set Card
@@ -213,7 +178,6 @@ fun AISetReviewScreen(
                     SetReviewCard(
                         set = set,
                         isRegenerating = isRegenerating,
-                        isAddingMoreSet = isAddingMoreSet,
                         onSetChange = { updatedSet ->
                             onEditableSetsChange(editableSets.toMutableList().apply {
                                 this[currentSetIndex] = updatedSet
@@ -233,7 +197,6 @@ fun AISetReviewScreen(
                                 )
                             })
                         },
-                        onDiscardSet = onDiscardSet,
                         onRegenerateSet = {
                             isRegenerating = true
                             regenerationError = null
@@ -301,79 +264,11 @@ fun AISetReviewScreen(
                         onAddWordsClick = {
                             onAddWordsClick(set.words.map { it.word })
                         },
-                        showBottomButtons = currentSetIndex == totalSets - 1,
+                        showBottomButtons = true,
                         isSaving = isSaving,
                         hasUndecidedSets = editableSets.any {
                             (it.overlapMatch != null && it.mergeDecision == MergeDecision.UNDECIDED) ||
                             (it.titleSimilarityMatch != null && it.titleSimilarityDecision == TitleSimilarityDecision.UNDECIDED)
-                        },
-                        onAddMoreSetClick = {
-                            isAddingMoreSet = true
-                            addMoreSetError = null
-                            val titles = editableSets.map { it.title }
-                            val descriptions = editableSets.map { it.description }
-                            onAddMoreSet(titles, descriptions) { newJson ->
-                                isAddingMoreSet = false
-                                if (newJson == null) {
-                                    addMoreSetError = "Failed to generate set. Please try again."
-                                    return@onAddMoreSet
-                                }
-                                try {
-                                    val newActivity = Gson().fromJson(newJson, AiGeneratedActivity::class.java)
-                                    val wordsWithImages = editableSets
-                                        .flatMap { it.words }
-                                        .filter { it.hasImage }
-                                        .map { it.word }
-                                        .toSet()
-                                    newActivity?.sets?.firstOrNull()?.let { newSet ->
-                                        // Resolve title similarity
-                                        val newTitleSimilarityMatch = newSet.titleSimilarity?.let { sim ->
-                                            val matchKey = existingSetTitleMap.keys.firstOrNull {
-                                                it.equals(sim.similarToExisting, ignoreCase = true)
-                                            }
-                                            if (matchKey != null) {
-                                                TitleSimilarityInfo(
-                                                    existingTitle = matchKey,
-                                                    existingId = existingSetTitleMap[matchKey] ?: 0L,
-                                                    reason = sim.reason
-                                                )
-                                            } else null
-                                        }
-
-                                        val newEditableSet = EditableSet(
-                                            title = newSet.title,
-                                            description = newSet.description,
-                                            words = newSet.words.map { word ->
-                                                EditableWord(
-                                                    word = word.word,
-                                                    configurationType = mapAiConfigTypeToUi(word.configurationType),
-                                                    selectedLetterIndex = word.selectedLetterIndex,
-                                                    hasImage = word.word in wordsWithImages
-                                                )
-                                            },
-                                            titleSimilarityMatch = newTitleSimilarityMatch
-                                        )
-
-                                        // Run overlap detection on the new set, then append
-                                        coroutineScope.launch {
-                                            var finalSet = newEditableSet
-                                            try {
-                                                val newSetWords = listOf(newEditableSet.words.map { it.word })
-                                                val overlaps = setRepository.findOverlappingSets(userId, newSetWords)
-                                                val match = overlaps[0]
-                                                if (match != null) {
-                                                    finalSet = newEditableSet.copy(overlapMatch = match)
-                                                }
-                                            } catch (e: Exception) {
-                                                android.util.Log.e("AISetReview", "Overlap detection failed for new set", e)
-                                            }
-                                            onEditableSetsChange(editableSets + finalSet)
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    addMoreSetError = "Failed to parse generated set"
-                                }
-                            }
                         },
                         onProceedClick = {
                             isSaving = true
@@ -452,13 +347,7 @@ fun AISetReviewScreen(
                                     return@launch
                                 }
 
-                                generatedActivity?.let { activity ->
-                                    onFinish(
-                                        activity.activity.title,
-                                        activity.activity.description,
-                                        savedSetIds
-                                    )
-                                }
+                                onFinish("", "", savedSetIds)
                             }
                         },
                         onMergeIntoExisting = {
@@ -553,36 +442,23 @@ private fun SetReviewCard(
     onWordRemove: (Int) -> Unit,
     onExistingWordRemove: (Int) -> Unit = {},
     isRegenerating: Boolean,
-    isAddingMoreSet: Boolean = false,
     onRegenerateSet: () -> Unit,
     onAddWordsClick: () -> Unit,
     showBottomButtons: Boolean = false,
     isSaving: Boolean = false,
     hasUndecidedSets: Boolean = false,
-    onAddMoreSetClick: () -> Unit = {},
     onProceedClick: () -> Unit = {},
     onMergeIntoExisting: () -> Unit = {},
     onCreateAsNew: () -> Unit = {},
-    onDiscardSet: () -> Unit = {},
     onKeepTitle: () -> Unit = {},
     onSkipSet: () -> Unit = {},
     onUndoTitleDecision: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showDiscardDialog by remember { mutableStateOf(false) }
-
-    DeleteConfirmationDialog(
-        isVisible = showDiscardDialog,
-        deleteType = DeleteType.SET,
-        onConfirm = {
-            showDiscardDialog = false
-            onDiscardSet()
-        },
-        onDismiss = { showDiscardDialog = false }
-    )
-
     Column(
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 15.dp)
     ) {
         // Overlap detection banner
         if (set.overlapMatch != null) {
@@ -838,7 +714,7 @@ private fun SetReviewCard(
 
         // Add a Set Title Field
         Text(
-            text = "Add a Set Title",
+            text = "Add an Activity Title",
             fontSize = 16.sp,
             fontWeight = FontWeight.Normal,
             color = Color(0xFF0B0B0B),
@@ -884,11 +760,11 @@ private fun SetReviewCard(
             }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(30.dp))
 
         // Add Description Field
         Text(
-            text = "Add Description",
+            text = "Add a short description",
             fontSize = 16.sp,
             fontWeight = FontWeight.Normal,
             color = Color(0xFF0B0B0B),
@@ -935,7 +811,7 @@ private fun SetReviewCard(
             }
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(30.dp))
 
         // === MERGED STATE: Two-section layout ===
         if (set.mergeDecision == MergeDecision.MERGE && set.existingWords.isNotEmpty()) {
@@ -1101,7 +977,7 @@ private fun SetReviewCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Words Added",
+                    text = "Words in Activity",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color(0xFF0B0B0B)
@@ -1134,7 +1010,7 @@ private fun SetReviewCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Regenerate Set",
+                            text = "Regenerate Activity",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -1208,98 +1084,34 @@ private fun SetReviewCard(
             )
         }
 
-        // Discard Set Button - Always visible
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedButton(
-            onClick = { showDiscardDialog = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.5.dp, Color(0xFFE57373)),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = Color(0xFFE57373)
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "Discard Set",
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Discard This Set",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        // Bottom Buttons - Only show on the last set
+        // Bottom Button
         if (showBottomButtons) {
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
+            Button(
+                onClick = onProceedClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3FA9F8),
+                    disabledContainerColor = Color(0xFFB0BEC5)
+                ),
+                enabled = !isSaving && !hasUndecidedSets
             ) {
-                // Add More Set Button (outline style)
-                Button(
-                    onClick = onAddMoreSetClick,
-                    enabled = !isAddingMoreSet && !isSaving,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        disabledContainerColor = Color.White
-                    ),
-                    border = BorderStroke(1.5.dp, if (isAddingMoreSet || isSaving) Color(0xFFB0BEC5) else Color(0xFF3FA9F8))
-                ) {
-                    if (isAddingMoreSet) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color(0xFF3FA9F8),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = "Add More Set",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isSaving) Color(0xFFB0BEC5) else Color(0xFF3FA9F8)
-                        )
-                    }
-                }
-
-                // Proceed Button (filled style) - saves all sets and finishes
-                Button(
-                    onClick = onProceedClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3FA9F8),
-                        disabledContainerColor = Color(0xFFB0BEC5)
-                    ),
-                    enabled = !isSaving && !hasUndecidedSets
-                ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = "Proceed",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
-                    }
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Proceed",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
                 }
             }
 
@@ -1660,7 +1472,6 @@ fun AISetReviewScreenPreview() {
         )
     )
     var editableSets by remember { mutableStateOf(sampleSets) }
-    var currentSetIndex by remember { mutableStateOf(0) }
 
     AISetReviewScreen(
         onNavigate = {},
@@ -1670,8 +1481,6 @@ fun AISetReviewScreenPreview() {
         userId = 1L,
         editableSets = editableSets,
         onEditableSetsChange = { editableSets = it },
-        currentSetIndex = currentSetIndex,
-        onCurrentSetIndexChange = { currentSetIndex = it },
         onRegenerateSet = { _, _, _ -> },
         onDiscardSet = {},
         onAddWordsClick = {}

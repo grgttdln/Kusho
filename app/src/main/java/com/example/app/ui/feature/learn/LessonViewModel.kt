@@ -11,7 +11,6 @@ import com.example.app.data.model.AiGenerationResult
 import com.example.app.data.repository.GeminiRepository
 import com.example.app.data.repository.GenerationPhase
 import com.example.app.data.repository.WordRepository
-import com.example.app.util.DictionaryValidator
 import com.example.app.util.ImageStorageManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,14 +31,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private val database = AppDatabase.getInstance(application)
     private val sessionManager = SessionManager.getInstance(application)
     private val imageStorageManager = ImageStorageManager(application)
-    private val dictionaryValidator = DictionaryValidator(application)
-    private val wordRepository = WordRepository(database.wordDao(), dictionaryValidator)
+    private val wordRepository = WordRepository(database.wordDao())
     private val activityDao = database.activityDao()
     private val setDao = database.setDao()
     private val geminiRepository = GeminiRepository()
-
-    // Cached existing set titles for regeneration support
-    private var cachedExistingSetTitles: List<String> = emptyList()
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -61,6 +56,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     // Cached suggested prompts for activity creation modal
     private var cachedActivitySuggestedPrompts: List<String> = emptyList()
     private var cachedActivityWordCountForPrompts: Int = -1
+    private var cachedActivitySetCountForPrompts: Int = -1
 
     init {
         // Observe the current user session
@@ -112,7 +108,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 selectedMediaUri = null,
                 inputError = null,
                 imageError = null,
-                dictionarySuggestions = emptyList()
             )
         }
     }
@@ -125,7 +120,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
             it.copy(
                 wordInput = word.trim(),
                 inputError = null,
-                dictionarySuggestions = emptyList()
             )
         }
     }
@@ -245,18 +239,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                         )
                     }
                 }
-                is WordRepository.AddWordResult.NotInDictionary -> {
-                    if (imagePath != null) {
-                        imageStorageManager.deleteImage(imagePath)
-                    }
-                    _uiState.update {
-                        it.copy(
-                            inputError = "This word was not found in the dictionary",
-                            dictionarySuggestions = result.suggestions,
-                            isLoading = false
-                        )
-                    }
-                }
             }
             } catch (e: Exception) {
                 // Clean up saved image on any error
@@ -325,7 +307,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 editInputError = null,
                 editImageError = null,
                 isEditLoading = false,
-                editDictionarySuggestions = emptyList()
             )
         }
     }
@@ -338,36 +319,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
             it.copy(
                 editWordInput = word.trim(),
                 editInputError = null,
-                editDictionarySuggestions = emptyList()
             )
         }
     }
 
-    /**
-     * Handle suggestion click in the add word modal.
-     */
-    fun onSuggestionClick(word: String) {
-        _uiState.update {
-            it.copy(
-                wordInput = word,
-                inputError = null,
-                dictionarySuggestions = emptyList()
-            )
-        }
-    }
-
-    /**
-     * Handle suggestion click in the edit word modal.
-     */
-    fun onEditSuggestionClick(word: String) {
-        _uiState.update {
-            it.copy(
-                editWordInput = word,
-                editInputError = null,
-                editDictionarySuggestions = emptyList()
-            )
-        }
-    }
 
     /**
      * Update the selected media URI for editing.
@@ -495,18 +450,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         }
                     }
-                    is WordRepository.UpdateWordResult.NotInDictionary -> {
-                        if (newMediaUri != null && newImagePath != editingWord.imagePath) {
-                            newImagePath?.let { imageStorageManager.deleteImage(it) }
-                        }
-                        _uiState.update {
-                            it.copy(
-                                editInputError = "This word was not found in the dictionary",
-                                editDictionarySuggestions = result.suggestions,
-                                isEditLoading = false
-                            )
-                        }
-                    }
                 }
             } catch (e: Exception) {
                 if (newMediaUri != null && newImagePath != editingWord.imagePath) {
@@ -626,15 +569,12 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         _generationPhase.value = GenerationPhase.Filtering
 
         viewModelScope.launch {
-            // Fetch existing titles for similarity detection
-            val existingActivityTitles = activityDao.getActivitiesByUserIdOnce(userId).map { it.title }
+            // Fetch existing set titles for similarity detection
             val existingSetTitles = setDao.getSetsWithWordNames(userId).map { it.setTitle }.distinct()
-            cachedExistingSetTitles = existingSetTitles
 
             val result = geminiRepository.generateActivity(
                 activityDescription,
                 allWords,
-                existingActivityTitles = existingActivityTitles,
                 existingSetTitles = existingSetTitles
             ) { phase ->
                 _generationPhase.value = phase
@@ -682,58 +622,14 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         viewModelScope.launch {
+            val existingSetTitles = setDao.getSetsWithWordNames(currentUserId ?: 0L).map { it.setTitle }.distinct()
+
             val result = geminiRepository.regenerateSet(
                 prompt = lastGenerationPrompt,
                 availableWords = lastSelectedWords,
                 currentSetTitle = currentSetTitle,
                 currentSetDescription = currentSetDescription,
-                existingSetTitles = cachedExistingSetTitles,
-                onPhaseChange = { phase ->
-                    _generationPhase.value = phase
-                }
-            )
-
-            when (result) {
-                is AiGenerationResult.Success -> {
-                    _generationPhase.value = GenerationPhase.Idle
-                    val gson = com.google.gson.Gson()
-                    onResult(gson.toJson(result.data))
-                }
-                is AiGenerationResult.Error -> {
-                    _generationPhase.value = GenerationPhase.Idle
-                    onResult(null)
-                }
-            }
-        }
-    }
-
-    /**
-     * Generate one additional set to append to the existing generated sets.
-     * Reuses the regenerateSet pipeline, passing all existing titles as avoidance context.
-     */
-    fun addMoreSet(
-        existingSetTitles: List<String>,
-        existingSetDescriptions: List<String>,
-        onResult: (String?) -> Unit
-    ) {
-        if (lastSelectedWords.isEmpty()) {
-            onResult(null)
-            return
-        }
-
-        // Combine existing titles into avoidance context for the AI
-        val avoidTitle = existingSetTitles.joinToString(", ").take(50)
-        val avoidDescription = existingSetDescriptions.joinToString("; ").take(100)
-
-        viewModelScope.launch {
-            val allTitlesToAvoid = (cachedExistingSetTitles + existingSetTitles).distinct()
-
-            val result = geminiRepository.regenerateSet(
-                prompt = lastGenerationPrompt,
-                availableWords = lastSelectedWords,
-                currentSetTitle = avoidTitle,
-                currentSetDescription = avoidDescription,
-                existingSetTitles = allTitlesToAvoid,
+                existingSetTitles = existingSetTitles,
                 onPhaseChange = { phase ->
                     _generationPhase.value = phase
                 }
@@ -801,28 +697,44 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
      * Uses cached prompts if word bank size hasn't changed.
      */
     fun loadActivitySuggestedPrompts() {
+        val userId = currentUserId ?: return
         val currentWords = _uiState.value.words
         val currentWordCount = currentWords.size
 
         // Don't load suggestions for empty word bank
         if (currentWordCount == 0) return
 
-        // Use cache if word bank size hasn't changed
-        if (currentWordCount == cachedActivityWordCountForPrompts && cachedActivitySuggestedPrompts.isNotEmpty()) {
-            _uiState.update { it.copy(activitySuggestedPrompts = cachedActivitySuggestedPrompts) }
-            return
-        }
-
-        // Generate new suggestions
+        // Generate new suggestions (cache check deferred until we know set count)
         _uiState.update { it.copy(isActivitySuggestionsLoading = true, activitySuggestedPrompts = emptyList()) }
 
         viewModelScope.launch {
             try {
-                val prompts = geminiRepository.generateActivitySuggestedPrompts(currentWords)
+                // Fetch existing sets with their words
+                val setWordNames = setDao.getSetsWithWordNames(userId)
+                val existingSetsMap = setWordNames.groupBy { it.setTitle }
+                    .mapValues { (_, rows) -> rows.map { it.wordName } }
+                val currentSetCount = existingSetsMap.size
+
+                // Use cache if word bank size and set count haven't changed
+                if (currentWordCount == cachedActivityWordCountForPrompts &&
+                    currentSetCount == cachedActivitySetCountForPrompts &&
+                    cachedActivitySuggestedPrompts.isNotEmpty()
+                ) {
+                    _uiState.update {
+                        it.copy(
+                            activitySuggestedPrompts = cachedActivitySuggestedPrompts,
+                            isActivitySuggestionsLoading = false
+                        )
+                    }
+                    return@launch
+                }
+
+                val prompts = geminiRepository.generateActivitySuggestedPrompts(currentWords, existingSetsMap)
 
                 if (prompts.isNotEmpty()) {
                     cachedActivitySuggestedPrompts = prompts
                     cachedActivityWordCountForPrompts = currentWordCount
+                    cachedActivitySetCountForPrompts = currentSetCount
                 }
 
                 _uiState.update {
@@ -1002,10 +914,6 @@ data class LessonUiState(
     val activitySuggestedPrompts: List<String> = emptyList(),
     val isActivitySuggestionsLoading: Boolean = false,
     val generatedJsonResult: String? = null,
-    // Dictionary suggestion state (add modal)
-    val dictionarySuggestions: List<String> = emptyList(),
-    // Dictionary suggestion state (edit modal)
-    val editDictionarySuggestions: List<String> = emptyList(),
     // Suggested prompts state (generation modal)
     val suggestedPrompts: List<String> = emptyList(),
     val isSuggestionsLoading: Boolean = false,

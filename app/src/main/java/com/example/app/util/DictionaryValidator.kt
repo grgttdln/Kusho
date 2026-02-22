@@ -68,13 +68,16 @@ class DictionaryValidator(context: Context) {
      * @return [DictionaryResult] indicating validation result
      */
     suspend fun validateWord(word: String): DictionaryResult {
+        Log.d(TAG, "validateWord() called for: '$word'")
+
         val textServicesManager = applicationContext.getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE)
                 as? TextServicesManager
 
         if (textServicesManager == null) {
-            Log.w(TAG, "TextServicesManager unavailable")
+            Log.w(TAG, "TextServicesManager is NULL - no spell checker service on this device")
             return DictionaryResult.Unavailable
         }
+        Log.d(TAG, "TextServicesManager obtained successfully")
 
         // Use withTimeoutOrNull to avoid blocking users.
         // Must run on Main dispatcher because SpellCheckerSession internally
@@ -94,37 +97,54 @@ class DictionaryValidator(context: Context) {
                                 }
 
                                 override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>?) {
-                                    if (!continuation.isActive) return
+                                    Log.d(TAG, "onGetSentenceSuggestions callback fired for '$word'")
+                                    if (!continuation.isActive) {
+                                        Log.d(TAG, "Continuation no longer active, ignoring callback")
+                                        return
+                                    }
 
                                     try {
                                         if (results == null || results.isEmpty()) {
+                                            Log.w(TAG, "Results null or empty → Unavailable")
                                             continuation.resume(DictionaryResult.Unavailable)
                                             session?.close()
                                             return
                                         }
 
                                         val sentenceSuggestionsInfo = results[0]
+                                        Log.d(TAG, "suggestionsCount (sentence level): ${sentenceSuggestionsInfo.suggestionsCount}")
                                         if (sentenceSuggestionsInfo.suggestionsCount == 0) {
+                                            Log.w(TAG, "Sentence suggestionsCount == 0 → Unavailable")
                                             continuation.resume(DictionaryResult.Unavailable)
                                             session?.close()
                                             return
                                         }
 
                                         val suggestionsInfo = sentenceSuggestionsInfo.getSuggestionsInfoAt(0)
+                                        val attrs = suggestionsInfo.suggestionsAttributes
+                                        Log.d(TAG, "suggestionsAttributes: 0x${attrs.toString(16)} (decimal: $attrs)")
+                                        Log.d(TAG, "  IN_THE_DICTIONARY flag: ${attrs and SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY != 0}")
+                                        Log.d(TAG, "  LOOKS_LIKE_TYPO flag: ${attrs and SuggestionsInfo.RESULT_ATTR_LOOKS_LIKE_TYPO != 0}")
+                                        Log.d(TAG, "  suggestionsCount (word level): ${suggestionsInfo.suggestionsCount}")
 
                                         if (suggestionsInfo.suggestionsAttributes and
                                             SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY != 0
                                         ) {
+                                            Log.d(TAG, "Word '$word' is IN THE DICTIONARY → Valid")
                                             continuation.resume(DictionaryResult.Valid)
                                             session?.close()
                                             return
                                         }
 
-                                        val cvcSuggestions = (0 until suggestionsInfo.suggestionsCount)
+                                        val allSuggestions = (0 until suggestionsInfo.suggestionsCount)
                                             .mapNotNull { suggestionsInfo.getSuggestionAt(it) }
+                                        Log.d(TAG, "Raw suggestions for '$word': $allSuggestions")
+
+                                        val cvcSuggestions = allSuggestions
                                             .filter { WordValidator.isCVCPattern(it) }
                                             .distinct()
                                             .take(MAX_SUGGESTIONS)
+                                        Log.d(TAG, "CVC-filtered suggestions: $cvcSuggestions")
 
                                         continuation.resume(DictionaryResult.Invalid(cvcSuggestions))
                                         session?.close()
@@ -139,10 +159,11 @@ class DictionaryValidator(context: Context) {
                         )
 
                         if (session == null) {
-                            Log.w(TAG, "Session creation failed")
+                            Log.w(TAG, "Session creation returned NULL - spell checker not available on this device")
                             continuation.resume(DictionaryResult.Unavailable)
                             return@suspendCancellableCoroutine
                         }
+                        Log.d(TAG, "SpellCheckerSession created successfully, sending query for '$word'")
 
                         continuation.invokeOnCancellation {
                             session?.close()
@@ -163,8 +184,10 @@ class DictionaryValidator(context: Context) {
 
         // If timeout occurred, return Unavailable
         if (result == null) {
-            Log.w(TAG, "Timeout occurred")
+            Log.w(TAG, "Timeout occurred after ${TIMEOUT_MS}ms for word '$word'")
         }
-        return result ?: DictionaryResult.Unavailable
+        val finalResult = result ?: DictionaryResult.Unavailable
+        Log.d(TAG, "Final result for '$word': $finalResult")
+        return finalResult
     }
 }
