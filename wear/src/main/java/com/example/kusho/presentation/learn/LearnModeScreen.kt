@@ -457,6 +457,7 @@ private fun FillInTheBlankMainContent(
     feedbackIsCorrect: Boolean
 ) {
     val scope = rememberCoroutineScope()
+    // Include timestamp in key to force fresh ViewModel on screen re-entry (matches Tutorial Mode pattern)
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(
             sensorManager = sensorManager,
@@ -466,7 +467,8 @@ private fun FillInTheBlankMainContent(
                     phoneCommunicationManager.sendLearnModeGestureRecording()
                 }
             }
-        )
+        ),
+        key = "${wordData.word}-${wordData.maskedIndex}-${wordData.timestamp}"
     )
 
     val uiState by viewModel.uiState.collectAsState()
@@ -493,6 +495,15 @@ private fun FillInTheBlankMainContent(
     LaunchedEffect(uiState.state) {
         if (uiState.state == LearnModeViewModel.State.IDLE) {
             lastSpokenPrediction = null
+        }
+    }
+
+    // Speak "oops" and notify phone when entering NO_MOVEMENT state
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.NO_MOVEMENT) {
+            ttsManager.speak("Oops, you did not air write!")
+            // Send wrong letter to phone so it exits "is air writing" and plays wrong sound
+            phoneCommunicationManager.sendLetterInput("?", wordData.maskedIndex)
         }
     }
 
@@ -534,6 +545,7 @@ private fun FillInTheBlankMainContent(
                     LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
+                    LearnModeViewModel.State.NO_MOVEMENT -> LearnNoMovementContent(viewModel)
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
                 }
             }
@@ -654,6 +666,30 @@ private fun ShowingPredictionContent(uiState: LearnModeViewModel.UiState) {
     }
 }
 
+@Composable
+private fun LearnNoMovementContent(
+    viewModel: LearnModeViewModel
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.retryAfterNoMovement() },
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.dis_ops),
+            contentDescription = "Oops, no movement detected",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
 /**
  * Build a display string with the masked letter shown as underscore
  */
@@ -761,6 +797,7 @@ private fun WriteTheWordMainContent(
     isLastLetterCorrect: Boolean
 ) {
     val scope = rememberCoroutineScope()
+    // Include timestamp in key to force fresh ViewModel on screen re-entry (matches Tutorial Mode pattern)
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(
             sensorManager = sensorManager,
@@ -770,7 +807,8 @@ private fun WriteTheWordMainContent(
                     phoneCommunicationManager.sendLearnModeGestureRecording()
                 }
             }
-        )
+        ),
+        key = "${wordData.word}-${wordData.maskedIndex}-${wordData.timestamp}"
     )
 
     val uiState by viewModel.uiState.collectAsState()
@@ -800,6 +838,14 @@ private fun WriteTheWordMainContent(
     LaunchedEffect(uiState.state) {
         if (uiState.state == LearnModeViewModel.State.IDLE) {
             lastSpokenPrediction = null
+        }
+    }
+
+    // Speak "oops" and notify phone when entering NO_MOVEMENT state
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.NO_MOVEMENT) {
+            ttsManager.speak("Oops, you did not air write!")
+            phoneCommunicationManager.sendLetterInput("?", currentLetterIndex)
         }
     }
 
@@ -844,6 +890,7 @@ private fun WriteTheWordMainContent(
                     LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
+                    LearnModeViewModel.State.NO_MOVEMENT -> LearnNoMovementContent(viewModel)
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
                 }
             }
@@ -1175,6 +1222,7 @@ private fun NameThePictureMainContent(
     isLastLetterCorrect: Boolean
 ) {
     val scope = rememberCoroutineScope()
+    // Include timestamp in key to force fresh ViewModel on screen re-entry (matches Tutorial Mode pattern)
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(
             sensorManager = sensorManager,
@@ -1184,7 +1232,8 @@ private fun NameThePictureMainContent(
                     phoneCommunicationManager.sendLearnModeGestureRecording()
                 }
             }
-        )
+        ),
+        key = "${wordData.word}-${wordData.maskedIndex}-${wordData.timestamp}"
     )
 
     val uiState by viewModel.uiState.collectAsState()
@@ -1214,6 +1263,14 @@ private fun NameThePictureMainContent(
     LaunchedEffect(uiState.state) {
         if (uiState.state == LearnModeViewModel.State.IDLE) {
             lastSpokenPrediction = null
+        }
+    }
+
+    // Speak "oops" and notify phone when entering NO_MOVEMENT state
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.NO_MOVEMENT) {
+            ttsManager.speak("Oops, you did not air write!")
+            phoneCommunicationManager.sendLetterInput("?", currentLetterIndex)
         }
     }
 
@@ -1258,6 +1315,7 @@ private fun NameThePictureMainContent(
                     LearnModeViewModel.State.COUNTDOWN -> CountdownContent(uiState)
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
+                    LearnModeViewModel.State.NO_MOVEMENT -> LearnNoMovementContent(viewModel)
                     LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
                 }
             }

@@ -581,8 +581,8 @@ fun LearnModeSessionScreen(
     }
 
     // Send current word data to watch whenever current word changes (only after handshake)
-    LaunchedEffect(currentWordIndex, words, isWatchReady) {
-        if (!isWatchReady) return@LaunchedEffect
+    LaunchedEffect(currentWordIndex, words, isWatchReady, showResumeDialog) {
+        if (!isWatchReady || showResumeDialog) return@LaunchedEffect
         val currentWord = words.getOrNull(currentWordIndex)
         if (currentWord != null) {
             // Reset letter tracking state for new word

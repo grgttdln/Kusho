@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.sensors.SensorSample
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -33,6 +34,11 @@ class LearnModeViewModel(
         private const val PREDICTION_DISPLAY_MS = 1500L // 1.5 seconds
         private const val PHONE_FEEDBACK_TIMEOUT_MS = 8000L
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
+        private const val NO_MOVEMENT_DISPLAY_SECONDS = 3
+
+        // Motion detection thresholds
+        private const val GYRO_VARIANCE_THRESHOLD = 0.3f
+        private const val GYRO_RANGE_THRESHOLD = 1.0f
     }
 
     enum class State {
@@ -40,6 +46,7 @@ class LearnModeViewModel(
         COUNTDOWN,
         RECORDING,
         PROCESSING,
+        NO_MOVEMENT,
         SHOWING_PREDICTION
     }
 
@@ -189,6 +196,30 @@ class LearnModeViewModel(
                 val samples = sensorManager.getCollectedSamples()
                 Log.d(TAG, "Collected ${samples.size} samples")
 
+                // Check for significant wrist movement
+                if (!hasSignificantMotion(samples)) {
+                    Log.w(TAG, "No significant wrist movement detected")
+                    _uiState.update {
+                        it.copy(
+                            state = State.NO_MOVEMENT,
+                            statusMessage = "Oops! You did not air write!",
+                            recordingProgress = 0f
+                        )
+                    }
+
+                    delay(NO_MOVEMENT_DISPLAY_SECONDS * 1000L)
+                    if (isActive && _uiState.value.state == State.NO_MOVEMENT) {
+                        _uiState.update {
+                            it.copy(
+                                state = State.IDLE,
+                                statusMessage = "Tap to guess",
+                                prediction = null
+                            )
+                        }
+                    }
+                    return@launch
+                }
+
                 val minSamples = classifier.windowSize / 2
                 if (samples.size < minSamples) {
                     Log.w(TAG, "Not enough samples: ${samples.size} < $minSamples")
@@ -220,7 +251,8 @@ class LearnModeViewModel(
 
                 // === Phase 4: Show the predicted letter ===
                 val predictedLetter = result.label?.trim()
-                Log.d(TAG, "Predicted: '$predictedLetter', Expected: '${wordData.word}'")
+                Log.d(TAG, "Predicted: '$predictedLetter' (confidence: %.2f), Expected: '${wordData.word}'".format(result.confidence))
+                Log.d(TAG, "Top 5 probs: ${result.allProbabilities.withIndex().sortedByDescending { it.value }.take(5).joinToString { "(${it.index}:%.2f)".format(it.value) }}")
 
                 _uiState.update {
                     it.copy(
@@ -295,6 +327,48 @@ class LearnModeViewModel(
                 countdownSeconds = 0
             )
         }
+    }
+
+    /**
+     * Retry after no movement was detected.
+     * Cancels any pending auto-return and immediately goes back to IDLE.
+     */
+    fun retryAfterNoMovement() {
+        if (_uiState.value.state != State.NO_MOVEMENT) return
+        Log.d(TAG, "Retrying after no movement")
+        recordingJob?.cancel()
+        recordingJob = null
+        _uiState.update {
+            it.copy(
+                state = State.IDLE,
+                statusMessage = "Tap to guess",
+                prediction = null
+            )
+        }
+    }
+
+    /**
+     * Check if the recorded sensor samples contain significant wrist movement.
+     * Uses gyroscope as the sole gate — air writing always involves rapid wrist rotation.
+     */
+    private fun hasSignificantMotion(samples: List<SensorSample>): Boolean {
+        if (samples.size < 2) return false
+
+        val n = samples.size.toFloat()
+
+        val gyroMagnitudes = samples.map {
+            kotlin.math.sqrt((it.gx * it.gx + it.gy * it.gy + it.gz * it.gz).toDouble()).toFloat()
+        }
+        val gyroMean = gyroMagnitudes.sum() / n
+        val gyroVariance = gyroMagnitudes.sumOf { ((it - gyroMean) * (it - gyroMean)).toDouble() }.toFloat() / n
+        val gyroRange = gyroMagnitudes.max() - gyroMagnitudes.min()
+
+        Log.d(TAG, "Gyro: variance=%.4f (need>=%.4f), range=%.4f (need>=%.4f)".format(
+            gyroVariance, GYRO_VARIANCE_THRESHOLD, gyroRange, GYRO_RANGE_THRESHOLD))
+
+        val result = gyroVariance >= GYRO_VARIANCE_THRESHOLD && gyroRange >= GYRO_RANGE_THRESHOLD
+        Log.i(TAG, "Motion detected: $result (variance=${gyroVariance >= GYRO_VARIANCE_THRESHOLD}, range=${gyroRange >= GYRO_RANGE_THRESHOLD})")
+        return result
     }
 
     override fun onCleared() {

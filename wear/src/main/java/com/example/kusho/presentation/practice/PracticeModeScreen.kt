@@ -243,6 +243,13 @@ private fun PracticeModeContent(
         }
     }
 
+    // Speak "oops" message when entering NO_MOVEMENT state
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == PracticeModeViewModel.State.NO_MOVEMENT) {
+            ttsManager.speak("Oops, you did not air write!")
+        }
+    }
+
     // Speak feedback when we enter RESULT state
     LaunchedEffect(uiState.state, uiState.isAnswerCorrect) {
         if (uiState.state == PracticeModeViewModel.State.RESULT) {
@@ -323,6 +330,7 @@ private fun PracticeModeContent(
             PracticeModeViewModel.State.COUNTDOWN -> CountdownContent(uiState, viewModel)
             PracticeModeViewModel.State.RECORDING -> RecordingContent(uiState, viewModel)
             PracticeModeViewModel.State.PROCESSING -> ProcessingContent(uiState)
+            PracticeModeViewModel.State.NO_MOVEMENT -> NoMovementContent(viewModel)
             PracticeModeViewModel.State.SHOWING_PREDICTION -> PredictionContent(uiState)
             PracticeModeViewModel.State.RESULT -> ResultContent(uiState, viewModel)
         }
@@ -573,6 +581,30 @@ private fun ResultContent(
                 id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
             ),
             contentDescription = if (isCorrect) "Correct" else "Wrong",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+@Composable
+private fun NoMovementContent(
+    viewModel: PracticeModeViewModel
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.retryAfterNoMovement() },
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.dis_ops),
+            contentDescription = "Oops, no movement detected",
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),

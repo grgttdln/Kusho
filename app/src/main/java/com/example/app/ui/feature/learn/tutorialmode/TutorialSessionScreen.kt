@@ -426,8 +426,8 @@ fun TutorialSessionScreen(
     
     // Send current letter data to watch whenever it changes AND play pre-recorded voice prompt
     // Gated behind isWatchReady so we don't send data before the watch is listening
-    LaunchedEffect(currentStep, currentLetter, isWatchReady) {
-        if (currentLetter.isNotEmpty() && isWatchReady) {
+    LaunchedEffect(currentStep, currentLetter, isWatchReady, showResumeDialog) {
+        if (currentLetter.isNotEmpty() && isWatchReady && !showResumeDialog) {
             watchConnectionManager.sendTutorialModeLetterData(
                 letter = currentLetter,
                 letterCase = letterType,
