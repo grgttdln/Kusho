@@ -1,5 +1,10 @@
 package com.example.app.ui.feature.learn.activities
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -34,6 +40,7 @@ import com.example.app.ui.components.SetItemCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.text.TextStyle
+import kotlinx.coroutines.delay
 
 /**
  * Screen to display and manage sets within a specific activity.
@@ -119,86 +126,178 @@ fun ActivitySetsScreen(
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
 
-            // Editable Activity Set title
-            OutlinedTextField(
-                value = uiState.editableTitle,
-                onValueChange = { viewModel.onTitleChanged(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 15.dp),
-                textStyle = TextStyle(
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0B0B0B)
-                ),
-                placeholder = {
-                    Text(
-                        text = "Activity Set Title",
-                        fontSize = 22.sp,
-                        color = Color(0xFFC5E5FD),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedIndicatorColor = Color(0x803FA9F8),
-                    focusedIndicatorColor = Color(0xFF3FA9F8),
-                    focusedTextColor = Color(0xFF000000),
-                    unfocusedTextColor = Color(0xFF000000)
-                ),
-                singleLine = true,
-                isError = uiState.titleError != null
-            )
+            // --- Title editing card ---
+            val titleHasChanged = uiState.editableTitle.trim() != uiState.originalTitle
+                    && uiState.editableTitle.isNotBlank()
 
-            // Error message
-            if (uiState.titleError != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = uiState.titleError!!,
-                    fontSize = 12.sp,
-                    color = Color(0xFFFF6B6B),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 15.dp)
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // "Activities" label
-            Text(
-                text = "Activities",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0B0B0B)
-            )
-
-            // Save button - only visible when title has changed
-            if (uiState.editableTitle.trim() != uiState.originalTitle && uiState.editableTitle.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { viewModel.saveTitle { newTitle -> onTitleUpdated(newTitle) } },
-                    enabled = !uiState.isSaving,
-                    modifier = Modifier
-                        .padding(horizontal = 15.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3FA9F8)
-                    )
-                ) {
-                    Text(
-                        text = if (uiState.isSaving) "Saving..." else "Save Title",
-                        fontSize = 14.sp,
-                        color = Color.White
-                    )
+            // Auto-dismiss "Saved" indicator after 2 seconds
+            var showSavedIndicator by remember { mutableStateOf(false) }
+            LaunchedEffect(uiState.titleSaved) {
+                if (uiState.titleSaved) {
+                    showSavedIndicator = true
+                    delay(2000)
+                    showSavedIndicator = false
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 15.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFFF0F8FF))
+                    .padding(16.dp)
+            ) {
+                // Label row: "Activity Set Title" + saved indicator
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Activity Set Title",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF6B7280)
+                    )
+
+                    // Saved indicator (animated)
+                    AnimatedVisibility(
+                        visible = showSavedIndicator,
+                        enter = fadeIn() + slideInVertically { -it },
+                        exit = fadeOut() + slideOutVertically { -it }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Saved",
+                                tint = Color(0xFF22C55E),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Saved",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF22C55E)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Text field
+                OutlinedTextField(
+                    value = uiState.editableTitle,
+                    onValueChange = { viewModel.onTitleChanged(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = TextStyle(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF0B0B0B)
+                    ),
+                    placeholder = {
+                        Text(
+                            text = "E.g, Tail letters",
+                            fontSize = 18.sp,
+                            color = Color(0xFFC5E5FD),
+                            fontWeight = FontWeight.Normal
+                        )
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = TextFieldDefaults.colors(
+                        unfocusedContainerColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        unfocusedIndicatorColor = Color(0xFFD1E6F9),
+                        focusedIndicatorColor = Color(0xFF3FA9F8),
+                        focusedTextColor = Color(0xFF000000),
+                        unfocusedTextColor = Color(0xFF000000),
+                        cursorColor = Color(0xFF3FA9F8),
+                        errorIndicatorColor = Color(0xFFFF6B6B),
+                        errorContainerColor = Color.White
+                    ),
+                    singleLine = true,
+                    isError = uiState.titleError != null,
+                    supportingText = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Error message (left-aligned)
+                            Text(
+                                text = uiState.titleError ?: "",
+                                fontSize = 12.sp,
+                                color = if (uiState.titleError != null) Color(0xFFFF6B6B) else Color.Transparent
+                            )
+                            // Character counter (right-aligned)
+                            Text(
+                                text = "${uiState.editableTitle.length}/30",
+                                fontSize = 12.sp,
+                                color = if (uiState.editableTitle.length >= 28)
+                                    Color(0xFFFF6B6B)
+                                else
+                                    Color(0xFF999999)
+                            )
+                        }
+                    }
+                )
+
+                // Save button (animated visibility)
+                AnimatedVisibility(
+                    visible = titleHasChanged,
+                    enter = fadeIn() + slideInVertically { it },
+                    exit = fadeOut() + slideOutVertically { it }
+                ) {
+                    Button(
+                        onClick = { viewModel.saveTitle { newTitle -> onTitleUpdated(newTitle) } },
+                        enabled = !uiState.isSaving,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3FA9F8),
+                            disabledContainerColor = Color(0xFFB3E5FC)
+                        )
+                    ) {
+                        if (uiState.isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = if (uiState.isSaving) "Saving..." else "Save Title",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // --- "Activities" section header ---
+            Text(
+                text = "Activities",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0B0B0B),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 15.dp)
+            )
+
+            Spacer(Modifier.height(16.dp))
 
             // Sets or Loading/Empty State
             when {
