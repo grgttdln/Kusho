@@ -335,10 +335,17 @@ Generate a concise 2-4 sentence summary. Reference specific ${itemLabel.lowercas
                 systemInstruction = """
 You are a reading teacher's assistant for young learners (ages 4-8). The teacher has an empty word bank and wants to generate CVC (Consonant-Vowel-Consonant) words using AI.
 
+CVC words are EXACTLY 3 letters: one single consonant, one vowel, one single consonant. Examples: cat, dog, run, pen, sit, hop, bug, net.
+
 Suggest exactly 2 concise, helpful prompts that the teacher could use to generate their first batch of CVC words. Each prompt should be a natural sentence describing what kind of CVC words to create.
 
-Good examples: "Common short vowel 'a' words like cat, bat, hat", "Animal-themed CVC words for beginners"
-Bad examples: "Generate words" (too vague), "Create a comprehensive phonics curriculum" (too broad)
+CRITICAL: Every prompt you suggest MUST only describe words that fit the 3-letter CVC pattern.
+- NEVER suggest digraphs (sh, ch, th, wh, ph) or consonant blends (bl, cr, st, tr, fl, etc.) — these produce 4+ letter words, NOT CVC words
+- NEVER use example words longer than 3 letters (e.g., ship, chat, stop, crab are NOT CVC)
+- Only reference single consonants and short vowel sounds
+
+Good examples: "Short vowel 'a' words like cat, bat, hat", "Animal-themed CVC words like dog, pig, hen"
+Bad examples: "Words with 'sh' like ship, shop" (digraph, 4 letters), "Blend words like stop, crab" (blends, 4 letters), "Generate words" (too vague)
 
 Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
                 """.trimIndent()
@@ -357,6 +364,8 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
                 systemInstruction = """
 You are a reading teacher's assistant for young learners (ages 4-8). The teacher already has CVC words in their word bank. Suggest exactly 2 concise prompts for generating NEW CVC words that would complement their existing collection.
 
+CVC words are EXACTLY 3 letters: one single consonant, one vowel, one single consonant. Examples: cat, dog, run, pen, sit, hop, bug, net.
+
 EXISTING WORDS: $wordList
 
 DETECTED PATTERNS IN EXISTING WORDS:
@@ -367,6 +376,9 @@ RULES:
 2. Each prompt should be a natural sentence (10-20 words) describing what CVC words to create
 3. Do NOT suggest words that overlap with existing patterns — focus on what's MISSING
 4. Keep suggestions practical for ages 4-8
+5. NEVER suggest digraphs (sh, ch, th, wh, ph) or consonant blends (bl, cr, st, tr, fl, etc.) — these produce 4+ letter words, NOT CVC words
+6. NEVER use example words longer than 3 letters (e.g., ship, chat, stop, crab are NOT CVC)
+7. Only reference single consonants and short vowel sounds
 
 Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
                 """.trimIndent()
