@@ -10,6 +10,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -50,12 +52,16 @@ fun WordBankGenerationModal(
     onSuggestionClick: (String) -> Unit = {},
     onPromptInputChanged: (String) -> Unit,
     onGenerate: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    generatedWords: List<String> = emptyList(),
+    requestedCount: Int = 0,
+    onDone: () -> Unit = {}
 ) {
     if (!isVisible) return
 
     val focusManager = LocalFocusManager.current
     val isSubmitEnabled = promptInput.isNotBlank()
+    val isSuccess = generatedWords.isNotEmpty() && !isLoading
 
     Dialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
@@ -96,345 +102,420 @@ fun WordBankGenerationModal(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Title
-                    Text(
-                        text = "Let Kuu Generate CVC Words!",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0B0B0B),
-                        textAlign = TextAlign.Center
-                    )
+                    if (isSuccess) {
+                        // === SUCCESS STATE ===
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Success",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(48.dp)
+                        )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Prompt input section
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
                         Text(
-                            text = "What kind of CVC words should Kuu create?",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
+                            text = "${generatedWords.size} words added!",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
                             color = Color(0xFF0B0B0B),
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = promptInput,
-                            onValueChange = onPromptInputChanged,
-                            textStyle = TextStyle(
-                                color = Color(0xFF49A9FF),
-                                fontSize = 16.sp
-                            ),
-                            placeholder = {
-                                Text(
-                                    text = "Describe what CVC words you want...",
-                                    color = Color.Gray
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF49A9FF),
-                                unfocusedBorderColor = Color(0xFFE0E0E0),
-                                focusedContainerColor = Color.White,
-                                unfocusedContainerColor = Color.White,
-                                cursorColor = Color(0xFF49A9FF),
-                                disabledBorderColor = Color(0xFFE0E0E0),
-                                disabledContainerColor = Color(0xFFF5F5F5),
-                                focusedTextColor = Color(0xFF49A9FF),
-                                unfocusedTextColor = Color(0xFF49A9FF),
-                                disabledTextColor = Color(0xFF49A9FF).copy(alpha = 0.5f)
-                            ),
-                            enabled = !isLoading,
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    focusManager.clearFocus()
-                                    if (isSubmitEnabled) {
-                                        onGenerate()
-                                    }
-                                }
-                            ),
-                            maxLines = 4
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Word count stepper section
-                    Text(
-                        text = "How many words should Kuu generate?",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF0B0B0B),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Stepper row: minus, count display, plus
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Minus button
-                        val minusEnabled = wordCount > 1 && !isLoading
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .shadow(2.dp, CircleShape)
-                                .background(
-                                    color = if (minusEnabled) Color(0xFF49A9FF) else Color(0xFFB0D9FF),
-                                    shape = CircleShape
-                                )
-                                .then(
-                                    if (minusEnabled) Modifier.clickable {
-                                        onWordCountChanged(wordCount - 1)
-                                    } else Modifier
-                                )
-                                .semantics { contentDescription = "Decrease word count" },
-                            contentAlignment = Alignment.Center
-                        ) {
+                        if (generatedWords.size < requestedCount) {
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "−",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(32.dp))
-
-                        // Count display
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "$wordCount",
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0B0B0B)
-                            )
-                            Text(
-                                text = "words",
+                                text = "Some words were duplicates or invalid and were skipped",
                                 fontSize = 14.sp,
-                                color = Color(0xFF888888)
+                                color = Color(0xFF888888),
+                                textAlign = TextAlign.Center
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(32.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                        // Plus button
-                        val plusEnabled = wordCount < 20 && !isLoading
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .shadow(2.dp, CircleShape)
-                                .background(
-                                    color = if (plusEnabled) Color(0xFF49A9FF) else Color(0xFFB0D9FF),
-                                    shape = CircleShape
-                                )
-                                .then(
-                                    if (plusEnabled) Modifier.clickable {
-                                        onWordCountChanged(wordCount + 1)
-                                    } else Modifier
-                                )
-                                .semantics { contentDescription = "Increase word count" },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "+",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Preset chips
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        listOf(5, 10, 15, 20).forEach { preset ->
-                            val isSelected = wordCount == preset
-                            Box(
-                                modifier = Modifier
-                                    .height(44.dp)
-                                    .widthIn(min = 48.dp)
-                                    .background(
-                                        color = if (isSelected) Color(0xFF49A9FF) else Color(0xFFF0F0F0),
-                                        shape = RoundedCornerShape(24.dp)
-                                    )
-                                    .then(
-                                        if (!isLoading) Modifier.clickable {
-                                            onWordCountChanged(preset)
-                                        } else Modifier
-                                    )
-                                    .padding(horizontal = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "$preset",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isSelected) Color.White else Color(0xFF666666)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Suggested prompts section
-                    if (isSuggestionsLoading || suggestedPrompts.isNotEmpty()) {
-                        Text(
-                            text = "Suggested for you",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF0B0B0B),
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        if (isSuggestionsLoading) {
-                            // Loading spinner
+                        generatedWords.forEach { word ->
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(60.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(vertical = 4.dp)
+                                    .background(
+                                        color = Color(0xFFF0F7FF),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
                             ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Color(0xFF49A9FF),
-                                    strokeWidth = 2.dp
+                                Text(
+                                    text = word,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF0B0B0B)
                                 )
                             }
-                        } else {
-                            // Suggestion chips
-                            suggestedPrompts.forEachIndexed { index, prompt ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 44.dp)
-                                        .background(
-                                            color = Color(0xFFF0F7FF),
-                                            shape = RoundedCornerShape(16.dp)
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = Color(0xFF49A9FF),
-                                            shape = RoundedCornerShape(16.dp)
-                                        )
-                                        .then(
-                                            if (!isLoading) Modifier.clickable {
-                                                onSuggestionClick(prompt)
-                                            } else Modifier
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 14.dp),
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_wand),
-                                            contentDescription = null,
-                                            tint = Color(0xFF49A9FF),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = prompt,
-                                            fontSize = 14.sp,
-                                            color = Color(0xFF333333),
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                                if (index < suggestedPrompts.lastIndex) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
-                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                        Spacer(modifier = Modifier.height(32.dp))
 
-                    // Generate button
-                    Button(
-                        onClick = {
-                            focusManager.clearFocus()
-                            onGenerate()
-                        },
-                        enabled = isSubmitEnabled && !isLoading,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF49A9FF),
-                            disabledContainerColor = Color(0xFFB0D9FF)
-                        )
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
+                        Button(
+                            onClick = onDone,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF49A9FF)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                        ) {
                             Text(
-                                text = when (generationPhase) {
-                                    is GenerationPhase.Filtering -> "Filtering words... (1/3)"
-                                    is GenerationPhase.Grouping -> "Grouping sets... (2/3)"
-                                    is GenerationPhase.Configuring -> "Configuring... (3/3)"
-                                    else -> "Generating..."
-                                },
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White
-                            )
-                        } else {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_wand),
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Generate CVC Words",
+                                text = "Done",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White
                             )
                         }
-                    }
-
-                    // Error message
-                    if (error != null) {
-                        Spacer(modifier = Modifier.height(16.dp))
+                    } else {
+                        // === INPUT STATE ===
+                        // Title
                         Text(
-                            text = error,
-                            color = Color.Red,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
+                            text = "Let Kuu Generate CVC Words!",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0B0B0B),
+                            textAlign = TextAlign.Center
                         )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Prompt input section
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "What kind of CVC words should Kuu create?",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF0B0B0B),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = promptInput,
+                                onValueChange = onPromptInputChanged,
+                                textStyle = TextStyle(
+                                    color = Color(0xFF49A9FF),
+                                    fontSize = 16.sp
+                                ),
+                                placeholder = {
+                                    Text(
+                                        text = "Describe what CVC words you want...",
+                                        color = Color.Gray
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF49A9FF),
+                                    unfocusedBorderColor = Color(0xFFE0E0E0),
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    cursorColor = Color(0xFF49A9FF),
+                                    disabledBorderColor = Color(0xFFE0E0E0),
+                                    disabledContainerColor = Color(0xFFF5F5F5),
+                                    focusedTextColor = Color(0xFF49A9FF),
+                                    unfocusedTextColor = Color(0xFF49A9FF),
+                                    disabledTextColor = Color(0xFF49A9FF).copy(alpha = 0.5f)
+                                ),
+                                enabled = !isLoading,
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        focusManager.clearFocus()
+                                        if (isSubmitEnabled) {
+                                            onGenerate()
+                                        }
+                                    }
+                                ),
+                                maxLines = 4
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Word count stepper section
+                        Text(
+                            text = "How many words should Kuu generate?",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF0B0B0B),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Stepper row: minus, count display, plus
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Minus button
+                            val minusEnabled = wordCount > 1 && !isLoading
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .shadow(2.dp, CircleShape)
+                                    .background(
+                                        color = if (minusEnabled) Color(0xFF49A9FF) else Color(0xFFB0D9FF),
+                                        shape = CircleShape
+                                    )
+                                    .then(
+                                        if (minusEnabled) Modifier.clickable {
+                                            onWordCountChanged(wordCount - 1)
+                                        } else Modifier
+                                    )
+                                    .semantics { contentDescription = "Decrease word count" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "−",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(32.dp))
+
+                            // Count display
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "$wordCount",
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0B0B0B)
+                                )
+                                Text(
+                                    text = "words",
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF888888)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(32.dp))
+
+                            // Plus button
+                            val plusEnabled = wordCount < 20 && !isLoading
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .shadow(2.dp, CircleShape)
+                                    .background(
+                                        color = if (plusEnabled) Color(0xFF49A9FF) else Color(0xFFB0D9FF),
+                                        shape = CircleShape
+                                    )
+                                    .then(
+                                        if (plusEnabled) Modifier.clickable {
+                                            onWordCountChanged(wordCount + 1)
+                                        } else Modifier
+                                    )
+                                    .semantics { contentDescription = "Increase word count" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Preset chips
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(5, 10, 15, 20).forEach { preset ->
+                                val isSelected = wordCount == preset
+                                Box(
+                                    modifier = Modifier
+                                        .height(44.dp)
+                                        .widthIn(min = 48.dp)
+                                        .background(
+                                            color = if (isSelected) Color(0xFF49A9FF) else Color(0xFFF0F0F0),
+                                            shape = RoundedCornerShape(24.dp)
+                                        )
+                                        .then(
+                                            if (!isLoading) Modifier.clickable {
+                                                onWordCountChanged(preset)
+                                            } else Modifier
+                                        )
+                                        .padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$preset",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isSelected) Color.White else Color(0xFF666666)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Suggested prompts section
+                        if (isSuggestionsLoading || suggestedPrompts.isNotEmpty()) {
+                            Text(
+                                text = "Need ideas? Start with these!",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF0B0B0B),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (isSuggestionsLoading) {
+                                // Loading spinner
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(60.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = Color(0xFF49A9FF),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            } else {
+                                // Suggestion chips - horizontal flow rows
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    suggestedPrompts.forEach { prompt ->
+                                        Box(
+                                            modifier = Modifier
+                                                .heightIn(min = 44.dp)
+                                                .background(
+                                                    color = Color(0xFFF0F7FF),
+                                                    shape = RoundedCornerShape(16.dp)
+                                                )
+                                                .border(
+                                                    width = 1.dp,
+                                                    color = Color(0xFF49A9FF),
+                                                    shape = RoundedCornerShape(16.dp)
+                                                )
+                                                .then(
+                                                    if (!isLoading) Modifier.clickable {
+                                                        onSuggestionClick(prompt)
+                                                    } else Modifier
+                                                )
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_wand),
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF49A9FF),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = prompt,
+                                                    fontSize = 14.sp,
+                                                    color = Color(0xFF333333),
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // Generate button
+                        Button(
+                            onClick = {
+                                focusManager.clearFocus()
+                                onGenerate()
+                            },
+                            enabled = isSubmitEnabled && !isLoading,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF49A9FF),
+                                disabledContainerColor = Color(0xFFB0D9FF)
+                            )
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = when (generationPhase) {
+                                        is GenerationPhase.Filtering -> "Filtering words... (1/3)"
+                                        is GenerationPhase.Grouping -> "Grouping sets... (2/3)"
+                                        is GenerationPhase.Configuring -> "Configuring... (3/3)"
+                                        else -> "Generating..."
+                                    },
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_wand),
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Generate CVC Words",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        // Error message
+                        if (error != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = error,
+                                color = Color.Red,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
@@ -506,5 +587,37 @@ fun WordBankGenerationModalLoadingPreview() {
         onPromptInputChanged = {},
         onGenerate = {},
         onDismiss = {}
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun WordBankGenerationModalSuccessPreview() {
+    WordBankGenerationModal(
+        isVisible = true,
+        promptInput = "",
+        isLoading = false,
+        generatedWords = listOf("cat", "bat", "hat", "mat", "sat"),
+        requestedCount = 5,
+        onPromptInputChanged = {},
+        onGenerate = {},
+        onDismiss = {},
+        onDone = {}
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun WordBankGenerationModalPartialSuccessPreview() {
+    WordBankGenerationModal(
+        isVisible = true,
+        promptInput = "",
+        isLoading = false,
+        generatedWords = listOf("cat", "bat", "hat"),
+        requestedCount = 5,
+        onPromptInputChanged = {},
+        onGenerate = {},
+        onDismiss = {},
+        onDone = {}
     )
 }
