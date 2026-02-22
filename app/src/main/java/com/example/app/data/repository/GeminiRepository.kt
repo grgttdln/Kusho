@@ -49,6 +49,8 @@ class GeminiRepository {
 
     // Cached Step 1 result for reuse during set regeneration
     private var cachedFilteredWords: List<String>? = null
+    private var cacheTimestamp: Long = 0L
+    private val CACHE_TTL_MS = 5L * 60 * 1000 // 5 minutes
 
     private val safetySettings = listOf(
         SafetySetting(HarmCategory.HARASSMENT, BlockThreshold.MEDIUM_AND_ABOVE),
@@ -61,6 +63,30 @@ class GeminiRepository {
         private const val TAG = "GeminiRepository"
         private const val MODEL_NAME = "gemini-2.5-flash-lite"
         private const val MAX_RETRIES = 2
+    }
+
+    fun invalidateWordCache() {
+        cachedFilteredWords = null
+        cacheTimestamp = 0L
+    }
+
+    private fun isCacheValid(): Boolean {
+        return cachedFilteredWords != null &&
+               (System.currentTimeMillis() - cacheTimestamp) < CACHE_TTL_MS
+    }
+
+    private val lastCallTimestamps = mutableMapOf<String, Long>()
+    private val DEBOUNCE_MS = 3000L
+
+    private fun shouldThrottle(key: String): Boolean {
+        val now = System.currentTimeMillis()
+        val last = lastCallTimestamps[key] ?: 0L
+        if (now - last < DEBOUNCE_MS) {
+            Log.w(TAG, "Throttling $key (${now - last}ms since last call)")
+            return true
+        }
+        lastCallTimestamps[key] = now
+        return false
     }
 
     /**
@@ -97,6 +123,15 @@ class GeminiRepository {
         existingSetTitles: List<String> = emptyList(),
         onPhaseChange: suspend (GenerationPhase) -> Unit = {}
     ): AiGenerationResult = withContext(Dispatchers.IO) {
+        if (shouldThrottle("generateActivity")) {
+            return@withContext AiGenerationResult.Error(
+                "Please wait before generating another activity.",
+                canRetry = true
+            )
+        }
+        if (!isCacheValid()) {
+            invalidateWordCache()
+        }
         try {
             val analyses = analyzeCVCWords(availableWords)
             val patterns = detectCVCPatterns(analyses)
@@ -115,15 +150,20 @@ class GeminiRepository {
                 cachedFilteredWords = availableWords.map { it.word }
             } else {
                 // Strip hallucinated words not in word bank
-                cachedFilteredWords = filteredWords.words.filter { it in wordBank }
-                if (cachedFilteredWords!!.size < 3) {
-                    Log.w(TAG, "Too few valid words after filtering (${cachedFilteredWords!!.size}), using all words")
+                val filtered = filteredWords.words.filter { it in wordBank }
+                if (filtered.size < 3) {
+                    Log.w(TAG, "Too few valid words after filtering (${filtered.size}), using all words")
                     cachedFilteredWords = availableWords.map { it.word }
+                } else {
+                    cachedFilteredWords = filtered
                 }
             }
+            cacheTimestamp = System.currentTimeMillis()
+
+            val cached = cachedFilteredWords ?: availableWords.map { it.word }
 
             // Rebuild analysis for filtered words only
-            val filteredWordObjs = availableWords.filter { it.word in cachedFilteredWords!! }
+            val filteredWordObjs = availableWords.filter { it.word in cached }
             val filteredAnalyses = analyzeCVCWords(filteredWordObjs)
             val filteredPatterns = detectCVCPatterns(filteredAnalyses)
             val filteredAnalysisTable = buildWordAnalysisTable(filteredAnalyses)
@@ -132,7 +172,7 @@ class GeminiRepository {
             // === Step 2: Select coherent subset for ONE set ===
             onPhaseChange(GenerationPhase.Grouping)
             val selectedSet = retryStep(MAX_RETRIES, "Step 2: Select") {
-                stepSelectSubset(prompt, cachedFilteredWords!!, filteredAnalysisTable, filteredPatternsSummary, existingSetTitles)
+                stepSelectSubset(prompt, cached, filteredAnalysisTable, filteredPatternsSummary, existingSetTitles)
             }
 
             val setsToUse: GroupedSetsResponse
@@ -158,6 +198,7 @@ class GeminiRepository {
             validateFinalResult(result, availableWords)
 
         } catch (e: Exception) {
+            invalidateWordCache()
             handleException(e, "Generation")
         }
     }
@@ -182,9 +223,19 @@ class GeminiRepository {
         onPhaseChange: suspend (GenerationPhase) -> Unit = {},
         maxRetries: Int = MAX_RETRIES
     ): AiGenerationResult = withContext(Dispatchers.IO) {
+        if (shouldThrottle("regenerateSet")) {
+            return@withContext AiGenerationResult.Error(
+                "Please wait before generating another activity.",
+                canRetry = true
+            )
+        }
         try {
-            // Use cached words from Step 1, or fall back to all words
-            val wordsToUse = cachedFilteredWords ?: availableWords.map { it.word }
+            // Use cached words from Step 1, validate against current word bank
+            val wordBank = availableWords.map { it.word }.toSet()
+            val wordsToUse = cachedFilteredWords
+                ?.filter { it in wordBank }
+                ?.takeIf { it.size >= 3 }
+                ?: availableWords.map { it.word }
             val wordObjs = availableWords.filter { it.word in wordsToUse }
             val analyses = analyzeCVCWords(wordObjs)
             val patterns = detectCVCPatterns(analyses)
@@ -207,7 +258,6 @@ class GeminiRepository {
                 )
             }
 
-            val wordBank = availableWords.map { it.word }.toSet()
             val validatedSets = validateGroupedSets(selectedSet, wordBank)
 
             // Step 3: Configure single set
@@ -242,6 +292,9 @@ class GeminiRepository {
         itemNames: Map<Int, String> = emptyMap()
     ): String? = withContext(Dispatchers.IO) {
         if (annotations.isEmpty()) return@withContext null
+        if (shouldThrottle("generateAnnotationSummary")) {
+            return@withContext null
+        }
 
         try {
             val isTutorial = sessionMode == com.example.app.data.entity.LearnerProfileAnnotation.MODE_TUTORIAL
@@ -258,10 +311,10 @@ class GeminiRepository {
                     annotation.levelOfProgress?.let { append(" Level: $it.") }
                     val strengths = annotation.getStrengthsList()
                     if (strengths.isNotEmpty()) append(" Strengths: ${strengths.joinToString(", ")}.")
-                    if (annotation.strengthsNote.isNotBlank()) append(" Strengths note: ${annotation.strengthsNote}.")
+                    if (annotation.strengthsNote.isNotBlank()) append(" Strengths note: ${sanitizeInput(annotation.strengthsNote)}.")
                     val challenges = annotation.getChallengesList()
                     if (challenges.isNotEmpty()) append(" Challenges: ${challenges.joinToString(", ")}.")
-                    if (annotation.challengesNote.isNotBlank()) append(" Challenges note: ${annotation.challengesNote}.")
+                    if (annotation.challengesNote.isNotBlank()) append(" Challenges note: ${sanitizeInput(annotation.challengesNote)}.")
                 }
             }
 
@@ -494,6 +547,154 @@ Generate one factual sentence describing this lesson.
         }
     }
 
+    // ========== Kuu Recommendation ==========
+
+    /**
+     * Context for generating a student recommendation.
+     */
+    data class RecommendationContext(
+        val studentName: String,
+        val completedTutorials: List<String>,
+        val completedLearnSets: List<String>,
+        val annotationSummary: String,
+        val availableTutorials: List<AvailableTutorial>,
+        val availableLearnActivities: List<AvailableLearnActivity>
+    )
+
+    data class AvailableTutorial(
+        val type: String,
+        val letterType: String,
+        val setId: Long
+    )
+
+    data class AvailableLearnActivity(
+        val activityId: Long,
+        val activityName: String,
+        val sets: List<String>
+    )
+
+    data class RecommendationResponse(
+        val title: String = "",
+        val description: String = "",
+        val activityType: String = "",
+        val targetActivityId: Long = 0,
+        val targetSetId: Long? = null
+    )
+
+    /**
+     * Generate a personalized activity recommendation for a student using Gemini AI.
+     *
+     * @param context The student's progress context
+     * @return A recommendation response, or null if generation fails
+     */
+    suspend fun generateRecommendation(
+        context: RecommendationContext
+    ): RecommendationResponse? = withContext(Dispatchers.IO) {
+        if (shouldThrottle("generateRecommendation")) {
+            return@withContext null
+        }
+        try {
+            val completedTutorialsText = if (context.completedTutorials.isEmpty()) {
+                "None"
+            } else {
+                context.completedTutorials.joinToString(", ")
+            }
+
+            val completedLearnText = if (context.completedLearnSets.isEmpty()) {
+                "None"
+            } else {
+                context.completedLearnSets.joinToString(", ")
+            }
+
+            val availableTutorialsText = context.availableTutorials.joinToString("\n") { t ->
+                "- ${t.type} ${t.letterType} (setId: ${t.setId})"
+            }
+
+            val availableLearnText = if (context.availableLearnActivities.isEmpty()) {
+                "None available"
+            } else {
+                context.availableLearnActivities.joinToString("\n") { a ->
+                    "- Activity \"${a.activityName}\" (activityId: ${a.activityId}), Sets: ${a.sets.joinToString(", ")}"
+                }
+            }
+
+            val annotationsText = context.annotationSummary.ifBlank { "No annotations yet." }
+
+            val systemInstruction = """
+You are Kuu, a friendly learning assistant for young learners (ages 4-8) learning to read and write letters. Your job is to recommend the SINGLE best next activity for a student based on their progress.
+
+STUDENT: ${context.studentName}
+
+COMPLETED TUTORIALS: $completedTutorialsText
+COMPLETED LEARN SETS: $completedLearnText
+
+TEACHER ANNOTATIONS SUMMARY:
+$annotationsText
+
+AVAILABLE TUTORIALS:
+$availableTutorialsText
+
+AVAILABLE LEARN ACTIVITIES:
+$availableLearnText
+
+RECOMMENDATION RULES:
+1. If the student has NO completions at all, recommend "Vowels Capital" tutorial (setId: -1).
+2. Follow natural tutorial progression: Vowels Capital -> Vowels Small -> Consonants Capital -> Consonants Small.
+3. If the student has completed some tutorials, recommend the next uncompleted tutorial in the progression.
+4. If ALL tutorials are completed and learn activities are available, recommend a learn activity that addresses the student's challenges based on annotations.
+5. If all tutorials are completed but no learn activities exist, recommend repeating a tutorial where the student had challenges.
+6. ONLY recommend activities from the "available" lists above. Use the exact setId/activityId values provided.
+7. For tutorials, use activityType "TUTORIAL" and set targetActivityId to the tutorial setId (negative number).
+8. For learn activities, use activityType "LEARN" and set targetActivityId to the activityId.
+
+RESPONSE FORMAT:
+Return a JSON object with:
+- "title": A short, encouraging card title (max 35 characters). Examples: "Try Vowels Tutorial!", "Practice Consonants!"
+- "description": A brief 1-2 sentence description explaining why this is recommended. Be encouraging and specific.
+- "activityType": Either "TUTORIAL" or "LEARN"
+- "targetActivityId": The tutorial setId (for TUTORIAL) or activityId (for LEARN)
+- "targetSetId": null for tutorials, or null for learn activities (teacher picks the set)
+            """.trimIndent()
+
+            val userPrompt = "Based on ${context.studentName}'s progress, recommend the best next activity."
+
+            val model = GenerativeModel(
+                modelName = MODEL_NAME,
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.3f
+                    topP = 0.95f
+                    maxOutputTokens = 256
+                    responseMimeType = "application/json"
+                },
+                safetySettings = safetySettings,
+                systemInstruction = content { text(systemInstruction) }
+            )
+
+            val response = model.generateContent(userPrompt)
+            val json = response.text?.trim()
+
+            if (json.isNullOrBlank()) {
+                Log.w(TAG, "Recommendation generation returned empty")
+                return@withContext null
+            }
+
+            Log.d(TAG, "Recommendation response: $json")
+            val parsed = gson.fromJson(json, RecommendationResponse::class.java)
+
+            // Validate the response
+            if (parsed.title.isBlank() || parsed.activityType.isBlank()) {
+                Log.w(TAG, "Invalid recommendation response: missing title or activityType")
+                return@withContext null
+            }
+
+            parsed
+        } catch (e: Exception) {
+            Log.e(TAG, "Recommendation generation failed: ${e.message}", e)
+            null
+        }
+    }
+
     // ========== Suggested Prompts ==========
 
     /**
@@ -708,6 +909,9 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
         count: Int,
         existingWords: List<Word>
     ): List<String> = withContext(Dispatchers.IO) {
+        if (shouldThrottle("generateCVCWords")) {
+            return@withContext emptyList()
+        }
         val requestCount = (count * 1.5).toInt().coerceAtLeast(count + 2)
 
         val existingWordList = existingWords
@@ -731,23 +935,35 @@ RULES — follow these strictly:
 - No proper nouns, slang, or obscure words
 - No duplicate words in the list$existingSection
 
+PATTERN ENFORCEMENT — THIS IS THE MOST IMPORTANT RULE:
+- If the teacher's request specifies a word pattern or structure (e.g., "_en", "-at", "words ending in -un", "short 'a' words"), then EVERY SINGLE word you generate MUST follow that exact pattern. No exceptions.
+- For example, if the request is "_en words", ALL words must end in "en" (e.g., hen, pen, ten, den, men, ben, fen, ken, wen, yen). Do NOT include words that do not match the pattern.
+- If the request is "-at words", ALL words must end in "at" (e.g., cat, bat, hat, mat, rat, sat, fat, pat, vat, lat). Do NOT include words with different endings.
+- The pattern takes absolute priority. Never substitute a non-matching word just to fill the count.
+
 Return a JSON object: {"words": ["word1", "word2", ...]}
 Return exactly $requestCount lowercase words. No extra text.
         """.trimIndent()
 
-        val userPrompt = "Generate $requestCount CVC words based on this request: $prompt"
+        val userPrompt = "Generate $requestCount CVC words based on this request: ${sanitizeInput(prompt)}"
 
         val model = createModel(systemInstruction)
         val response = model.generateContent(userPrompt)
         val json = response.text ?: throw Exception("Empty response from CVC word generation")
 
         Log.d(TAG, "CVC word generation response: $json")
-        val parsed = gson.fromJson(json, GeneratedWordsResponse::class.java)
-
-        parsed.words
-            .map { it.lowercase().trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
+        try {
+            val parsed = gson.fromJson(json, GeneratedWordsResponse::class.java)
+            parsed.words
+                .map { it.lowercase().trim() }
+                .filter { it.isNotBlank() }
+                .filter { isValidCVC(it) }
+                .filter { it !in BLOCKED_WORDS }
+                .distinct()
+        } catch (e: Exception) {
+            Log.e(TAG, "CVC word generation JSON parse failed: ${e.message}", e)
+            emptyList()
+        }
     }
 
     // ========== Step Functions ==========
@@ -765,6 +981,11 @@ You are a reading teacher's assistant for young learners (ages 4-8). You ONLY he
 
 Your task: Given a word list and a teacher's instruction, select ONLY the words that are relevant to the instruction. Consider phonics patterns, word families, and themes when filtering.
 
+PATTERN ENFORCEMENT — CRITICAL:
+- If the teacher specifies a word pattern or structure (e.g., "_en", "-at", "words ending in -un"), then EVERY word you select MUST match that exact pattern. Do NOT include any word that does not match.
+- For example: if the instruction is "-at words", only select words whose rime is "at" (cat, bat, hat, etc.). Exclude all others.
+- If no words in the list match the pattern, return an empty word list with reasoning explaining that no matching words were found.
+
 CVC CONTEXT:
 - All words are 3-letter CVC (Consonant-Vowel-Consonant) words
 - Students air-write ONE LETTER AT A TIME on a smartwatch
@@ -780,14 +1001,18 @@ Respond with a JSON object containing:
 - "reasoning": brief explanation of why these words were selected
         """.trimIndent()
 
-        val userPrompt = "Teacher's request: $prompt\n\nSelect the words from the word analysis that best match this request."
+        val userPrompt = "Teacher's request: ${sanitizeInput(prompt)}\n\nSelect the words from the word analysis that best match this request."
 
         val model = createModel(systemInstruction)
         val response = model.generateContent(userPrompt)
         val json = response.text ?: throw Exception("Empty response from Step 1")
 
         Log.d(TAG, "Step 1 response: $json")
-        return gson.fromJson(json, FilteredWordsResponse::class.java)
+        try {
+            return gson.fromJson(json, FilteredWordsResponse::class.java)
+        } catch (e: Exception) {
+            throw Exception("Failed to parse Step 1 response: ${e.message}", e)
+        }
     }
 
     /**
@@ -828,7 +1053,14 @@ Choose a different subset of words or a different angle on the teacher's request
         val systemInstruction = """
 You are a reading teacher's assistant. From the available words, select a coherent subset for ONE focused air-writing activity.
 
-CRITICAL CONSTRAINT — The set MUST contain AT LEAST 3 words and AT MOST 10 words.
+CRITICAL WORD COUNT CONSTRAINT — STRICTLY ENFORCED:
+- The set MUST contain AT LEAST 3 words and ABSOLUTELY NO MORE THAN 10 words.
+- If you have more than 10 matching words, pick the BEST 10. NEVER return 11 or more words.
+- Count your words before responding. If the count exceeds 10, remove the least fitting words until you have exactly 10.
+
+PATTERN ENFORCEMENT — CRITICAL:
+- If the teacher specifies a word pattern or structure (e.g., "_en", "-at", "words ending in -un"), then EVERY word you select MUST match that exact pattern. Do NOT include any word that does not match the requested pattern.
+- For example: if the instruction is "-at words", only select words whose rime is "at" (cat, bat, hat, etc.). Exclude all others regardless of how many words remain.
 
 SELECTION STRATEGIES (use in priority order):
 1. Word Family (highest priority): Same rime (cat/bat/hat = "-at" family)
@@ -837,17 +1069,17 @@ SELECTION STRATEGIES (use in priority order):
 4. Theme-Based: Group by meaning if the teacher suggests a theme
 
 RULES:
-1. Select 3-10 words that form ONE coherent grouping matching the teacher's request
+1. Select 3 to 10 words (NEVER more than 10) that form ONE coherent grouping matching the teacher's request
 2. ONLY use words from the provided list
 3. Set title: max 30 characters. Be creative — vary your naming style. Examples: "-at Rhyme Time", "Cat Bat Hat!", "A Sound Fun", "Vowel 'e' Mix", "B Words Go!"
 4. A smaller, coherent set is better than a larger, mixed one
 $existingSetTitlesSection$avoidanceSection
 Respond with a JSON object containing:
-- "sets": array with exactly ONE object having "title" (string), "description" (string), "words" (array of strings, minimum 3), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings)
+- "sets": array with exactly ONE object having "title" (string), "description" (string), "words" (array of strings, minimum 3, MAXIMUM 10), and optionally "titleSimilarity" (object with "similarTo", "reason", and "alternateTitle" strings)
         """.trimIndent()
 
         val userPrompt = """
-Teacher's request: $prompt
+Teacher's request: ${sanitizeInput(prompt)}
 
 Available words: ${filteredWords.joinToString(", ")}
 
@@ -865,7 +1097,11 @@ Select a coherent subset of words for one focused activity.
         val json = response.text ?: throw Exception("Empty response from Step 2")
 
         Log.d(TAG, "Step 2 response: $json")
-        return gson.fromJson(json, GroupedSetsResponse::class.java)
+        try {
+            return gson.fromJson(json, GroupedSetsResponse::class.java)
+        } catch (e: Exception) {
+            throw Exception("Failed to parse Step 2 response: ${e.message}", e)
+        }
     }
 
     /**
@@ -945,7 +1181,11 @@ Assign appropriate configuration types and letter indices to each word based on 
         val json = response.text ?: throw Exception("Empty response from Step 3")
 
         Log.d(TAG, "Step 3 response: $json")
-        val aiResponse = gson.fromJson(json, AiResponse::class.java)
+        val aiResponse = try {
+            gson.fromJson(json, AiResponse::class.java)
+        } catch (e: Exception) {
+            throw Exception("Failed to parse Step 3 response: ${e.message}", e)
+        }
         return parseStep3Response(aiResponse, availableWords, existingSetTitles)
     }
 
@@ -1121,10 +1361,18 @@ Assign appropriate configuration types and letter indices to each word based on 
                 )
             }
 
+            // Hard cap at 10 words per set
+            val cappedWords = if (validatedWords.size > 10) {
+                Log.w(TAG, "Set '${dedupedSetTitle}' has ${validatedWords.size} words, capping to 10")
+                validatedWords.take(10).toMutableList()
+            } else {
+                validatedWords
+            }
+
             // If set has < 3 valid words, collect them as orphans to merge later
-            if (validatedWords.size < 3) {
-                Log.w(TAG, "Set '${dedupedSetTitle}' has only ${validatedWords.size} valid words, merging into another set")
-                orphanWords.addAll(validatedWords)
+            if (cappedWords.size < 3) {
+                Log.w(TAG, "Set '${dedupedSetTitle}' has only ${cappedWords.size} valid words, merging into another set")
+                orphanWords.addAll(cappedWords)
                 continue
             }
 
@@ -1144,29 +1392,31 @@ Assign appropriate configuration types and letter indices to each word based on 
                 AiGeneratedSet(
                     title = dedupedSetTitle,
                     description = set.description,
-                    words = validatedWords,
+                    words = cappedWords,
                     titleSimilarity = setTitleSimilarity
                 )
             )
         }
 
-        // Merge orphan words into the last valid set
+        // Merge orphan words into the last valid set, capped at 10
         if (orphanWords.isNotEmpty() && validatedSets.isNotEmpty()) {
             val lastSet = validatedSets.last()
             val existingWordNames = lastSet.words.map { it.word }.toSet()
             val uniqueOrphans = orphanWords.filter { it.word !in existingWordNames }
-            if (uniqueOrphans.isNotEmpty()) {
+            val spotsAvailable = 10 - lastSet.words.size
+            val toMerge = uniqueOrphans.take(spotsAvailable.coerceAtLeast(0))
+            if (toMerge.isNotEmpty()) {
                 validatedSets[validatedSets.lastIndex] = lastSet.copy(
-                    words = lastSet.words + uniqueOrphans
+                    words = lastSet.words + toMerge
                 )
             }
         } else if (validatedSets.isEmpty() && orphanWords.size >= 3) {
-            // All sets were undersized but we have enough orphan words for one set
+            // All sets were undersized but we have enough orphan words for one set (cap at 10)
             validatedSets.add(
                 AiGeneratedSet(
                     title = "CVC Practice",
                     description = "CVC word practice",
-                    words = orphanWords
+                    words = orphanWords.take(10)
                 )
             )
         }
@@ -1202,6 +1452,7 @@ Assign appropriate configuration types and letter indices to each word based on 
             val validWords = set.words
                 .filter { it in wordBank }  // Only keep words in word bank
                 .filter { seen.add(it) }    // Remove duplicates across sets
+                .take(10)                   // Hard cap at 10 words per set
             set.copy(words = validWords)
         }
 
@@ -1210,12 +1461,16 @@ Assign appropriate configuration types and letter indices to each word based on 
         val orphanWords = cleanedSets.filter { it.words.size < 3 }.flatMap { it.words }
 
         if (orphanWords.isNotEmpty() && validSets.isNotEmpty()) {
-            // Merge orphan words into the last valid set
+            // Merge orphan words into the last valid set, but cap at 10
             val lastSet = validSets.last()
-            validSets[validSets.lastIndex] = lastSet.copy(words = lastSet.words + orphanWords)
+            val spotsAvailable = 10 - lastSet.words.size
+            val toMerge = orphanWords.take(spotsAvailable.coerceAtLeast(0))
+            if (toMerge.isNotEmpty()) {
+                validSets[validSets.lastIndex] = lastSet.copy(words = lastSet.words + toMerge)
+            }
         } else if (validSets.isEmpty()) {
-            // All sets were undersized — combine all words into a single set
-            val allWords = cleanedSets.flatMap { it.words }
+            // All sets were undersized — combine all words into a single set (cap at 10)
+            val allWords = cleanedSets.flatMap { it.words }.take(10)
             if (allWords.size >= 3) {
                 return GroupedSetsResponse(
                     sets = listOf(
@@ -1387,6 +1642,30 @@ Assign appropriate configuration types and letter indices to each word based on 
         val words: List<String> = emptyList()
     )
 
+    // ========== Input Sanitization ==========
+
+    private fun sanitizeInput(input: String, maxLength: Int = 500): String {
+        return input
+            .take(maxLength)
+            .replace(Regex("[\\r\\n\\t]"), " ")
+            .replace(Regex("[{}``]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
+    // ========== CVC Validation ==========
+
+    private fun isValidCVC(word: String): Boolean {
+        if (word.length != 3) return false
+        val vowels = setOf('a', 'e', 'i', 'o', 'u')
+        return word[0] !in vowels && word[1] in vowels && word[2] !in vowels
+    }
+
+    private val BLOCKED_WORDS = setOf(
+        "ass", "cum", "fag", "fuc", "fuk", "gay", "god",
+        "hoe", "nig", "pis", "poo", "sex", "tit"
+    )
+
     // ========== CVC Word Analysis ==========
 
     private data class CVCAnalysis(
@@ -1399,10 +1678,9 @@ Assign appropriate configuration types and letter indices to each word based on 
     )
 
     private fun analyzeCVCWords(words: List<Word>): List<CVCAnalysis> {
-        val vowels = setOf('a', 'e', 'i', 'o', 'u')
         return words.mapNotNull { w ->
             val lower = w.word.lowercase()
-            if (lower.length == 3 && !vowels.contains(lower[0]) && vowels.contains(lower[1]) && !vowels.contains(lower[2])) {
+            if (isValidCVC(lower)) {
                 CVCAnalysis(
                     word = w.word,
                     onset = lower[0],
@@ -1412,15 +1690,8 @@ Assign appropriate configuration types and letter indices to each word based on 
                     hasImage = !w.imagePath.isNullOrBlank()
                 )
             } else {
-                // Non-CVC word - still include with basic decomposition
-                CVCAnalysis(
-                    word = w.word,
-                    onset = lower.getOrElse(0) { ' ' },
-                    vowel = lower.getOrElse(1) { ' ' },
-                    coda = lower.getOrElse(2) { ' ' },
-                    rime = lower.drop(1),
-                    hasImage = !w.imagePath.isNullOrBlank()
-                )
+                Log.w(TAG, "Word '${w.word}' is not a valid CVC word, skipping analysis")
+                null
             }
         }
     }
