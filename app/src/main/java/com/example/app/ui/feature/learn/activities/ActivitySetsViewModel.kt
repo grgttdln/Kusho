@@ -19,7 +19,12 @@ import kotlinx.coroutines.launch
 data class ActivitySetsUiState(
     val sets: List<Set> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val editableTitle: String = "",
+    val originalTitle: String = "",
+    val titleError: String? = null,
+    val isSaving: Boolean = false,
+    val titleSaved: Boolean = false
 )
 
 /**
