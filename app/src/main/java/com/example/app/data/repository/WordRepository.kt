@@ -13,7 +13,9 @@ import kotlinx.coroutines.withContext
  * Provides a clean API for the UI layer to interact with word data.
  * All database operations are performed on the IO dispatcher.
  */
-class WordRepository(private val wordDao: WordDao) {
+class WordRepository(
+    private val wordDao: WordDao
+) {
 
     /**
      * Result class for add word operation.

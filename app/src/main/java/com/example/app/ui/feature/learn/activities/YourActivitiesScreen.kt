@@ -142,7 +142,7 @@ fun YourActivitiesScreen(
 
             // Title
             Text(
-                text = "Your Activities",
+                text = "My Activity Sets",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -185,7 +185,7 @@ fun YourActivitiesScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "No Activities Yet",
+                            text = "No Activity Sets Yet",
                             color = Color(0xFF4A4A4A),
                             fontSize = 24.sp,
                             fontWeight = FontWeight.SemiBold
@@ -194,7 +194,7 @@ fun YourActivitiesScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Tap the button below to create\nyour first activity.",
+                            text = "Tap the button below to create\nyour first activity set.",
                             color = Color(0xFF7A7A7A),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center
@@ -266,7 +266,7 @@ fun YourActivitiesScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 96.dp)
                 .height(75.dp)
-                .width(180.dp),
+                .width(240.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF3FA9F8)
             ),
@@ -281,7 +281,7 @@ fun YourActivitiesScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Add Activity",
+                text = "Add Activity Set",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.White

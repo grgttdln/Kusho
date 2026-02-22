@@ -82,7 +82,7 @@ fun ConfirmationScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Celebration Icon - larger size
+                    // Celebration Icon
                     Image(
                         painter = painterResource(id = R.drawable.ic_confirmation),
                         contentDescription = "Confirmation",
@@ -91,16 +91,16 @@ fun ConfirmationScreen(
                         contentScale = ContentScale.Fit
                     )
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Main Title - bold and italic
+                    // Main Title
                     Text(
                         text = title,
-                        fontSize = 36.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF000000),
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 30.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
             }

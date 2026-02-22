@@ -110,7 +110,7 @@ private fun SetTitleSection(
     ) {
         // Set Title Label
         Text(
-            text = "Set Title",
+            text = "Activity Title",
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             color = Color(0xFF0B0B0B)
@@ -203,7 +203,7 @@ private fun WordsSection(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No words in this set",
+                        text = "No words in this activity",
                         fontSize = 14.sp,
                         color = Color(0xFF808080),
                         textAlign = TextAlign.Center
@@ -333,7 +333,7 @@ private fun DeleteConfirmationDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Delete Set",
+                text = "Delete Activity",
                 fontWeight = FontWeight.Bold
             )
         },

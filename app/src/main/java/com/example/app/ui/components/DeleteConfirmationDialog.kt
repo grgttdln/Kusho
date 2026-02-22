@@ -31,7 +31,8 @@ enum class DeleteType {
     SET,
     ACTIVITY,
     SET_FROM_ACTIVITY,
-    WORD
+    WORD,
+    DISCARD_ACTIVITY
 }
 
 /**
@@ -53,10 +54,11 @@ fun DeleteConfirmationDialog(
     if (!isVisible) return
 
     val message = when (deleteType) {
-        DeleteType.SET -> "Delete this Set?"
-        DeleteType.ACTIVITY -> "Delete this Activity?"
-        DeleteType.SET_FROM_ACTIVITY -> "Remove Set From this Activity?"
+        DeleteType.SET -> "Delete this Activity?"
+        DeleteType.ACTIVITY -> "Delete this Activity Set?"
+        DeleteType.SET_FROM_ACTIVITY -> "Remove Activity From this Activity Set?"
         DeleteType.WORD -> "Delete this Word?"
+        DeleteType.DISCARD_ACTIVITY -> "Discard this Activity?"
     }
 
     Dialog(
