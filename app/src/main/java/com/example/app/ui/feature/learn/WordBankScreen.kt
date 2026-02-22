@@ -218,7 +218,8 @@ fun WordBankScreen(
         WordBankGenerationModal(
             isVisible = isGenerationModalVisible,
             promptInput = generationPrompt,
-            isLoading = false,
+            isLoading = uiState.isWordGenerationLoading,
+            error = uiState.wordGenerationError,
             wordCount = generationWordCount,
             onWordCountChanged = { generationWordCount = it },
             suggestedPrompts = uiState.suggestedPrompts,
@@ -227,11 +228,22 @@ fun WordBankScreen(
                 generationPrompt = suggestion
             },
             onPromptInputChanged = { generationPrompt = it },
-            onGenerate = { /* TODO: Wire to generation logic */ },
+            onGenerate = {
+                viewModel.generateWords(generationPrompt, generationWordCount)
+            },
             onDismiss = {
                 isGenerationModalVisible = false
                 generationPrompt = ""
                 generationWordCount = 5
+                viewModel.clearWordGenerationState()
+            },
+            generatedWords = uiState.generatedWords,
+            requestedCount = uiState.wordGenerationRequestedCount,
+            onDone = {
+                isGenerationModalVisible = false
+                generationPrompt = ""
+                generationWordCount = 5
+                viewModel.clearWordGenerationState()
             }
         )
 
