@@ -31,6 +31,9 @@ import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.DeleteConfirmationDialog
 import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.SetItemCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.text.TextStyle
 
 /**
  * Screen to display and manage sets within a specific activity.
@@ -45,6 +48,7 @@ fun ActivitySetsScreen(
     onBackClick: () -> Unit,
     onAddSetClick: () -> Unit = {},
     onViewSetClick: (Long) -> Unit = {},
+    onTitleUpdated: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ActivitySetsViewModel = viewModel()
 ) {
@@ -52,6 +56,7 @@ fun ActivitySetsScreen(
 
     // Load sets for this activity when screen is displayed
     LaunchedEffect(activityId) {
+        viewModel.loadActivity(activityId)
         viewModel.loadSetsForActivity(activityId)
     }
 
@@ -116,13 +121,82 @@ fun ActivitySetsScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // Title - Activity Set name + "Activities"
+            // Editable Activity Set title
+            OutlinedTextField(
+                value = uiState.editableTitle,
+                onValueChange = { viewModel.onTitleChanged(it) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 15.dp),
+                textStyle = TextStyle(
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0B0B0B)
+                ),
+                placeholder = {
+                    Text(
+                        text = "Activity Set Title",
+                        fontSize = 22.sp,
+                        color = Color(0xFFC5E5FD),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedIndicatorColor = Color(0x803FA9F8),
+                    focusedIndicatorColor = Color(0xFF3FA9F8),
+                    focusedTextColor = Color(0xFF000000),
+                    unfocusedTextColor = Color(0xFF000000)
+                ),
+                singleLine = true,
+                isError = uiState.titleError != null
+            )
+
+            // Error message
+            if (uiState.titleError != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = uiState.titleError!!,
+                    fontSize = 12.sp,
+                    color = Color(0xFFFF6B6B),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 15.dp)
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // "Activities" label
             Text(
-                text = "$activityTitle Activities",
+                text = "Activities",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
             )
+
+            // Save button - only visible when title has changed
+            if (uiState.editableTitle.trim() != uiState.originalTitle && uiState.editableTitle.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { viewModel.saveTitle { newTitle -> onTitleUpdated(newTitle) } },
+                    enabled = !uiState.isSaving,
+                    modifier = Modifier
+                        .padding(horizontal = 15.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3FA9F8)
+                    )
+                ) {
+                    Text(
+                        text = if (uiState.isSaving) "Saving..." else "Save Title",
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                }
+            }
 
             Spacer(Modifier.height(32.dp))
 
