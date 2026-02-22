@@ -58,6 +58,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     private var cachedSuggestedPrompts: List<String> = emptyList()
     private var cachedWordCountForPrompts: Int = -1
 
+    // Cached suggested prompts for activity creation modal
+    private var cachedActivitySuggestedPrompts: List<String> = emptyList()
+    private var cachedActivityWordCountForPrompts: Int = -1
+
     init {
         // Observe the current user session
         viewModelScope.launch {
@@ -576,7 +580,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
             it.copy(
                 isActivityCreationModalVisible = false,
                 activityInput = "",
-                selectedActivityWordIds = emptySet(),
                 isActivityCreationLoading = false
             )
         }
@@ -592,38 +595,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Toggle word selection for activity creation.
-     */
-    fun onActivityWordSelectionChanged(wordId: Long, isSelected: Boolean) {
-        _uiState.update { state: LessonUiState ->
-            val currentSelection = state.selectedActivityWordIds
-            val newSelection = if (isSelected) {
-                currentSelection + wordId
-            } else {
-                currentSelection - wordId
-            }
-            state.copy(selectedActivityWordIds = newSelection)
-        }
-    }
-
-    /**
-     * Select all words for activity creation.
-     */
-    fun onSelectAllActivityWords() {
-        _uiState.update { state: LessonUiState ->
-            val allWordIds = state.words.map { it.id }.toSet()
-            // If all words are already selected, deselect all; otherwise select all
-            val newSelection = if (state.selectedActivityWordIds == allWordIds) {
-                emptySet()
-            } else {
-                allWordIds
-            }
-            state.copy(selectedActivityWordIds = newSelection)
-        }
-    }
-
-    /**
-     * Generate activity using AI with selected words.
+     * Generate activity using AI with the entire word bank.
      * Stores the generated JSON result and signals completion via callback.
      */
     fun createActivity(onGenerationComplete: (String) -> Unit) {
@@ -634,19 +606,21 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val activityDescription = _uiState.value.activityInput.trim()
-        val selectedWordIds = _uiState.value.selectedActivityWordIds
 
-        if (activityDescription.isBlank() || selectedWordIds.isEmpty()) {
-            _uiState.update { it.copy(activityError = "Please enter a description and select at least one word") }
+        if (activityDescription.isBlank()) {
+            _uiState.update { it.copy(activityError = "Please enter a description") }
             return
         }
 
-        val selectedWords = _uiState.value.words
-            .filter { selectedWordIds.contains(it.id) }
+        val allWords = _uiState.value.words
+        if (allWords.isEmpty()) {
+            _uiState.update { it.copy(activityError = "No words in your Word Bank yet. Add some words first!") }
+            return
+        }
 
         // Cache for regeneration
         lastGenerationPrompt = activityDescription
-        lastSelectedWords = selectedWords
+        lastSelectedWords = allWords
 
         _uiState.update { it.copy(isActivityCreationLoading = true, activityError = null) }
         _generationPhase.value = GenerationPhase.Filtering
@@ -659,7 +633,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
 
             val result = geminiRepository.generateActivity(
                 activityDescription,
-                selectedWords,
+                allWords,
                 existingActivityTitles = existingActivityTitles,
                 existingSetTitles = existingSetTitles
             ) { phase ->
@@ -674,7 +648,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                         it.copy(
                             isActivityCreationModalVisible = false,
                             activityInput = "",
-                            selectedActivityWordIds = emptySet(),
                             isActivityCreationLoading = false,
                             generatedJsonResult = jsonResult
                         )
@@ -817,6 +790,52 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                     it.copy(
                         suggestedPrompts = emptyList(),
                         isSuggestionsLoading = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Load suggested prompts for the activity creation modal.
+     * Uses cached prompts if word bank size hasn't changed.
+     */
+    fun loadActivitySuggestedPrompts() {
+        val currentWords = _uiState.value.words
+        val currentWordCount = currentWords.size
+
+        // Don't load suggestions for empty word bank
+        if (currentWordCount == 0) return
+
+        // Use cache if word bank size hasn't changed
+        if (currentWordCount == cachedActivityWordCountForPrompts && cachedActivitySuggestedPrompts.isNotEmpty()) {
+            _uiState.update { it.copy(activitySuggestedPrompts = cachedActivitySuggestedPrompts) }
+            return
+        }
+
+        // Generate new suggestions
+        _uiState.update { it.copy(isActivitySuggestionsLoading = true, activitySuggestedPrompts = emptyList()) }
+
+        viewModelScope.launch {
+            try {
+                val prompts = geminiRepository.generateActivitySuggestedPrompts(currentWords)
+
+                if (prompts.isNotEmpty()) {
+                    cachedActivitySuggestedPrompts = prompts
+                    cachedActivityWordCountForPrompts = currentWordCount
+                }
+
+                _uiState.update {
+                    it.copy(
+                        activitySuggestedPrompts = prompts,
+                        isActivitySuggestionsLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        activitySuggestedPrompts = emptyList(),
+                        isActivitySuggestionsLoading = false
                     )
                 }
             }
@@ -978,9 +997,10 @@ data class LessonUiState(
     // Activity creation modal state
     val isActivityCreationModalVisible: Boolean = false,
     val activityInput: String = "",
-    val selectedActivityWordIds: Set<Long> = emptySet(),
     val isActivityCreationLoading: Boolean = false,
     val activityError: String? = null,
+    val activitySuggestedPrompts: List<String> = emptyList(),
+    val isActivitySuggestionsLoading: Boolean = false,
     val generatedJsonResult: String? = null,
     // Dictionary suggestion state (add modal)
     val dictionarySuggestions: List<String> = emptyList(),
