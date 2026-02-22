@@ -78,6 +78,9 @@ fun MainNavigationContainer(
     
     // --- DASHBOARD TUTORIAL FLOW STATE ---
     var dashboardTutorialSection by remember { mutableStateOf("") } // "Vowels" or "Consonants"
+
+    // --- KUU RECOMMENDATION FLOW STATE ---
+    var kuuRecommendationOrigin by remember { mutableStateOf(false) } // true when navigating from Kuu card
     
     // --- DASHBOARD LEARN FLOW STATE ---
     var dashboardLearnActivityId by remember { mutableStateOf(0L) }
@@ -504,6 +507,31 @@ fun MainNavigationContainer(
                 selectedLearnAnnotationActivityId = if (parts.size >= 3) parts[2].toLongOrNull() ?: 0L else 0L
                 currentScreen = 47
             },
+            onNavigateToTutorial = { tutorialSetId ->
+                // Map tutorial setId to type/letterType and navigate to tutorial student screen
+                tutorialModeStudentId = selectedStudentId.toLongOrNull() ?: 0L
+                tutorialModeStudentName = selectedStudentName
+                tutorialModeClassId = selectedClassId.toLongOrNull() ?: 0L
+                kuuRecommendationOrigin = true
+                when (tutorialSetId) {
+                    -1L -> { dashboardTutorialSection = "Vowels"; tutorialLetterType = "capital" }
+                    -2L -> { dashboardTutorialSection = "Vowels"; tutorialLetterType = "small" }
+                    -3L -> { dashboardTutorialSection = "Consonants"; tutorialLetterType = "capital" }
+                    -4L -> { dashboardTutorialSection = "Consonants"; tutorialLetterType = "small" }
+                    else -> { dashboardTutorialSection = "Vowels"; tutorialLetterType = "capital" }
+                }
+                currentScreen = 27 // Navigate to TutorialModeStudentScreen
+            },
+            onNavigateToLearnSetStatus = { activityId ->
+                // Navigate to learn mode set status screen for the recommended activity
+                selectedActivityId = activityId
+                kuuRecommendationOrigin = true
+                coroutineScope.launch {
+                    val activity = database.activityDao().getActivityById(activityId)
+                    selectedActivityTitle = activity?.title ?: ""
+                }
+                currentScreen = 32 // Navigate to LearnModeSetStatusScreen
+            },
             modifier = modifier
         )
         46 -> TutorialAnnotationDetailsScreen(
@@ -525,7 +553,15 @@ fun MainNavigationContainer(
             studentId = tutorialModeStudentId,
             classId = tutorialModeClassId,
             studentName = tutorialModeStudentName,
-            onBack = { currentScreen = 4 },
+            preselectedSection = if (kuuRecommendationOrigin) dashboardTutorialSection.ifEmpty { null } else null,
+            onBack = {
+                if (kuuRecommendationOrigin) {
+                    kuuRecommendationOrigin = false
+                    currentScreen = 26 // Back to StudentDetailsScreen
+                } else {
+                    currentScreen = 4
+                }
+            },
             onStartSession = { title, letterType, studentName ->
                 tutorialSessionTitle = title
                 tutorialLetterType = letterType
@@ -595,7 +631,14 @@ fun MainNavigationContainer(
                 activityIconRes = selectedActivityIconRes,
                 activityTitle = selectedActivityTitle,
                 sets = activitySetStatuses,
-                onBack = { currentScreen = 31 },
+                onBack = {
+                    if (kuuRecommendationOrigin) {
+                        kuuRecommendationOrigin = false
+                        currentScreen = 26 // Back to StudentDetailsScreen
+                    } else {
+                        currentScreen = 31
+                    }
+                },
                 onStartSet = { set ->
                     // Navigate to LearnModeSessionScreen and pass the set id and title
                     selectedSetId = set.setId
