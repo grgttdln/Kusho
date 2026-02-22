@@ -313,7 +313,13 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET -> {
                 android.util.Log.d("PhoneCommunicationMgr", "♻️ Mobile requested session reset - clearing all state")
                 com.example.kusho.presentation.tutorial.TutorialModeStateHolder.resetSession()
-            }            MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY -> {
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY -> {
+                // Phone is sending phone_ready pings, so it's in Tutorial Mode.
+                // Set this unconditionally so new PhoneCommunicationManager instances
+                // (created when watch re-enters TutorialModeScreen) learn the phone's state
+                // even if they missed the original /tutorial_mode_started message.
+                _isPhoneInTutorialMode.value = true
                 // Only reply if watch user is actually on the Tutorial Mode screen
                 if (com.example.kusho.presentation.tutorial.TutorialModeStateHolder.isWatchOnTutorialScreen.value) {
                     android.util.Log.d("PhoneCommunicationMgr", "📱 Phone is ready & watch is on Tutorial screen - replying with watch ready")

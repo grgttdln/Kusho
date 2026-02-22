@@ -50,6 +50,7 @@ fun TutorialModeScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val phoneCommunicationManager = remember { PhoneCommunicationManager(context) }
+    val isPhoneInTutorialMode by phoneCommunicationManager.isPhoneInTutorialMode.collectAsState()
 
     // Initialize TextToSpeech manager
     val ttsManager = remember { TextToSpeechManager(context) }
@@ -68,7 +69,6 @@ fun TutorialModeScreen() {
     }
 
     val letterData by TutorialModeStateHolder.letterData.collectAsState()
-    val sessionData by TutorialModeStateHolder.sessionData.collectAsState()
     val isSessionComplete by TutorialModeStateHolder.isSessionComplete.collectAsState()
 
     // Debouncing state for skip gesture
@@ -152,8 +152,8 @@ fun TutorialModeScreen() {
     }
 
     // Two-way handshake: send watch_ready when session becomes active.
-    LaunchedEffect(sessionData.isActive) {
-        if (sessionData.isActive) {
+    LaunchedEffect(isPhoneInTutorialMode) {
+        if (isPhoneInTutorialMode) {
             scope.launch {
                 phoneCommunicationManager.sendTutorialModeWatchReady()
             }
@@ -207,7 +207,7 @@ fun TutorialModeScreen() {
         Scaffold {
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
-                    !sessionData.isActive -> {
+                    !isPhoneInTutorialMode -> {
                         // Waiting for phone to start session
                         WaitingContent()
                     }
