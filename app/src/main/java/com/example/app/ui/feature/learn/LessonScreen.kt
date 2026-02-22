@@ -86,19 +86,19 @@ fun LessonScreen(
             Spacer(Modifier.height(20.dp))
 
             NavigationTile(
-                title = "Your Activities",
+                title = "Your Sets",
                 backgroundColor = Color(0xFF5DB7FF),
-                imageRes = R.drawable.ic_activity_set,
-                onClick = onNavigateToActivities
+                imageRes = R.drawable.ic_activities,
+                onClick = onNavigateToSets
             )
 
             Spacer(Modifier.height(20.dp))
 
             NavigationTile(
-                title = "Your Sets",
+                title = "Your Activities",
                 backgroundColor = Color(0xFF5DB7FF),
-                imageRes = R.drawable.ic_activities,
-                onClick = onNavigateToSets
+                imageRes = R.drawable.ic_activity_set,
+                onClick = onNavigateToActivities
             )
         }
 
@@ -228,7 +228,7 @@ fun AddWordBankButton(
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "Add Word",
+            text = "Add a Word",
             fontSize = 20.sp,
             fontWeight = FontWeight.Normal,
             color = Color.White
