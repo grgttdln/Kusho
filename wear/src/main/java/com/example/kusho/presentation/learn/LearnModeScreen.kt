@@ -729,10 +729,17 @@ private fun WriteTheWordContent(
     val targetChar = wordData.word.getOrNull(writeTheWordState.currentLetterIndex)
     val letterCase = if (targetChar?.isUpperCase() == true) "uppercase" else "lowercase"
 
-    // Initialize dependencies and load hand+case-specific model
+    // Track which model is currently loaded to prevent composing MainContent with a stale classifier.
+    // When letterCase changes mid-word (e.g., "PiG": P->i), the LaunchedEffect hasn't run yet during
+    // the first recomposition frame, so classifierResult still holds the old model. Without this guard,
+    // MainContent would be composed and a ViewModel created with the wrong (soon-to-be-closed) classifier.
+    val expectedModelKey = "$letterCase-${wordData.dominantHand}"
+    var loadedModelKey by remember { mutableStateOf("") }
+
+    // Load hand+case-specific model; reloads when letterCase or dominantHand changes
     LaunchedEffect(letterCase, wordData.dominantHand) {
         sensorManager = sensorManager ?: MotionSensorManager(context)
-        // Close old model if switching
+        // Close old model before loading new one
         (classifierResult as? ClassifierLoadResult.Success)?.classifier?.close()
         classifierResult = try {
             val modelConfig = ModelConfig.getModelForSession(letterCase, wordData.dominantHand)
@@ -741,10 +748,11 @@ private fun WriteTheWordContent(
         } catch (e: Exception) {
             ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
         }
+        loadedModelKey = expectedModelKey
         isInitialized = true
     }
 
-    if (!isInitialized || sensorManager == null || classifierResult == null) {
+    if (!isInitialized || sensorManager == null || classifierResult == null || loadedModelKey != expectedModelKey) {
         // Loading state
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -792,7 +800,15 @@ private fun WriteTheWordMainContent(
     isLastLetterCorrect: Boolean
 ) {
     val scope = rememberCoroutineScope()
-    // Include timestamp in key to force fresh ViewModel on screen re-entry (matches Tutorial Mode pattern)
+
+    // Current letter to input - keep exact case (uppercase or lowercase)
+    val currentLetterIndex = writeTheWordState.currentLetterIndex
+    val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
+
+    // Include currentLetterIndex in the key so each letter position gets a fresh ViewModel.
+    // This prevents key collisions when the same case appears at different positions
+    // (e.g., "PiG" — P at index 0 and G at index 2 are both uppercase but need separate ViewModels
+    // because the classifier from index 0 gets closed when switching to lowercase for index 1).
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(
             sensorManager = sensorManager,
@@ -803,14 +819,10 @@ private fun WriteTheWordMainContent(
                 }
             }
         ),
-        key = "${wordData.word}-${wordData.maskedIndex}-${wordData.timestamp}"
+        key = "${wordData.word}-${wordData.maskedIndex}-${wordData.timestamp}-${currentLetterIndex}"
     )
 
     val uiState by viewModel.uiState.collectAsState()
-
-    // Current letter to input - keep exact case (uppercase or lowercase)
-    val currentLetterIndex = writeTheWordState.currentLetterIndex
-    val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
 
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
@@ -1150,10 +1162,17 @@ private fun NameThePictureContent(
     val targetChar = wordData.word.getOrNull(writeTheWordState.currentLetterIndex)
     val letterCase = if (targetChar?.isUpperCase() == true) "uppercase" else "lowercase"
 
-    // Initialize dependencies and load hand+case-specific model
+    // Track which model is currently loaded to prevent composing MainContent with a stale classifier.
+    // When letterCase changes mid-word (e.g., "PiG": P->i), the LaunchedEffect hasn't run yet during
+    // the first recomposition frame, so classifierResult still holds the old model. Without this guard,
+    // MainContent would be composed and a ViewModel created with the wrong (soon-to-be-closed) classifier.
+    val expectedModelKey = "$letterCase-${wordData.dominantHand}"
+    var loadedModelKey by remember { mutableStateOf("") }
+
+    // Load hand+case-specific model; reloads when letterCase or dominantHand changes
     LaunchedEffect(letterCase, wordData.dominantHand) {
         sensorManager = sensorManager ?: MotionSensorManager(context)
-        // Close old model if switching
+        // Close old model before loading new one
         (classifierResult as? ClassifierLoadResult.Success)?.classifier?.close()
         classifierResult = try {
             val modelConfig = ModelConfig.getModelForSession(letterCase, wordData.dominantHand)
@@ -1162,10 +1181,11 @@ private fun NameThePictureContent(
         } catch (e: Exception) {
             ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
         }
+        loadedModelKey = expectedModelKey
         isInitialized = true
     }
 
-    if (!isInitialized || sensorManager == null || classifierResult == null) {
+    if (!isInitialized || sensorManager == null || classifierResult == null || loadedModelKey != expectedModelKey) {
         // Loading state
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -1213,7 +1233,15 @@ private fun NameThePictureMainContent(
     isLastLetterCorrect: Boolean
 ) {
     val scope = rememberCoroutineScope()
-    // Include timestamp in key to force fresh ViewModel on screen re-entry (matches Tutorial Mode pattern)
+
+    // Current letter to input - keep exact case (uppercase or lowercase)
+    val currentLetterIndex = writeTheWordState.currentLetterIndex
+    val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
+
+    // Include currentLetterIndex in the key so each letter position gets a fresh ViewModel.
+    // This prevents key collisions when the same case appears at different positions
+    // (e.g., "PiG" — P at index 0 and G at index 2 are both uppercase but need separate ViewModels
+    // because the classifier from index 0 gets closed when switching to lowercase for index 1).
     val viewModel: LearnModeViewModel = viewModel(
         factory = LearnModeViewModelFactory(
             sensorManager = sensorManager,
@@ -1224,14 +1252,10 @@ private fun NameThePictureMainContent(
                 }
             }
         ),
-        key = "${wordData.word}-${wordData.maskedIndex}-${wordData.timestamp}"
+        key = "${wordData.word}-${wordData.maskedIndex}-${wordData.timestamp}-${currentLetterIndex}"
     )
 
     val uiState by viewModel.uiState.collectAsState()
-
-    // Current letter to input - keep exact case (uppercase or lowercase)
-    val currentLetterIndex = writeTheWordState.currentLetterIndex
-    val expectedLetter = wordData.word.getOrNull(currentLetterIndex)
 
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
