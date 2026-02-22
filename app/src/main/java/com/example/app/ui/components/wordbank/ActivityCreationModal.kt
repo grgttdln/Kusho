@@ -4,15 +4,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,39 +34,30 @@ import com.example.app.data.entity.Word
 import com.example.app.data.repository.GenerationPhase
 
 /**
- * Activity Creation Modal component for creating activities with selected words.
- * Displays a dialog with activity input, word selection, and magic creation button.
- *
- * @param isVisible Whether the modal is currently visible
- * @param activityInput Current text in the activity input field
- * @param words List of all available words from Word Bank
- * @param selectedWordIds Set of selected word IDs
- * @param isLoading Whether the modal is in a loading state
- * @param onActivityInputChanged Callback when activity input changes
- * @param onWordSelectionChanged Callback when word selection changes (wordId, isSelected)
- * @param onSelectAll Callback when "Select all" is clicked
- * @param onCreateActivity Callback when "Do the magic!" button is clicked
- * @param onDismiss Callback when modal is dismissed
+ * Activity Creation Modal component for creating activities using the entire word bank.
+ * Displays a dialog with activity input, suggested prompts, and magic creation button.
+ * Shows an empty state when the word bank has no words.
  */
 @Composable
 fun ActivityCreationModal(
     isVisible: Boolean,
     activityInput: String,
     words: List<Word>,
-    selectedWordIds: Set<Long>,
     isLoading: Boolean,
     generationPhase: GenerationPhase = GenerationPhase.Idle,
     error: String? = null,
+    suggestedPrompts: List<String> = emptyList(),
+    isSuggestionsLoading: Boolean = false,
     onActivityInputChanged: (String) -> Unit,
-    onWordSelectionChanged: (Long, Boolean) -> Unit,
-    onSelectAll: () -> Unit,
+    onSuggestionClick: (String) -> Unit = {},
     onCreateActivity: () -> Unit,
     onDismiss: () -> Unit
 ) {
     if (!isVisible) return
 
     val focusManager = LocalFocusManager.current
-    val isSubmitEnabled = activityInput.isNotBlank() && selectedWordIds.isNotEmpty()
+    val isSubmitEnabled = activityInput.isNotBlank()
+    val isWordBankEmpty = words.isEmpty()
 
     Dialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
@@ -121,53 +109,57 @@ fun ActivityCreationModal(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Activity input section
-                    ActivityInputSection(
-                        activityInput = activityInput,
-                        isLoading = isLoading,
-                        onActivityInputChanged = onActivityInputChanged,
-                        onSubmit = {
-                            focusManager.clearFocus()
-                            if (isSubmitEnabled) {
+                    if (isWordBankEmpty) {
+                        // Empty word bank state
+                        EmptyWordBankMessage()
+                    } else {
+                        // Activity input section
+                        ActivityInputSection(
+                            activityInput = activityInput,
+                            isLoading = isLoading,
+                            onActivityInputChanged = onActivityInputChanged,
+                            onSubmit = {
+                                focusManager.clearFocus()
+                                if (isSubmitEnabled) {
+                                    onCreateActivity()
+                                }
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Suggested prompts section
+                        SuggestedPromptsSection(
+                            suggestedPrompts = suggestedPrompts,
+                            isSuggestionsLoading = isSuggestionsLoading,
+                            isLoading = isLoading,
+                            onSuggestionClick = onSuggestionClick
+                        )
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // Magic button
+                        MagicButton(
+                            isLoading = isLoading,
+                            generationPhase = generationPhase,
+                            isEnabled = isSubmitEnabled,
+                            onClick = {
+                                focusManager.clearFocus()
                                 onCreateActivity()
                             }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Word selection section
-                    WordSelectionSection(
-                        words = words,
-                        selectedWordIds = selectedWordIds,
-                        isLoading = isLoading,
-                        onWordSelectionChanged = onWordSelectionChanged,
-                        onSelectAll = onSelectAll
-                    )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    // Magic button
-                    MagicButton(
-                        isLoading = isLoading,
-                        generationPhase = generationPhase,
-                        isEnabled = isSubmitEnabled,
-                        onClick = {
-                            focusManager.clearFocus()
-                            onCreateActivity()
-                        }
-                    )
-
-                    // Error message
-                    if (error != null) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = error,
-                            color = Color.Red,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
                         )
+
+                        // Error message
+                        if (error != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = error,
+                                color = Color.Red,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
@@ -251,146 +243,117 @@ private fun ActivityInputSection(
 }
 
 /**
- * Word selection section with header, counter, and word chips.
+ * Message shown when the word bank is empty.
  */
 @Composable
-private fun WordSelectionSection(
-    words: List<Word>,
-    selectedWordIds: Set<Long>,
-    isLoading: Boolean,
-    onWordSelectionChanged: (Long, Boolean) -> Unit,
-    onSelectAll: () -> Unit
-) {
+private fun EmptyWordBankMessage() {
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Section label
         Text(
-            text = "Select the words you want for the activity!",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF0B0B0B)
+            text = "Your Word Bank is empty!",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF0B0B0B),
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Counter and Select all row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "${selectedWordIds.size} words selected",
-                fontSize = 14.sp,
-                color = Color(0xFF666666)
-            )
-
-            if (words.isNotEmpty()) {
-                Text(
-                    text = "Select all",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF49A9FF),
-                    modifier = Modifier.clickable(
-                        enabled = !isLoading,
-                        onClick = onSelectAll
-                    )
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Word chips grid
-        if (words.isEmpty()) {
-            Text(
-                text = "No words in your Word Bank yet. Add some words first!",
-                fontSize = 14.sp,
-                color = Color.Gray,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        } else {
-            val scrollState = rememberScrollState()
-            val row1Words = words.filterIndexed { index, _ -> index % 2 == 0 }
-            val row2Words = words.filterIndexed { index, _ -> index % 2 != 0 }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(scrollState),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    row1Words.forEach { word ->
-                        val isSelected = selectedWordIds.contains(word.id)
-                        WordChip(
-                            word = word.word,
-                            isSelected = isSelected,
-                            isEnabled = !isLoading,
-                            onClick = { onWordSelectionChanged(word.id, !isSelected) }
-                        )
-                    }
-                }
-                if (row2Words.isNotEmpty()) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        row2Words.forEach { word ->
-                            val isSelected = selectedWordIds.contains(word.id)
-                            WordChip(
-                                word = word.word,
-                                isSelected = isSelected,
-                                isEnabled = !isLoading,
-                                onClick = { onWordSelectionChanged(word.id, !isSelected) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        Text(
+            text = "Add words to your Word Bank first to create activities.",
+            fontSize = 14.sp,
+            color = Color(0xFF888888),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
 /**
- * Individual word chip component.
+ * Suggested prompts section with loading state and clickable chips.
  */
 @Composable
-private fun WordChip(
-    word: String,
-    isSelected: Boolean,
-    isEnabled: Boolean,
-    onClick: () -> Unit
+private fun SuggestedPromptsSection(
+    suggestedPrompts: List<String>,
+    isSuggestionsLoading: Boolean,
+    isLoading: Boolean,
+    onSuggestionClick: (String) -> Unit
 ) {
-    val backgroundColor = if (isSelected) Color(0xFF49A9FF) else Color.White
-    val textColor = if (isSelected) Color.White else Color(0xFF49A9FF)
-    val borderColor = Color(0xFF49A9FF)
+    if (!isSuggestionsLoading && suggestedPrompts.isEmpty()) return
 
-    Box(
-        modifier = Modifier
-            .width(100.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .border(
-                width = 1.5.dp,
-                color = if (isEnabled) borderColor else borderColor.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(20.dp)
+    Text(
+        text = "Need ideas? Start with these!",
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Medium,
+        color = Color(0xFF0B0B0B),
+        textAlign = TextAlign.Center
+    )
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    if (isSuggestionsLoading) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color(0xFF49A9FF),
+                strokeWidth = 2.dp
             )
-            .background(if (isEnabled) backgroundColor else backgroundColor.copy(alpha = 0.3f))
-            .clickable(enabled = isEnabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = word,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (isEnabled) textColor else textColor.copy(alpha = 0.5f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        }
+    } else {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            suggestedPrompts.forEach { prompt ->
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 44.dp)
+                        .background(
+                            color = Color(0xFFF0F7FF),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color(0xFF49A9FF),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .then(
+                            if (!isLoading) Modifier.clickable {
+                                onSuggestionClick(prompt)
+                            } else Modifier
+                        )
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_wand),
+                            contentDescription = null,
+                            tint = Color(0xFF49A9FF),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = prompt,
+                            fontSize = 14.sp,
+                            color = Color(0xFF333333),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -459,21 +422,19 @@ fun ActivityCreationModalPreview() {
     val sampleWords = listOf(
         Word(id = 1L, userId = 1L, word = "cat"),
         Word(id = 2L, userId = 1L, word = "dog"),
-        Word(id = 3L, userId = 1L, word = "bird"),
-        Word(id = 4L, userId = 1L, word = "fish"),
-        Word(id = 5L, userId = 1L, word = "elephant"),
-        Word(id = 6L, userId = 1L, word = "lion")
+        Word(id = 3L, userId = 1L, word = "bat")
     )
 
     ActivityCreationModal(
         isVisible = true,
         activityInput = "",
         words = sampleWords,
-        selectedWordIds = emptySet(),
         isLoading = false,
+        suggestedPrompts = listOf(
+            "Practice the -at word family with rhyming words",
+            "Group words by short vowel sounds"
+        ),
         onActivityInputChanged = {},
-        onWordSelectionChanged = { _, _ -> },
-        onSelectAll = {},
         onCreateActivity = {},
         onDismiss = {}
     )
@@ -481,25 +442,13 @@ fun ActivityCreationModalPreview() {
 
 @Preview(showBackground = true)
 @Composable
-fun ActivityCreationModalWithSelectionPreview() {
-    val sampleWords = listOf(
-        Word(id = 1L, userId = 1L, word = "cat"),
-        Word(id = 2L, userId = 1L, word = "dog"),
-        Word(id = 3L, userId = 1L, word = "bird"),
-        Word(id = 4L, userId = 1L, word = "fish"),
-        Word(id = 5L, userId = 1L, word = "elephant"),
-        Word(id = 6L, userId = 1L, word = "lion")
-    )
-
+fun ActivityCreationModalEmptyWordBankPreview() {
     ActivityCreationModal(
         isVisible = true,
-        activityInput = "Create a story about animals",
-        words = sampleWords,
-        selectedWordIds = setOf(1L, 2L),
+        activityInput = "",
+        words = emptyList(),
         isLoading = false,
         onActivityInputChanged = {},
-        onWordSelectionChanged = { _, _ -> },
-        onSelectAll = {},
         onCreateActivity = {},
         onDismiss = {}
     )
@@ -510,19 +459,15 @@ fun ActivityCreationModalWithSelectionPreview() {
 fun ActivityCreationModalLoadingPreview() {
     val sampleWords = listOf(
         Word(id = 1L, userId = 1L, word = "cat"),
-        Word(id = 2L, userId = 1L, word = "dog"),
-        Word(id = 3L, userId = 1L, word = "bird")
+        Word(id = 2L, userId = 1L, word = "dog")
     )
 
     ActivityCreationModal(
         isVisible = true,
         activityInput = "Create a story",
         words = sampleWords,
-        selectedWordIds = setOf(1L, 2L),
         isLoading = true,
         onActivityInputChanged = {},
-        onWordSelectionChanged = { _, _ -> },
-        onSelectAll = {},
         onCreateActivity = {},
         onDismiss = {}
     )
