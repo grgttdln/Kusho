@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
 import com.example.app.data.entity.Set
+import com.example.app.data.repository.ActivityRepository
 import com.example.app.data.repository.SetRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,12 +37,92 @@ class ActivitySetsViewModel(application: Application) : AndroidViewModel(applica
 
     private val database = AppDatabase.getInstance(application)
     private val setRepository = SetRepository(database)
+    private val activityRepository = ActivityRepository(database.activityDao())
 
     private val _uiState = MutableStateFlow(ActivitySetsUiState())
     val uiState: StateFlow<ActivitySetsUiState> = _uiState.asStateFlow()
 
     private var currentLoadJob: Job? = null
     private var currentActivityId: Long? = null
+
+    fun loadActivity(activityId: Long) {
+        viewModelScope.launch {
+            try {
+                val result = activityRepository.getActivityById(activityId)
+                result.onSuccess { activity ->
+                    _uiState.update {
+                        it.copy(
+                            editableTitle = activity.title,
+                            originalTitle = activity.title,
+                            titleError = null,
+                            titleSaved = false
+                        )
+                    }
+                }.onFailure { e ->
+                    _uiState.update {
+                        it.copy(errorMessage = e.message ?: "Failed to load activity")
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(errorMessage = e.message ?: "Failed to load activity")
+                }
+            }
+        }
+    }
+
+    fun onTitleChanged(newTitle: String) {
+        if (newTitle.length <= 30) {
+            _uiState.update {
+                it.copy(
+                    editableTitle = newTitle,
+                    titleError = null,
+                    titleSaved = false
+                )
+            }
+        }
+    }
+
+    fun saveTitle(onTitleUpdated: (String) -> Unit) {
+        val state = _uiState.value
+        val newTitle = state.editableTitle.trim()
+
+        if (newTitle.isBlank()) {
+            _uiState.update { it.copy(titleError = "Title cannot be empty") }
+            return
+        }
+
+        if (newTitle == state.originalTitle) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, titleError = null) }
+            val activityId = currentActivityId ?: return@launch
+            val result = activityRepository.updateActivity(
+                activityId = activityId,
+                title = newTitle
+            )
+            result.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        originalTitle = newTitle,
+                        titleSaved = true,
+                        titleError = null
+                    )
+                }
+                onTitleUpdated(newTitle)
+            }.onFailure { e ->
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        titleError = e.message ?: "Failed to update title"
+                    )
+                }
+            }
+        }
+    }
 
     /**
      * Load sets linked to a specific activity
