@@ -410,6 +410,76 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
     }
 
     /**
+     * Generate 2 contextual prompt suggestions for the activity creation modal.
+     * Only called when the word bank is non-empty.
+     *
+     * @param words Current word bank contents (must be non-empty)
+     * @return List of exactly 2 activity prompt suggestion strings, or empty list on failure
+     */
+    suspend fun generateActivitySuggestedPrompts(words: List<Word>): List<String> = withContext(Dispatchers.IO) {
+        try {
+            val validWords = words.filter { it.word.isNotBlank() }
+            if (validWords.isEmpty()) return@withContext emptyList()
+
+            val analyses = analyzeCVCWords(validWords)
+            val patterns = detectCVCPatterns(analyses)
+            val wordList = if (validWords.size > 30) {
+                "${validWords.take(30).joinToString(", ") { it.word }} (and ${validWords.size - 30} more)"
+            } else {
+                validWords.joinToString(", ") { it.word }
+            }
+            val patternsSummary = buildPatternsSummary(patterns)
+
+            val systemInstruction = """
+You are a reading teacher's assistant for young learners (ages 4-8). The teacher wants to create an air-writing activity set using words from their word bank.
+
+An activity set groups words into themed activities for air-writing practice. Each activity contains words that share a learning objective (e.g., same word family, same vowel sound, same theme).
+
+WORD BANK: $wordList
+
+DETECTED PATTERNS:
+$patternsSummary
+
+Suggest exactly 2 concise prompts the teacher could use to describe what kind of activity set to create. Each prompt should be a natural sentence (10-20 words) describing a learning objective or grouping strategy.
+
+Good examples: "Practice the -at word family with rhyming words", "Group words by short vowel sounds for comparison"
+Bad examples: "Create an activity" (too vague), "Generate words" (wrong purpose — words already exist)
+
+RULES:
+1. Prompts must reference grouping or practicing EXISTING words, not generating new ones
+2. Suggest strategies that leverage the detected patterns (word families, vowel sounds, themes)
+3. Keep suggestions practical and age-appropriate (ages 4-8)
+4. Each prompt should suggest a different grouping strategy
+
+Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
+            """.trimIndent()
+
+            val userPrompt = "Based on the word bank, suggest 2 prompts for creating air-writing activity sets."
+
+            val model = createModel(systemInstruction)
+            val response = model.generateContent(userPrompt)
+            val json = response.text ?: throw Exception("Empty response from activity suggested prompts")
+
+            Log.d(TAG, "Activity suggested prompts response: $json")
+            val parsed = gson.fromJson(json, SuggestedPromptsResponse::class.java)
+
+            val prompts = parsed.prompts
+                .filter { it.isNotBlank() }
+                .filter { isValidPromptSuggestion(it) }
+                .take(2)
+            if (prompts.size < 2) {
+                Log.w(TAG, "Fewer than 2 valid activity prompts returned: ${prompts.size}")
+                return@withContext emptyList()
+            }
+
+            prompts
+        } catch (e: Exception) {
+            Log.e(TAG, "Activity suggested prompts generation failed: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    /**
      * Validate that a suggested prompt is coherent and not repetitive garbage.
      * Rejects prompts where any 3+ character substring repeats excessively.
      */
