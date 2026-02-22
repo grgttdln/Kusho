@@ -419,6 +419,63 @@ Respond with a JSON object: {"prompts": ["prompt 1", "prompt 2"]}
         return true
     }
 
+    // ========== CVC Word Generation ==========
+
+    /**
+     * Generate CVC words for the word bank based on teacher's prompt.
+     *
+     * @param prompt Teacher's description of what kind of CVC words to generate
+     * @param count Desired number of words (will over-generate by ~50% to account for filtering)
+     * @param existingWords Current word bank contents (for dedup context in prompt)
+     * @return List of candidate CVC word strings (lowercase, trimmed)
+     */
+    suspend fun generateCVCWords(
+        prompt: String,
+        count: Int,
+        existingWords: List<Word>
+    ): List<String> = withContext(Dispatchers.IO) {
+        val requestCount = (count * 1.5).toInt().coerceAtLeast(count + 2)
+
+        val existingWordList = existingWords
+            .map { it.word.lowercase() }
+            .distinct()
+            .joinToString(", ")
+
+        val existingSection = if (existingWords.isNotEmpty()) {
+            "\n- Do NOT include any of these existing words: $existingWordList"
+        } else ""
+
+        val systemInstruction = """
+You generate CVC (Consonant-Vowel-Consonant) words for early readers (ages 4-8).
+
+RULES — follow these strictly:
+- Each word must be EXACTLY 3 letters long
+- Letter 1 must be a consonant (b, c, d, f, g, h, j, k, l, m, n, p, r, s, t, v, w, x, y, z)
+- Letter 2 must be a vowel (a, e, i, o, u)
+- Letter 3 must be a consonant (b, c, d, f, g, h, j, k, l, m, n, p, r, s, t, v, w, x, y, z)
+- Every word must be a real, common English word that a child would recognize
+- No proper nouns, slang, or obscure words
+- No duplicate words in the list$existingSection
+
+Return a JSON object: {"words": ["word1", "word2", ...]}
+Return exactly $requestCount lowercase words. No extra text.
+        """.trimIndent()
+
+        val userPrompt = "Generate $requestCount CVC words based on this request: $prompt"
+
+        val model = createModel(systemInstruction)
+        val response = model.generateContent(userPrompt)
+        val json = response.text ?: throw Exception("Empty response from CVC word generation")
+
+        Log.d(TAG, "CVC word generation response: $json")
+        val parsed = gson.fromJson(json, GeneratedWordsResponse::class.java)
+
+        parsed.words
+            .map { it.lowercase().trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
     // ========== Step Functions ==========
 
     /**
@@ -1181,6 +1238,12 @@ Assign appropriate configuration types and letter indices to each word based on 
 
     private data class SuggestedPromptsResponse(
         val prompts: List<String> = emptyList()
+    )
+
+    // ========== CVC Word Generation ==========
+
+    private data class GeneratedWordsResponse(
+        val words: List<String> = emptyList()
     )
 
     // ========== CVC Word Analysis ==========
