@@ -5,16 +5,22 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -25,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.ui.components.BottomNavBar
+import com.example.app.ui.components.DeleteConfirmationDialog
+import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.wordbank.WordAddedConfirmationModal
 import com.example.app.ui.components.wordbank.WordBankEditModal
 import com.example.app.ui.components.wordbank.WordBankGenerationModal
@@ -45,6 +53,9 @@ fun WordBankScreen(
     var isGenerationModalVisible by remember { mutableStateOf(false) }
     var generationPrompt by remember { mutableStateOf("") }
     var generationWordCount by remember { mutableIntStateOf(5) }
+
+    // Local state for batch delete confirmation
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     // Load suggested prompts when generation modal becomes visible
     LaunchedEffect(isGenerationModalVisible) {
@@ -106,17 +117,65 @@ fun WordBankScreen(
                         .align(Alignment.Center),
                     alignment = Alignment.Center
                 )
+
+                // Edit Mode Button (right) - switches between Edit and Delete icons
+                IconButton(
+                    onClick = {
+                        if (uiState.isWordBankEditMode && uiState.selectedWordIds.isNotEmpty()) {
+                            showBatchDeleteDialog = true
+                        } else {
+                            viewModel.toggleWordBankEditMode()
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
+                    Icon(
+                        imageVector = if (uiState.isWordBankEditMode) Icons.Default.Delete else Icons.Default.Edit,
+                        contentDescription = if (uiState.isWordBankEditMode) "Delete Selected" else "Edit Mode",
+                        tint = if (uiState.isWordBankEditMode) Color(0xFFFF6B6B) else Color(0xFF3FA9F8),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Title
-            Text(
-                text = "My Word Bank",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0B0B0B)
-            )
+            // Title with Select All checkbox
+            Box(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "My Word Bank",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0B0B0B),
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                
+                // Select All checkbox (always present to maintain layout, but visibility controlled)
+                IconButton(
+                    onClick = { 
+                        if (uiState.isWordBankEditMode) {
+                            if (uiState.selectedWordIds.size == uiState.words.size) {
+                                viewModel.deselectAllWords()
+                            } else {
+                                viewModel.selectAllWords()
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .alpha(if (uiState.isWordBankEditMode) 1f else 0f),
+                    enabled = uiState.isWordBankEditMode
+                ) {
+                    Icon(
+                        imageVector = if (uiState.selectedWordIds.size == uiState.words.size) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                        contentDescription = "Select All",
+                        tint = Color(0xFF3FA9F8),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -129,24 +188,33 @@ fun WordBankScreen(
                 WordBankList(
                     words = uiState.words,
                     onWordClick = { word ->
-                        viewModel.onWordClick(word)
+                        if (uiState.isWordBankEditMode) {
+                            viewModel.toggleWordSelection(word.id)
+                        } else {
+                            viewModel.onWordClick(word)
+                        }
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    isEditMode = uiState.isWordBankEditMode,
+                    selectedWordIds = uiState.selectedWordIds
                 )
             }
         }
 
-        // Action Buttons: "+ Word Bank" and Magic Wand
+        // Action Buttons: "+ Word Bank" and Magic Wand (grayed out in edit mode)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 80.dp),
+                .padding(bottom = 80.dp)
+                .then(if (uiState.isWordBankEditMode) Modifier.alpha(0.4f) else Modifier),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
             AddWordBankButton(
                 onClick = {
-                    viewModel.showWordBankModal()
+                    if (!uiState.isWordBankEditMode) {
+                        viewModel.showWordBankModal()
+                    }
                 }
             )
 
@@ -154,7 +222,11 @@ fun WordBankScreen(
 
             // Magic Wand Button
             IconButton(
-                onClick = { isGenerationModalVisible = true },
+                onClick = { 
+                    if (!uiState.isWordBankEditMode) {
+                        isGenerationModalVisible = true
+                    }
+                },
                 modifier = Modifier
                     .size(75.dp)
                     .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
@@ -279,6 +351,20 @@ fun WordBankScreen(
             onDismiss = {
                 viewModel.hideEditModal()
             },
+        )
+
+        // Batch Delete Confirmation Dialog
+        DeleteConfirmationDialog(
+            isVisible = showBatchDeleteDialog,
+            deleteType = DeleteType.WORDS,
+            itemCount = uiState.selectedWordIds.size,
+            onConfirm = {
+                viewModel.deleteSelectedWords()
+                showBatchDeleteDialog = false
+            },
+            onDismiss = {
+                showBatchDeleteDialog = false
+            }
         )
 
     }

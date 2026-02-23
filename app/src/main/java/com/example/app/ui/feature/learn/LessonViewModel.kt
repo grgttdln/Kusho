@@ -278,6 +278,84 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Toggle Word Bank edit mode for batch delete.
+     */
+    fun toggleWordBankEditMode() {
+        _uiState.update {
+            it.copy(
+                isWordBankEditMode = !it.isWordBankEditMode,
+                selectedWordIds = emptySet() // Clear selections when toggling mode
+            )
+        }
+    }
+
+    /**
+     * Toggle selection of a word in edit mode.
+     */
+    fun toggleWordSelection(wordId: Long) {
+        _uiState.update {
+            val currentSelections = it.selectedWordIds
+            val newSelections = if (currentSelections.contains(wordId)) {
+                currentSelections - wordId
+            } else {
+                currentSelections + wordId
+            }
+            it.copy(selectedWordIds = newSelections)
+        }
+    }
+
+    /**
+     * Select all words in Word Bank.
+     */
+    fun selectAllWords() {
+        _uiState.update {
+            val allWordIds = it.words.map { word -> word.id }.toSet()
+            it.copy(selectedWordIds = allWordIds)
+        }
+    }
+
+    /**
+     * Deselect all words in Word Bank.
+     */
+    fun deselectAllWords() {
+        _uiState.update {
+            it.copy(selectedWordIds = emptySet())
+        }
+    }
+
+    /**
+     * Delete selected words (batch delete).
+     */
+    fun deleteSelectedWords() {
+        val selectedIds = _uiState.value.selectedWordIds.toList()
+        if (selectedIds.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDeletingWords = true) }
+
+            val result = wordRepository.deleteWords(selectedIds)
+            
+            _uiState.update {
+                it.copy(
+                    isDeletingWords = false,
+                    isWordBankEditMode = false, // Exit edit mode after delete
+                    selectedWordIds = emptySet() // Clear selections
+                )
+            }
+
+            // Show error if deletion failed (optional - could add error state to UI)
+            when (result) {
+                is WordRepository.BatchDeleteResult.Success -> {
+                    // Successfully deleted
+                }
+                is WordRepository.BatchDeleteResult.Error -> {
+                    // Handle error (could show snackbar or toast)
+                }
+            }
+        }
+    }
+
+    /**
      * Handle word item click - opens the edit modal with the selected word.
      */
     fun onWordClick(word: Word) {
@@ -906,6 +984,10 @@ data class LessonUiState(
     val editInputError: String? = null,
     val editImageError: String? = null,
     val isEditLoading: Boolean = false,
+    // Word Bank edit mode state (for batch delete)
+    val isWordBankEditMode: Boolean = false,
+    val selectedWordIds: Set<Long> = emptySet(),
+    val isDeletingWords: Boolean = false,
     // Activity creation modal state
     val isActivityCreationModalVisible: Boolean = false,
     val activityInput: String = "",

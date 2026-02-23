@@ -34,6 +34,14 @@ class WordRepository(
     }
 
     /**
+     * Result class for batch delete word operation.
+     */
+    sealed class BatchDeleteResult {
+        data class Success(val count: Int) : BatchDeleteResult()
+        data class Error(val message: String) : BatchDeleteResult()
+    }
+
+    /**
      * Add a new word to the user's Word Bank.
      *
      * This method:
@@ -106,6 +114,32 @@ class WordRepository(
             wordDao.deleteWordById(wordId) > 0
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /**
+     * Delete multiple words by their IDs (batch delete).
+     *
+     * @param wordIds The list of word IDs to delete
+     * @return BatchDeleteResult indicating success with count or failure
+     */
+    suspend fun deleteWords(wordIds: List<Long>): BatchDeleteResult = withContext(Dispatchers.IO) {
+        try {
+            if (wordIds.isEmpty()) {
+                return@withContext BatchDeleteResult.Success(0)
+            }
+
+            var deletedCount = 0
+            wordIds.forEach { wordId ->
+                val rowsDeleted = wordDao.deleteWordById(wordId)
+                if (rowsDeleted > 0) {
+                    deletedCount++
+                }
+            }
+
+            BatchDeleteResult.Success(deletedCount)
+        } catch (e: Exception) {
+            BatchDeleteResult.Error(e.message ?: "Failed to delete words")
         }
     }
 

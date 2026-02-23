@@ -1,5 +1,6 @@
 package com.example.app.ui.components.wordbank
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -25,17 +26,31 @@ import androidx.compose.ui.unit.sp
 fun WordBankItem(
     word: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isEditMode: Boolean = false,
+    isSelected: Boolean = false
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .border(
-                width = 1.dp,
-                color = Color(0xFF49A9FF),
-                shape = RoundedCornerShape(14.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .then(
+                if (isEditMode && isSelected) {
+                    Modifier
+                        .background(Color(0x203FA9F8), RoundedCornerShape(16.dp))
+                        .border(
+                            width = 3.dp,
+                            color = Color(0xFF3FA9F8),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                } else {
+                    Modifier.border(
+                        width = 1.dp,
+                        color = Color(0xFF49A9FF),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
             )
             .clickable { onClick() },
         contentAlignment = Alignment.Center

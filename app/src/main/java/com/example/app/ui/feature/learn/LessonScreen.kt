@@ -144,7 +144,9 @@ private fun NavigationTile(
 fun WordBankList(
     words: List<Word>,
     onWordClick: (Word) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isEditMode: Boolean = false,
+    selectedWordIds: Set<Long> = emptySet()
 ) {
     if (words.isEmpty()) {
         Box(
@@ -192,7 +194,9 @@ fun WordBankList(
             items(words, key = { it.id }) { word ->
                 WordBankItem(
                     word = word.word,
-                    onClick = { onWordClick(word) }
+                    onClick = { onWordClick(word) },
+                    isEditMode = isEditMode,
+                    isSelected = selectedWordIds.contains(word.id)
                 )
             }
         }
