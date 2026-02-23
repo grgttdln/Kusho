@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * ViewModel for Learn Mode.
@@ -281,6 +282,10 @@ class LearnModeViewModel(
                     }
                 }
 
+            } catch (e: CancellationException) {
+                // Normal cancellation (e.g., resetToIdle cancelled the recording job) — re-throw
+                Log.d(TAG, "Recording coroutine cancelled (normal)")
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Recording error: ${e.message}", e)
                 _uiState.update {
@@ -356,6 +361,7 @@ class LearnModeViewModel(
      * Uses gyroscope as the sole gate — air writing always involves rapid wrist rotation.
      */
     private fun hasSignificantMotion(samples: List<SensorSample>): Boolean {
+        // TODO: Motion gate temporarily bypassed for debugging — always allow ML classification
         if (samples.size < 2) return false
 
         val n = samples.size.toFloat()
@@ -372,14 +378,19 @@ class LearnModeViewModel(
 
         val result = gyroVariance >= GYRO_VARIANCE_THRESHOLD && gyroRange >= GYRO_RANGE_THRESHOLD
         Log.i(TAG, "Motion detected: $result (variance=${gyroVariance >= GYRO_VARIANCE_THRESHOLD}, range=${gyroRange >= GYRO_RANGE_THRESHOLD})")
-        return result
+        // return result
+        Log.w(TAG, "Motion gate BYPASSED — returning true regardless (debugging)")
+        return true
     }
 
     override fun onCleared() {
         super.onCleared()
         recordingJob?.cancel()
         sensorManager.stopRecording()
-        classifier?.close()
+        // NOTE: Do NOT close the classifier here — its lifecycle is managed by the
+        // Screen composable's LaunchedEffect. Closing it here causes "Interpreter
+        // has already been closed" when a new ViewModel is created with the same
+        // classifier instance (e.g., when word/timestamp changes but model doesn't).
     }
 }
 

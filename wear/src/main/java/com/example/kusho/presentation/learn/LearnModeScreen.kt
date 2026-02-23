@@ -400,6 +400,13 @@ private fun FillInTheBlankContent(
     val targetChar = wordData.word.getOrNull(wordData.maskedIndex)
     val letterCase = if (targetChar?.isUpperCase() == true) "uppercase" else "lowercase"
 
+    // Track which model is currently loaded to prevent composing MainContent with a stale classifier.
+    // When letterCase changes, the LaunchedEffect hasn't run yet during the first recomposition frame,
+    // so classifierResult still holds the old model. Without this guard, MainContent would be composed
+    // and a ViewModel created with the wrong (soon-to-be-closed) classifier.
+    val expectedModelKey = "$letterCase-${wordData.dominantHand}"
+    var loadedModelKey by remember { mutableStateOf("") }
+
     // Initialize dependencies and load hand+case-specific model
     LaunchedEffect(letterCase, wordData.dominantHand) {
         sensorManager = sensorManager ?: MotionSensorManager(context)
@@ -412,10 +419,11 @@ private fun FillInTheBlankContent(
         } catch (e: Exception) {
             ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
         }
+        loadedModelKey = expectedModelKey
         isInitialized = true
     }
 
-    if (!isInitialized || sensorManager == null || classifierResult == null) {
+    if (!isInitialized || sensorManager == null || classifierResult == null || loadedModelKey != expectedModelKey) {
         // Loading state
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -472,6 +480,12 @@ private fun FillInTheBlankMainContent(
     )
 
     val uiState by viewModel.uiState.collectAsState()
+
+    // Auto-start the first recording so the user doesn't see a second "Tap to begin!"
+    // after already tapping the WaitScreen. Only fires once per ViewModel instance.
+    LaunchedEffect(Unit) {
+        viewModel.startRecording()
+    }
 
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }

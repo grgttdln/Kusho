@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -48,6 +49,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun TutorialModeScreen() {
     val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
     val phoneCommunicationManager = remember { PhoneCommunicationManager(context) }
     val isPhoneInTutorialMode by phoneCommunicationManager.isPhoneInTutorialMode.collectAsState()
@@ -61,8 +63,11 @@ fun TutorialModeScreen() {
         TutorialModeStateHolder.resetSession()
         // Mark watch as on Tutorial Mode screen for handshake gating
         TutorialModeStateHolder.setWatchOnTutorialScreen(true)
+        // Keep screen on during Tutorial Mode to prevent sleep during air writing
+        view.keepScreenOn = true
         onDispose {
             TutorialModeStateHolder.setWatchOnTutorialScreen(false)
+            view.keepScreenOn = false
             ttsManager.shutdown()
             phoneCommunicationManager.cleanup()
         }
@@ -423,8 +428,6 @@ private fun GestureRecognitionContent(
     feedbackIsCorrect: Boolean,
     onSkip: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-
     // Create ViewModel — includes timestamp in key to force fresh ViewModel per letter
     val viewModel: TutorialModeViewModel = viewModel(
         factory = TutorialModeViewModelFactory(
@@ -434,14 +437,10 @@ private fun GestureRecognitionContent(
             letterCase = letterCase,
             onGestureResult = { isCorrect, predictedLetter ->
                 // Send result to phone — phone will send feedback back
-                scope.launch {
-                    phoneCommunicationManager.sendTutorialModeGestureResult(isCorrect, predictedLetter)
-                }
+                phoneCommunicationManager.sendTutorialModeGestureResult(isCorrect, predictedLetter)
             },
             onRecordingStarted = {
-                scope.launch {
-                    phoneCommunicationManager.sendTutorialModeGestureRecording()
-                }
+                phoneCommunicationManager.sendTutorialModeGestureRecording()
             }
         ),
         key = "$letter-$letterCase-$timestamp"

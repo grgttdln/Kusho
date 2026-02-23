@@ -317,6 +317,7 @@ class TutorialModeViewModel(
     }
 
     private fun hasSignificantMotion(samples: List<SensorSample>): Boolean {
+        // TODO: Motion gate temporarily bypassed for debugging — always allow ML classification
         if (samples.size < 2) return false
 
         val n = samples.size.toFloat()
@@ -333,7 +334,9 @@ class TutorialModeViewModel(
 
         val result = gyroVariance >= GYRO_VARIANCE_THRESHOLD && gyroRange >= GYRO_RANGE_THRESHOLD
         Log.i(TAG, "Motion detected: $result (variance=${gyroVariance >= GYRO_VARIANCE_THRESHOLD}, range=${gyroRange >= GYRO_RANGE_THRESHOLD})")
-        return result
+        // return result
+        Log.w(TAG, "Motion gate BYPASSED — returning true regardless (debugging)")
+        return true
     }
 }
 

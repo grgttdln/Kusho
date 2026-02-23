@@ -511,49 +511,54 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
      * @param isCorrect Whether the gesture was recognized correctly
      * @param predictedLetter The letter that was predicted by the model
      */
-    suspend fun sendTutorialModeGestureResult(isCorrect: Boolean, predictedLetter: String = "") {
-        try {
-            val nodes = nodeClient.connectedNodes.await()
-            val jsonPayload = org.json.JSONObject().apply {
-                put("isCorrect", isCorrect)
-                put("predictedLetter", predictedLetter)
-            }.toString()
+    fun sendTutorialModeGestureResult(isCorrect: Boolean, predictedLetter: String = "") {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val jsonPayload = org.json.JSONObject().apply {
+                    put("isCorrect", isCorrect)
+                    put("predictedLetter", predictedLetter)
+                }.toString()
 
-            nodes.forEach { node ->
-                try {
-                    messageClient.sendMessage(
-                        node.id,
-                        MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
-                        jsonPayload.toByteArray()
-                    ).await()
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                nodes.forEach { node ->
+                    try {
+                        messageClient.sendMessage(
+                            node.id,
+                            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
+                            jsonPayload.toByteArray()
+                        ).await()
+                        android.util.Log.d("PhoneCommunicationMgr", "Gesture result sent: correct=$isCorrect, letter=$predictedLetter")
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
     /**
      * Notify phone that watch has started recording a gesture (student is writing)
      */
-    suspend fun sendTutorialModeGestureRecording() {
-        try {
-            val nodes = nodeClient.connectedNodes.await()
-            nodes.forEach { node ->
-                try {
-                    messageClient.sendMessage(
-                        node.id,
-                        MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
-                        ByteArray(0)
-                    ).await()
-                } catch (e: Exception) {
-                    e.printStackTrace()
+    fun sendTutorialModeGestureRecording() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    try {
+                        messageClient.sendMessage(
+                            node.id,
+                            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
+                            ByteArray(0)
+                        ).await()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
