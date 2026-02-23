@@ -650,7 +650,7 @@ RECOMMENDATION RULES:
 RESPONSE FORMAT:
 Return a JSON object with:
 - "title": A short, encouraging card title (max 35 characters). Examples: "Try Vowels Tutorial!", "Practice Consonants!"
-- "description": A brief 1-2 sentence description explaining why this is recommended. Be encouraging and specific.
+- "description": A brief 1 sentence description (max 80 characters) explaining why this is recommended. Be encouraging and specific.
 - "activityType": Either "TUTORIAL" or "LEARN"
 - "targetActivityId": The tutorial setId (for TUTORIAL) or activityId (for LEARN)
 - "targetSetId": null for tutorials, or null for learn activities (teacher picks the set)

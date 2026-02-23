@@ -455,7 +455,7 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                     val allAnnotations = annotationDao.getAnnotationsForStudent(studentId.toString())
                     val hasNewerAnnotation = allAnnotations.any { it.updatedAt > existingRecommendation.generatedAt }
                     // Check if enough completions since last generation
-                    val completionThresholdReached = existingRecommendation.completionsSinceGeneration >= 3
+                    val completionThresholdReached = existingRecommendation.completionsSinceGeneration >= 1
                     hasNewerAnnotation || completionThresholdReached
                 }
 
@@ -506,8 +506,9 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
-     * Generate a Kuu recommendation for a student using Gemini AI.
-     * Gathers context (completions, annotations, available activities) and calls Gemini.
+     * Generate a Kuu recommendation for a student.
+     * Uses deterministic rule-based logic when tutorials are incomplete (no API call needed).
+     * Only calls Gemini AI when all tutorials are done and a learn activity must be chosen.
      */
     private fun generateKuuRecommendation(studentId: Long, classId: Long? = null) {
         recommendationJob?.cancel()
@@ -515,18 +516,8 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
             _studentDetailsUiState.value = _studentDetailsUiState.value.copy(isRecommendationLoading = true)
 
             try {
-                val student = studentRepository.getStudentById(studentId)
-                val studentName = student?.fullName ?: "Student"
-
                 val annotationDao = database.learnerProfileAnnotationDao()
                 val tutorialCompletionDao = database.tutorialCompletionDao()
-                val studentSetProgressDao = database.studentSetProgressDao()
-                val activityDao = database.activityDao()
-                val setDao = database.setDao()
-
-                // Gather completed tutorials
-                val tutorialCompletions = tutorialCompletionDao.getCompletionsForStudent(studentId)
-                val completedTutorialSetIds = tutorialCompletions.map { it.tutorialSetId }.toSet()
 
                 val tutorialCombinations = listOf(
                     Triple("Vowels", "Capital", -1L),
@@ -535,9 +526,9 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                     Triple("Consonants", "Small", -4L)
                 )
 
-                val completedTutorialNames = tutorialCombinations
-                    .filter { (_, _, setId) -> setId in completedTutorialSetIds }
-                    .map { (type, letterType, _) -> "$type $letterType" }
+                // Gather completed tutorials
+                val tutorialCompletions = tutorialCompletionDao.getCompletionsForStudent(studentId)
+                val completedTutorialSetIds = tutorialCompletions.map { it.tutorialSetId }.toSet()
 
                 // Also check tutorial annotations for completions
                 val tutorialAnnotationSetIds = mutableSetOf<Long>()
@@ -551,6 +542,30 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 val allCompletedTutorialIds = completedTutorialSetIds + tutorialAnnotationSetIds
+                val allTutorialSetIds = tutorialCombinations.map { it.third }.toSet()
+                val allTutorialsComplete = allTutorialSetIds.all { it in allCompletedTutorialIds }
+
+                if (!allTutorialsComplete) {
+                    // Rule-based: recommend the next tutorial in progression
+                    val recommendation = createFallbackRecommendation(studentId, allCompletedTutorialIds)
+                    kuuRecommendationDao.insertOrUpdate(recommendation)
+
+                    val saved = kuuRecommendationDao.getRecommendationForStudent(studentId)
+                    _studentDetailsUiState.value = _studentDetailsUiState.value.copy(
+                        kuuRecommendation = saved,
+                        isRecommendationLoading = false
+                    )
+                    return@launch
+                }
+
+                // All tutorials complete — use Gemini to pick a learn activity
+                val student = studentRepository.getStudentById(studentId)
+                val studentName = student?.fullName ?: "Student"
+
+                val studentSetProgressDao = database.studentSetProgressDao()
+                val activityDao = database.activityDao()
+                val setDao = database.setDao()
+
                 val allCompletedTutorialNames = tutorialCombinations
                     .filter { (_, _, setId) -> setId in allCompletedTutorialIds }
                     .map { (type, letterType, _) -> "$type $letterType" }
@@ -577,6 +592,10 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                         .groupingBy { it }.eachCount()
                     val challengesList = allAnnotations.flatMap { it.getChallengesList() }
                         .groupingBy { it }.eachCount()
+                    val strengthNotes = allAnnotations.map { it.strengthsNote.trim() }
+                        .filter { it.isNotBlank() }
+                    val challengeNotes = allAnnotations.map { it.challengesNote.trim() }
+                        .filter { it.isNotBlank() }
 
                     buildString {
                         if (levelCounts.isNotEmpty()) {
@@ -585,8 +604,14 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                         if (strengthsList.isNotEmpty()) {
                             appendLine("Common strengths: ${strengthsList.entries.sortedByDescending { it.value }.take(3).joinToString(", ") { it.key }}")
                         }
+                        if (strengthNotes.isNotEmpty()) {
+                            appendLine("Teacher notes on strengths: ${strengthNotes.joinToString("; ")}")
+                        }
                         if (challengesList.isNotEmpty()) {
                             appendLine("Common challenges: ${challengesList.entries.sortedByDescending { it.value }.take(3).joinToString(", ") { it.key }}")
+                        }
+                        if (challengeNotes.isNotEmpty()) {
+                            appendLine("Teacher notes on challenges: ${challengeNotes.joinToString("; ")}")
                         }
                     }
                 }

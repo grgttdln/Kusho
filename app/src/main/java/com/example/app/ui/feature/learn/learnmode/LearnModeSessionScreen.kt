@@ -240,6 +240,7 @@ fun LearnModeSessionScreen(
     val annotationDao = remember { database.learnerProfileAnnotationDao() }
     val studentSetProgressDao = remember { database.studentSetProgressDao() }
     val annotationSummaryDao = remember { database.annotationSummaryDao() }
+    val kuuRecommendationDao = remember { database.kuuRecommendationDao() }
     val geminiRepository = remember { com.example.app.data.repository.GeminiRepository() }
 
     // Get WatchConnectionManager instance
@@ -404,6 +405,7 @@ fun LearnModeSessionScreen(
                             )
                             studentSetProgressDao.upsertProgress(progress)
                         }
+                        kuuRecommendationDao.incrementCompletions(studentIdLong)
                         Log.d("LearnModeSession", "✅ Set marked as completed in StudentSetProgress: studentId=$studentId, activityId=$activityId, setId=$setId")
 
                         // Generate AI summary for this set's annotations

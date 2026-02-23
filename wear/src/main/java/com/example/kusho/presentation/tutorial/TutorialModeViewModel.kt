@@ -8,6 +8,7 @@ import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
 import com.example.kusho.sensors.SensorSample
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -263,6 +264,11 @@ class TutorialModeViewModel(
 
                 // ViewModel stops here. Phone-driven feedback takes over in the composable.
 
+            } catch (e: CancellationException) {
+                // Job was cancelled (e.g., ViewModel cleared during letter transition).
+                // Do NOT send onGestureResult — this is not a real gesture attempt.
+                Log.d(TAG, "Recording job cancelled, not sending gesture result")
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Recognition error: ${e.message}", e)
                 _uiState.update {

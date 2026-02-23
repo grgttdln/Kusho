@@ -40,7 +40,6 @@ import com.example.kusho.presentation.practice.PracticeModeScreen
 import com.example.kusho.presentation.tutorial.TutorialModeScreen
 import com.example.kusho.presentation.learn.LearnModeScreen
 import com.example.kusho.presentation.service.ConnectionMonitor
-import com.example.kusho.presentation.service.DisconnectionReason
 
 /**
  * Navigation graph for the app
@@ -80,11 +79,12 @@ fun AppNavigation() {
         val currentRoute = navController.currentBackStackEntry?.destination?.route
         if (!isConnected && isPaired && !isSkipped && currentRoute != NavigationRoutes.PAIRING) {
             // Connection lost - navigate to pairing screen
-            prefs.edit().putBoolean("is_paired", false).apply()
+            connectionMonitor.clearPairingStatus()
             connectionMonitor.stopMonitoring()
             connectionMonitor.resetFailureCounter()
             navController.navigate(NavigationRoutes.PAIRING) {
-                popUpTo(NavigationRoutes.HOME) { inclusive = false }
+                popUpTo(NavigationRoutes.HOME) { inclusive = true }
+                launchSingleTop = true
             }
         }
     }

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.R
@@ -31,20 +32,20 @@ fun KuuRecommendationCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
+        // Background image stretches to match content size
         Image(
             painter = painterResource(id = R.drawable.dis_kuu_card),
             contentDescription = "Kuu Card",
             modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp),
-            contentScale = ContentScale.Fit
+                .matchParentSize(),
+            contentScale = ContentScale.FillBounds
         )
 
         if (isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp),
+                    .defaultMinSize(minHeight = 170.dp),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
@@ -54,22 +55,20 @@ fun KuuRecommendationCard(
                 )
             }
         } else {
-            // Overlay Content
+            // Overlay Content — height driven by content
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                    .defaultMinSize(minHeight = 170.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // Main Content
                 Column(
                     modifier = Modifier
-                        .weight(1f)
                         .padding(end = 80.dp),
-                    verticalArrangement = Arrangement.Center
                 ) {
-                    Spacer(Modifier.height(22.dp))
+                    Spacer(Modifier.height(15.dp))
                     Text(
                         text = title,
                         fontSize = 17.sp,
@@ -82,9 +81,13 @@ fun KuuRecommendationCard(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color.White.copy(alpha = 0.9f),
-                        lineHeight = 20.sp
+                        lineHeight = 20.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(Modifier.height(4.dp))
 
                 // Start Button
                 Button(

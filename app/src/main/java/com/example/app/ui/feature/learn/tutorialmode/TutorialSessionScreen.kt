@@ -188,6 +188,7 @@ fun TutorialSessionScreen(
     val annotationDao = remember { database.learnerProfileAnnotationDao() }
     val annotationSummaryDao = remember { database.annotationSummaryDao() }
     val tutorialCompletionDao = remember { database.tutorialCompletionDao() }
+    val kuuRecommendationDao = remember { database.kuuRecommendationDao() }
     val geminiRepository = remember { com.example.app.data.repository.GeminiRepository() }
 
     // Pre-compute total letter count (needed by lambdas defined before the full letter lists)
@@ -233,6 +234,7 @@ fun TutorialSessionScreen(
                             completedIndicesJson = serializeCompletedIndices(allIndices)
                         )
                     )
+                    kuuRecommendationDao.incrementCompletions(studentId)
                 }
             }
             onEndSession()
@@ -488,6 +490,15 @@ fun TutorialSessionScreen(
                 lastGestureTime = timestamp
                 val gestureCorrect = result["isCorrect"] as? Boolean ?: false
                 val gesturePredicted = result["predictedLetter"] as? String ?: ""
+
+                // Ignore spurious results with empty predictedLetter — these come from
+                // error paths (e.g., cancelled recording during letter transition), not
+                // real gesture attempts. Don't let them poison attemptedIndices.
+                if (gesturePredicted.isEmpty()) {
+                    Log.d("TutorialSession", "Ignoring gesture result with empty predictedLetter")
+                    return@collect
+                }
+
                 isStudentWriting = false // Recording finished, student is no longer writing
 
                 // Send feedback to watch (phone is single source of truth)

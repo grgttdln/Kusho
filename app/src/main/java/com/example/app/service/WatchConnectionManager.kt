@@ -194,10 +194,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                     when (state) {
                         BluetoothAdapter.STATE_OFF -> {
-                            // Bluetooth turned off - clear pairing so handshake is required on reconnect
-                            this@WatchConnectionManager.context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
-                                .edit().remove("paired_watch_node_id").apply()
-                            Log.d(TAG, "🔵 Bluetooth OFF — cleared paired_watch_node_id")
+                            Log.d(TAG, "🔵 Bluetooth OFF")
                             _deviceInfo.value = WatchDeviceInfo(
                                 isConnected = false,
                                 connectionState = ConnectionState.BLUETOOTH_OFF
