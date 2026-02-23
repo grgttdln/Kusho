@@ -505,54 +505,12 @@ fun TutorialSessionScreen(
                 watchConnectionManager.sendTutorialModeFeedback(gestureCorrect, gesturePredicted)
 
                 val itemIndex = currentStep - 1
-                val isRevisit = itemIndex in attemptedIndices
                 attemptedIndices = attemptedIndices + itemIndex
 
-                if (isRevisit) {
-                    // REVISIT: auto-advance or auto-retry (no dialog)
-                    val maxSteps = if (totalSteps > 0) totalSteps else calculatedTotalSteps
-                    if (gestureCorrect) {
-                        // Auto-mark complete and advance
-                        val newCompleted = completedIndices + itemIndex
-                        completedIndices = newCompleted
-                        // Dismiss feedback on watch immediately
-                        watchConnectionManager.notifyTutorialModeFeedbackDismissed()
-                        if (newCompleted.size >= maxSteps) {
-                            completeTutorialAndEnd()
-                        } else {
-                            // Auto-navigate to next unanswered
-                            val nextIncomplete = ((currentStep) until maxSteps).firstOrNull { it !in newCompleted }
-                                ?: (0 until currentStep - 1).firstOrNull { it !in newCompleted }
-                            if (nextIncomplete != null) {
-                                currentStep = nextIncomplete + 1
-                            }
-                        }
-                    } else {
-                        // Auto-retry: show wrong feedback briefly, then retry same item
-                        val letterToRetry = currentLetter
-                        val stepToRetry = currentStep
-                        showAnimation = false
-                        coroutineScope.launch {
-                            kotlinx.coroutines.delay(1500L)
-                            watchConnectionManager.notifyTutorialModeFeedbackDismissed()
-                            watchConnectionManager.notifyTutorialModeRetry()
-                            if (letterToRetry.isNotEmpty()) {
-                                watchConnectionManager.sendTutorialModeLetterData(
-                                    letter = letterToRetry,
-                                    letterCase = letterType,
-                                    currentIndex = stepToRetry,
-                                    totalLetters = calculatedTotalSteps,
-                                    dominantHand = dominantHand
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    // FIRST ATTEMPT: show teacher-gated ProgressCheckDialog
-                    isCorrectGesture = gestureCorrect
-                    predictedLetter = gesturePredicted
-                    showProgressCheck = true
-                }
+                // Always show teacher-gated ProgressCheckDialog
+                isCorrectGesture = gestureCorrect
+                predictedLetter = gesturePredicted
+                showProgressCheck = true
             }
         }
     }

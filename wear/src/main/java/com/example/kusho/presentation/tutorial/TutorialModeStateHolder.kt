@@ -43,10 +43,6 @@ object TutorialModeStateHolder {
     private val _isSessionComplete = MutableStateFlow(false)
     val isSessionComplete: StateFlow<Boolean> = _isSessionComplete.asStateFlow()
     
-    // Retry trigger - timestamp when retry was requested from mobile
-    private val _retryTrigger = MutableStateFlow(0L)
-    val retryTrigger: StateFlow<Long> = _retryTrigger.asStateFlow()
-
     // Tracks whether the watch user is currently on the TutorialModeScreen
     // Used to gate handshake replies so we don't reply when on other screens
     private val _isWatchOnTutorialScreen = MutableStateFlow(false)
@@ -62,6 +58,16 @@ object TutorialModeStateHolder {
     fun updateLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int, dominantHand: String = "RIGHT") {
         runOnMainThread {
             try {
+                // Deduplication guard: reject duplicate calls within 500ms for the same letter/case/index
+                val current = _letterData.value
+                if (current.letter == letter &&
+                    current.letterCase == letterCase &&
+                    current.currentIndex == currentIndex &&
+                    System.currentTimeMillis() - current.timestamp < 500) {
+                    Log.d(TAG, "Duplicate letter data within 500ms, skipping")
+                    return@runOnMainThread
+                }
+
                 Log.d(TAG, "📝 Updating letter data: $letter ($letterCase), index: $currentIndex/$totalLetters, hand: $dominantHand")
                 _letterData.value = LetterData(
                     letter = letter,
@@ -143,16 +149,6 @@ object TutorialModeStateHolder {
     }
 
     /**
-     * Trigger retry from mobile app
-     */
-    fun triggerRetry() {
-        runOnMainThread {
-            Log.d(TAG, "🔄 Retry triggered from mobile")
-            _retryTrigger.value = System.currentTimeMillis()
-        }
-    }
-    
-    /**
      * Reset entire session state (called when session ends or user navigates away)
      */
     fun resetSession() {
@@ -161,7 +157,6 @@ object TutorialModeStateHolder {
             _letterData.value = LetterData()
             _sessionData.value = SessionData()
             _isSessionComplete.value = false
-            _retryTrigger.value = 0L
         }
     }
 

@@ -197,6 +197,7 @@ fun TutorialModeScreen() {
                 lastDismissTime = timestamp
                 Log.d("TutorialMode", "👆 Phone dismissed feedback")
                 showingFeedback = false
+                showWaitScreen = true  // Prevent auto-start race — require user tap
             }
         }
     }

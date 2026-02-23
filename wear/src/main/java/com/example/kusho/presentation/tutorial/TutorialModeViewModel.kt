@@ -227,7 +227,7 @@ class TutorialModeViewModel(
                 }
 
                 // === Phase 4: Show prediction and send result to phone ===
-                val predictedLetter = result.label  // Model always outputs uppercase
+                val predictedLetter = result.label  // Small model outputs lowercase (a-z), capital model outputs uppercase (A-Z)
 
                 // Determine the expected letter case
                 val expectedLetter = when (letterCase.lowercase()) {
@@ -245,7 +245,8 @@ class TutorialModeViewModel(
                     predictedLetter.equals(expectedLetter, ignoreCase = false)
                 }
 
-                Log.d(TAG, "Predicted: $predictedLetter, Expected: $expectedLetter (case: $letterCase), Similar: $isSimilarShape, Correct: $isCorrect")
+                Log.d(TAG, "Comparison: predicted='$predictedLetter' expected='$expectedLetter' " +
+                    "case=$letterCase similar=$isSimilarShape result=$isCorrect")
 
                 // Show the predicted letter (stay in this state until phone sends feedback)
                 _uiState.update {

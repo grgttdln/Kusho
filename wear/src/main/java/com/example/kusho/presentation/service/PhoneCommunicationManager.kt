@@ -307,8 +307,7 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                 _tutorialModeFeedbackDismissed.value = System.currentTimeMillis()
             }
             MESSAGE_PATH_TUTORIAL_MODE_RETRY -> {
-                android.util.Log.d("PhoneCommunicationMgr", "🔄 Mobile requested retry")
-                com.example.kusho.presentation.tutorial.TutorialModeStateHolder.triggerRetry()
+                android.util.Log.d("PhoneCommunicationMgr", "🔄 Mobile requested retry (handled via feedback dismissal + letter resend)")
             }
             MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET -> {
                 android.util.Log.d("PhoneCommunicationMgr", "♻️ Mobile requested session reset - clearing all state")
