@@ -56,7 +56,7 @@ class TutorialModeViewModel(
 
     data class UiState(
         val state: State = State.IDLE,
-        val countdownSeconds: Int = COUNTDOWN_SECONDS,
+        val countdownSeconds: Int = 0,
         val recordingProgress: Float = 0f,
         val prediction: String? = null,
         val isCorrect: Boolean = false,

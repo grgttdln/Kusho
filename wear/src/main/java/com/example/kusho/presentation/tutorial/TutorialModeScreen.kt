@@ -1,5 +1,6 @@
 package com.example.kusho.presentation.tutorial
 
+import android.media.MediaPlayer
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -447,6 +448,31 @@ private fun GestureRecognitionContent(
     )
 
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    // Play countdown voice audio (3, 2, 1)
+    LaunchedEffect(uiState.countdownSeconds) {
+        val resId = when (uiState.countdownSeconds) {
+            3 -> R.raw.voice_3
+            2 -> R.raw.voice_2
+            1 -> R.raw.voice_1
+            else -> null
+        }
+        if (resId != null && uiState.state == TutorialModeViewModel.State.COUNTDOWN) {
+            val mp = MediaPlayer.create(context, resId)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
+
+    // Play "go" voice when recording starts
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == TutorialModeViewModel.State.RECORDING) {
+            val mp = MediaPlayer.create(context, R.raw.voice_go)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
 
     // Speak the prediction when we enter SHOWING_PREDICTION state
     LaunchedEffect(uiState.state, uiState.prediction, uiState.isCorrect) {

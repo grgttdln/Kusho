@@ -1,5 +1,6 @@
 package com.example.kusho.presentation.learn
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -464,6 +465,7 @@ private fun FillInTheBlankMainContent(
     showingFeedback: Boolean,
     feedbackIsCorrect: Boolean
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // Include timestamp in key to force fresh ViewModel on screen re-entry (matches Tutorial Mode pattern)
     val viewModel: LearnModeViewModel = viewModel(
@@ -480,6 +482,30 @@ private fun FillInTheBlankMainContent(
     )
 
     val uiState by viewModel.uiState.collectAsState()
+
+    // Play countdown voice audio (3, 2, 1)
+    LaunchedEffect(uiState.countdownSeconds) {
+        val resId = when (uiState.countdownSeconds) {
+            3 -> R.raw.voice_3
+            2 -> R.raw.voice_2
+            1 -> R.raw.voice_1
+            else -> null
+        }
+        if (resId != null && uiState.state == LearnModeViewModel.State.COUNTDOWN) {
+            val mp = MediaPlayer.create(context, resId)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
+
+    // Play "go" voice when recording starts
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.RECORDING) {
+            val mp = MediaPlayer.create(context, R.raw.voice_go)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
 
     // Auto-start the first recording so the user doesn't see a second "Tap to begin!"
     // after already tapping the WaitScreen. Only fires once per ViewModel instance.
@@ -813,6 +839,7 @@ private fun WriteTheWordMainContent(
     feedbackPredictedLetter: String,
     isLastLetterCorrect: Boolean
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     // Current letter to input - keep exact case (uppercase or lowercase)
@@ -837,6 +864,30 @@ private fun WriteTheWordMainContent(
     )
 
     val uiState by viewModel.uiState.collectAsState()
+
+    // Play countdown voice audio (3, 2, 1)
+    LaunchedEffect(uiState.countdownSeconds) {
+        val resId = when (uiState.countdownSeconds) {
+            3 -> R.raw.voice_3
+            2 -> R.raw.voice_2
+            1 -> R.raw.voice_1
+            else -> null
+        }
+        if (resId != null && uiState.state == LearnModeViewModel.State.COUNTDOWN) {
+            val mp = MediaPlayer.create(context, resId)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
+
+    // Play "go" voice when recording starts
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.RECORDING) {
+            val mp = MediaPlayer.create(context, R.raw.voice_go)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
 
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }
@@ -1246,6 +1297,7 @@ private fun NameThePictureMainContent(
     feedbackPredictedLetter: String,
     isLastLetterCorrect: Boolean
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     // Current letter to input - keep exact case (uppercase or lowercase)
@@ -1270,6 +1322,30 @@ private fun NameThePictureMainContent(
     )
 
     val uiState by viewModel.uiState.collectAsState()
+
+    // Play countdown voice audio (3, 2, 1)
+    LaunchedEffect(uiState.countdownSeconds) {
+        val resId = when (uiState.countdownSeconds) {
+            3 -> R.raw.voice_3
+            2 -> R.raw.voice_2
+            1 -> R.raw.voice_1
+            else -> null
+        }
+        if (resId != null && uiState.state == LearnModeViewModel.State.COUNTDOWN) {
+            val mp = MediaPlayer.create(context, resId)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
+
+    // Play "go" voice when recording starts
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == LearnModeViewModel.State.RECORDING) {
+            val mp = MediaPlayer.create(context, R.raw.voice_go)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
 
     // Track last spoken prediction to avoid double TTS
     var lastSpokenPrediction by remember { mutableStateOf<String?>(null) }

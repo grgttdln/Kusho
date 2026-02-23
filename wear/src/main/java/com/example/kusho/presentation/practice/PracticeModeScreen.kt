@@ -137,6 +137,30 @@ private fun PracticeModeContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
+    // Play countdown voice audio (3, 2, 1)
+    LaunchedEffect(uiState.countdownSeconds) {
+        val resId = when (uiState.countdownSeconds) {
+            3 -> R.raw.voice_3
+            2 -> R.raw.voice_2
+            1 -> R.raw.voice_1
+            else -> null
+        }
+        if (resId != null && uiState.state == PracticeModeViewModel.State.COUNTDOWN) {
+            val mp = MediaPlayer.create(context, resId)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
+
+    // Play "go" voice when recording starts
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == PracticeModeViewModel.State.RECORDING) {
+            val mp = MediaPlayer.create(context, R.raw.voice_go)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
+
     // Play the question audio or speak it with TTS when entering QUESTION state
     LaunchedEffect(uiState.state, uiState.currentQuestion) {
         if (uiState.state == PracticeModeViewModel.State.QUESTION && uiState.currentQuestion != null) {
