@@ -115,7 +115,8 @@ fun MainNavigationContainer(
     // --- REPOSITORY & CONTEXT HELPERS ---
     val context = LocalContext.current
     val sessionManager = remember { SessionManager.getInstance(context) }
-    val userId = remember { sessionManager.getUserId() }
+    val currentUser by sessionManager.currentUser.collectAsState()
+    val userId = currentUser?.id ?: 0L
     val wordRepository = remember { WordRepository(AppDatabase.getInstance(context).wordDao()) }
     val database = remember { AppDatabase.getInstance(context) }
     val setRepository = remember { SetRepository(database) }
@@ -335,8 +336,10 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         12 -> {
-            LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId)
+            LaunchedEffect(userId) {
+                if (userId != 0L) {
+                    availableWords = wordRepository.getWordsForUserOnce(userId)
+                }
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -378,8 +381,10 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         15 -> {
-            LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId)
+            LaunchedEffect(userId) {
+                if (userId != 0L) {
+                    availableWords = wordRepository.getWordsForUserOnce(userId)
+                }
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -845,8 +850,10 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         50 -> {
-            LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId)
+            LaunchedEffect(userId) {
+                if (userId != 0L) {
+                    availableWords = wordRepository.getWordsForUserOnce(userId)
+                }
             }
             SelectWordsScreen(
                 availableWords = availableWords,

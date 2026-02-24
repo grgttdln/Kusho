@@ -49,8 +49,10 @@ fun SelectSetsScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     // Load sets for the current user from the database
-    LaunchedEffect(Unit) {
-        viewModel.loadSetsForUser(userId)
+    LaunchedEffect(userId) {
+        if (userId != 0L) {
+            viewModel.loadSetsForUser(userId)
+        }
     }
 
     // Filter sets based on search query - memoized to prevent excessive filtering
