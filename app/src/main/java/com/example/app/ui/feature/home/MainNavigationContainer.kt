@@ -309,6 +309,7 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         9 -> SelectSetsScreen(
+            userId = userId,
             onNavigate = { currentScreen = it },
             onBackClick = { currentScreen = 8 },
             modifier = modifier

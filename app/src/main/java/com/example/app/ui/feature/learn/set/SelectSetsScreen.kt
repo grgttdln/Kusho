@@ -37,6 +37,7 @@ import com.example.app.ui.feature.learn.activities.AddActivityViewModel
 
 @Composable
 fun SelectSetsScreen(
+    userId: Long,
     onNavigate: (Int) -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -47,9 +48,9 @@ fun SelectSetsScreen(
     
     val uiState by viewModel.uiState.collectAsState()
 
-    // Load all available sets from the database
+    // Load sets for the current user from the database
     LaunchedEffect(Unit) {
-        viewModel.loadAllSets()
+        viewModel.loadSetsForUser(userId)
     }
 
     // Filter sets based on search query - memoized to prevent excessive filtering
@@ -261,6 +262,7 @@ fun SelectSetsScreen(
 @Composable
 fun SelectSetsScreenPreview() {
     SelectSetsScreen(
+        userId = 1L,
         onNavigate = {},
         onBackClick = {}
     )
