@@ -101,7 +101,7 @@ app/src/main/java/com/example/app/
 4. **Learn Mode** — Tutorial mode (guided) and Learn mode (independent), fill-in-blank / write-word / name-picture question types
 5. **Word Bank** — Per-user word management with optional images, batch delete
 6. **Activities & Sets** — Create activities, build word sets, link them together
-7. **AI Activity Generation** — Natural language prompts generate activities via OpenRouter (`nvidia/nemotron-nano-9b-v2:free`)
+7. **AI Activity Generation** — Natural language prompts generate activities via Gemini 2.5 Flash Lite with PatternRouter for deterministic CVC pattern filtering
 8. **Watch Integration** — Air-writing gesture recognition, tutorial/learn modes on watch, phone-watch sync
 9. **TTS** — Deepgram voices with audio caching, playback speed control, encouraging phrases
 
@@ -116,6 +116,57 @@ Routes defined in `Screen` sealed class. Main navigation handled by `MainNavigat
 ## Database
 
 Room database `kusho_database` (version 18) with 16 entities including: `User`, `Word`, `Class`, `Student`, `Enrollment`, `Activity`, `Set`, `SetWord`, `StudentSetProgress`, `TutorialCompletion`, and more. CASCADE DELETE on user deletion.
+
+## AI Activity Generation Pipeline
+
+The activity generation system in `GeminiRepository.kt` uses a 3-step chained Gemini pipeline:
+
+1. **Step 1 — Filter Words**: Selects words from the Word Bank matching the teacher's prompt
+2. **Step 2 — Select Subset**: Picks a coherent group of 3-10 words
+3. **Step 3 — Configure**: Assigns activity types ("write the word", "fill in the blanks", "name the picture")
+
+### PatternRouter (deterministic filtering)
+
+`classifyPrompt()` detects structural CVC patterns in teacher prompts and bypasses AI for Step 1:
+
+| Pattern Type | Example Prompt | Detection |
+|---|---|---|
+| Rime | "-un words", "ending in -at" | `DetectedPattern.Rime` |
+| Onset | "starting with b", "letters with g" | `DetectedPattern.Onset` |
+| Vowel | "short a words", "vowel 'e'" | `DetectedPattern.Vowel` |
+| Coda | "ending in t" | `DetectedPattern.Coda` |
+
+Regex ordering matters: **vowel patterns are checked before onset** to prevent "words with the short 'a'" from matching 's' in "short" as an onset. The `(?:the\s+)?(?:letter\s+)?` optional groups handle phrasings like "start with the letter g".
+
+Semantic/thematic prompts (e.g., "animal words") fall through to AI Step 1.
+
+### Insufficient Word Bank → Inline Suggestions
+
+When fewer than 3 words match a structural pattern:
+- `generateActivity()` returns `AiGenerationResult.InsufficientWords` (carries pattern + original prompt)
+- `LessonViewModel.handleInsufficientWords()` generates suggestions via `generateCVCWords()` using the original teacher prompt
+- `WordSuggestionDialog` shows selectable word chips for the teacher to add to the bank
+- After adding, generation auto-resumes
+
+### Word Generation Filtering
+
+`generateCVCWords()` applies a post-generation filter chain:
+1. `isValidCVC()` — validates consonant-vowel-consonant pattern
+2. `BLOCKED_WORDS` — removes inappropriate content
+3. **Pattern adherence** — if `classifyPrompt()` detects a structural pattern, non-matching words are stripped
+4. Child-friendly vocabulary enforcement via prompt (kindergarten/first-grade level, explicit negative examples)
+
+### Key Files
+
+| File | Role |
+|---|---|
+| `data/repository/GeminiRepository.kt` | AI pipeline, PatternRouter, CVC analysis |
+| `data/model/AiGeneratedData.kt` | Result types including `InsufficientWords` |
+| `ui/feature/learn/LessonViewModel.kt` | Word bank management, suggestion flow |
+| `ui/components/wordbank/WordSuggestionDialog.kt` | Inline suggestion dialog |
+| `ui/feature/learn/set/YourSetsScreen.kt` | Activity creation UI, dialog wiring |
+| `util/WordValidator.kt` | CVC pattern validation |
+| `util/DictionaryValidator.kt` | Android spell checker integration |
 
 ## Permissions
 
