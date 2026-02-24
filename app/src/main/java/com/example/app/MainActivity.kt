@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.compose.rememberNavController
 import com.example.app.navigation.AppNavigation
+import com.example.app.ui.components.pairing.GlobalPairingModals
 import com.example.app.ui.theme.KushoTheme
 import com.example.kusho.common.MessageService
 import com.google.android.gms.wearable.NodeClient
@@ -31,16 +32,20 @@ class MainActivity : ComponentActivity() {
             KushoTheme {
                 val navController = rememberNavController()
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = Color.White
-                ) { innerPadding ->
-                    AppNavigation(
-                        navController = navController,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Color.White
+                    ) { innerPadding ->
+                        AppNavigation(
+                            navController = navController,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        )
+                    }
+
+                    GlobalPairingModals()
                 }
             }
         }
