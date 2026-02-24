@@ -37,6 +37,7 @@ import com.example.app.ui.components.DeleteConfirmationDialog
 import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.SetItemCard
 import com.example.app.ui.components.wordbank.ActivityCreationModal
+import com.example.app.ui.components.wordbank.WordSuggestionDialog
 import com.example.app.ui.feature.learn.LessonViewModel
 
 @Composable
@@ -351,6 +352,21 @@ fun YourSetsScreen(
             },
             onDismiss = { lessonViewModel.hideActivityCreationModal() }
         )
+
+        // Word Suggestion Dialog (shown when word bank has insufficient words for a pattern)
+        if (lessonUiState.isWordSuggestionDialogVisible) {
+            WordSuggestionDialog(
+                pattern = lessonUiState.wordSuggestionPattern,
+                matchingWords = lessonUiState.wordSuggestionMatching,
+                candidates = lessonUiState.wordSuggestionCandidates,
+                selectedWords = lessonUiState.wordSuggestionSelected,
+                isLoading = lessonUiState.isWordSuggestionLoading,
+                error = lessonUiState.wordSuggestionError,
+                onToggleWord = { lessonViewModel.toggleWordSuggestion(it) },
+                onConfirm = { lessonViewModel.confirmWordSuggestions() },
+                onDismiss = { lessonViewModel.dismissWordSuggestionDialog() }
+            )
+        }
     }
 }
 

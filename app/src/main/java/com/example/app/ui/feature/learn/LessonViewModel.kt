@@ -596,6 +596,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
      * Hide the Activity Creation modal and reset its state.
      */
     fun hideActivityCreationModal() {
+        pendingGenerationCallback = null
         _generationPhase.value = GenerationPhase.Idle
         _uiState.update {
             it.copy(
@@ -681,6 +682,14 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                         )
                     }
                 }
+                is AiGenerationResult.InsufficientWords -> {
+                    handleInsufficientWords(
+                        pattern = result.pattern,
+                        matchingWords = result.matchingWords,
+                        originalPrompt = result.originalPrompt,
+                        onGenerationComplete = onGenerationComplete
+                    )
+                }
             }
         }
     }
@@ -723,7 +732,160 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                     _generationPhase.value = GenerationPhase.Idle
                     onResult(null)
                 }
+                is AiGenerationResult.InsufficientWords -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    onResult(null)
+                }
             }
+        }
+    }
+
+    /**
+     * Handle InsufficientWords result by generating suggestions and showing dialog.
+     */
+    private fun handleInsufficientWords(
+        pattern: String,
+        matchingWords: List<String>,
+        originalPrompt: String,
+        onGenerationComplete: (String) -> Unit
+    ) {
+        _uiState.update {
+            it.copy(
+                isActivityCreationLoading = false,
+                activityError = null,
+                isWordSuggestionDialogVisible = true,
+                wordSuggestionPattern = pattern,
+                wordSuggestionMatching = matchingWords,
+                wordSuggestionCandidates = emptyList(),
+                wordSuggestionSelected = emptySet(),
+                isWordSuggestionLoading = true,
+                wordSuggestionError = null
+            )
+        }
+        _generationPhase.value = GenerationPhase.Idle
+
+        pendingGenerationCallback = onGenerationComplete
+
+        viewModelScope.launch {
+            try {
+                val existingWords = _uiState.value.words
+                val suggestionPrompt = if (originalPrompt.isNotBlank()) originalPrompt else "$pattern words"
+                val candidates = geminiRepository.generateCVCWords(
+                    prompt = suggestionPrompt,
+                    count = 8,
+                    existingWords = existingWords
+                )
+                val existingWordSet = existingWords.map { it.word.lowercase() }.toSet()
+                val filtered = candidates.filter { it.lowercase() !in existingWordSet }
+
+                if (filtered.isEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isWordSuggestionLoading = false,
+                            wordSuggestionError = "Could not generate suggestions. Please add words manually."
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isWordSuggestionLoading = false,
+                            wordSuggestionCandidates = filtered,
+                            wordSuggestionSelected = filtered.toSet()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isWordSuggestionLoading = false,
+                        wordSuggestionError = "Failed to generate suggestions: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    private var pendingGenerationCallback: ((String) -> Unit)? = null
+
+    /**
+     * Toggle selection of a suggested word.
+     */
+    fun toggleWordSuggestion(word: String) {
+        _uiState.update { state ->
+            val current = state.wordSuggestionSelected
+            val updated = if (word in current) current - word else current + word
+            state.copy(wordSuggestionSelected = updated)
+        }
+    }
+
+    /**
+     * Add selected suggested words to the word bank and resume generation.
+     */
+    fun confirmWordSuggestions() {
+        val userId = currentUserId ?: return
+        val selected = _uiState.value.wordSuggestionSelected.toList()
+
+        if (selected.isEmpty()) {
+            _uiState.update { it.copy(wordSuggestionError = "Select at least one word to add") }
+            return
+        }
+
+        _uiState.update { it.copy(isWordSuggestionLoading = true, wordSuggestionError = null) }
+
+        viewModelScope.launch {
+            val addedWords = mutableListOf<String>()
+
+            for (word in selected) {
+                try {
+                    wordRepository.addWord(userId, word, null)
+                    addedWords.add(word)
+                } catch (e: Exception) {
+                    android.util.Log.w("LessonViewModel", "Failed to insert suggestion '$word': ${e.message}")
+                }
+            }
+
+            if (addedWords.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isWordSuggestionLoading = false,
+                        wordSuggestionError = "Failed to add words. Please try again."
+                    )
+                }
+                return@launch
+            }
+
+            cachedWordCountForPrompts = -1
+            geminiRepository.invalidateWordCache()
+
+            _uiState.update {
+                it.copy(
+                    isWordSuggestionDialogVisible = false,
+                    isWordSuggestionLoading = false,
+                    wordSuggestionCandidates = emptyList(),
+                    wordSuggestionSelected = emptySet()
+                )
+            }
+
+            val callback = pendingGenerationCallback
+            pendingGenerationCallback = null
+            if (callback != null) {
+                createActivity(callback)
+            }
+        }
+    }
+
+    /**
+     * Dismiss the word suggestion dialog without adding words.
+     */
+    fun dismissWordSuggestionDialog() {
+        pendingGenerationCallback = null
+        _uiState.update {
+            it.copy(
+                isWordSuggestionDialogVisible = false,
+                wordSuggestionCandidates = emptyList(),
+                wordSuggestionSelected = emptySet(),
+                wordSuggestionError = null
+            )
         }
     }
 
@@ -1003,6 +1165,14 @@ data class LessonUiState(
     val isWordGenerationLoading: Boolean = false,
     val wordGenerationError: String? = null,
     val generatedWords: List<String> = emptyList(),
-    val wordGenerationRequestedCount: Int = 0
+    val wordGenerationRequestedCount: Int = 0,
+    // Word suggestion dialog state (for insufficient word bank)
+    val isWordSuggestionDialogVisible: Boolean = false,
+    val wordSuggestionPattern: String = "",
+    val wordSuggestionMatching: List<String> = emptyList(),
+    val wordSuggestionCandidates: List<String> = emptyList(),
+    val wordSuggestionSelected: Set<String> = emptySet(),
+    val isWordSuggestionLoading: Boolean = false,
+    val wordSuggestionError: String? = null
 )
 

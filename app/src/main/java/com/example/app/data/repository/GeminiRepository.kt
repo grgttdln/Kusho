@@ -36,6 +36,32 @@ sealed class GenerationPhase {
 }
 
 /**
+ * Represents a structural pattern detected in a teacher's prompt.
+ * Used to bypass AI filtering and apply deterministic code-based filtering.
+ */
+sealed class DetectedPattern {
+    abstract fun matches(onset: Char, vowel: Char, coda: Char, rime: String): Boolean
+    abstract val displayName: String
+
+    data class Rime(val rime: String) : DetectedPattern() {
+        override fun matches(onset: Char, vowel: Char, coda: Char, rime: String) = rime == this.rime
+        override val displayName = "-$rime"
+    }
+    data class Onset(val onset: Char) : DetectedPattern() {
+        override fun matches(onset: Char, vowel: Char, coda: Char, rime: String) = onset == this.onset
+        override val displayName = "starting with '$onset'"
+    }
+    data class Vowel(val vowel: Char) : DetectedPattern() {
+        override fun matches(onset: Char, vowel: Char, coda: Char, rime: String) = vowel == this.vowel
+        override val displayName = "with vowel '$vowel'"
+    }
+    data class Coda(val coda: Char) : DetectedPattern() {
+        override fun matches(onset: Char, vowel: Char, coda: Char, rime: String) = coda == this.coda
+        override val displayName = "ending in '$coda'"
+    }
+}
+
+/**
  * Repository for generating activities using Gemini 2.5 Flash Lite.
  * Uses a 3-step chained approach:
  *   Step 1: Filter words matching teacher's request
@@ -90,6 +116,94 @@ class GeminiRepository {
     }
 
     /**
+     * Classify a teacher's prompt to detect structural patterns.
+     * Returns null for semantic/thematic prompts that need AI filtering.
+     */
+    fun classifyPrompt(prompt: String): DetectedPattern? {
+        val lower = prompt.lowercase().trim()
+
+        // Rime patterns: "-un", "_un", "ending in -un", "words ending in un", "-un words"
+        val rimeRegex = Regex("""(?:^|(?<=\s))[-_]([aeiou][bcdfghjklmnprstvwxyz])\b""")
+        val rimeMatch = rimeRegex.find(lower)
+        if (rimeMatch != null) {
+            return DetectedPattern.Rime(rimeMatch.groupValues[1])
+        }
+
+        // "ending in -un" / "end in un" / "that end with un"
+        val endingInRimeRegex = Regex("""end(?:ing)?\s+(?:in|with)\s+[-_]?([aeiou][bcdfghjklmnprstvwxyz])\b""")
+        val endingInRimeMatch = endingInRimeRegex.find(lower)
+        if (endingInRimeMatch != null) {
+            return DetectedPattern.Rime(endingInRimeMatch.groupValues[1])
+        }
+
+        // Onset patterns: "starting with b", "words that start with c", "b__ words",
+        // "letters with g", "words with g", "letter g", "g words"
+        val onsetRegex = Regex("""start(?:ing)?\s+with\s+(?:the\s+)?(?:letter\s+)?['"]?([bcdfghjklmnprstvwxyz])['"]?""")
+        val onsetMatch = onsetRegex.find(lower)
+        if (onsetMatch != null) {
+            return DetectedPattern.Onset(onsetMatch.groupValues[1][0])
+        }
+        val onsetBlankRegex = Regex("""\b([bcdfghjklmnprstvwxyz])_+\b""")
+        val onsetBlankMatch = onsetBlankRegex.find(lower)
+        if (onsetBlankMatch != null) {
+            return DetectedPattern.Onset(onsetBlankMatch.groupValues[1][0])
+        }
+        // Vowel patterns — checked BEFORE onset "letters/words with" to prevent
+        // "words with the short 'a'" from matching 's' in "short" as an onset
+        val vowelRegex = Regex("""(?:short|long|vowel)\s+['"]?([aeiou])['"]?""")
+        val vowelMatch = vowelRegex.find(lower)
+        if (vowelMatch != null) {
+            return DetectedPattern.Vowel(vowelMatch.groupValues[1][0])
+        }
+        val wordsWithVowelRegex = Regex("""words?\s+with\s+['"]([aeiou])['"]""")
+        val wordsWithVowelMatch = wordsWithVowelRegex.find(lower)
+        if (wordsWithVowelMatch != null) {
+            return DetectedPattern.Vowel(wordsWithVowelMatch.groupValues[1][0])
+        }
+
+        // "letters with g", "words with g", "letter g words"
+        val lettersWithRegex = Regex("""(?:letters?|words?)\s+with\s+(?:the\s+)?(?:letter\s+)?['"]?([bcdfghjklmnprstvwxyz])['"]?""")
+        val lettersWithMatch = lettersWithRegex.find(lower)
+        if (lettersWithMatch != null) {
+            return DetectedPattern.Onset(lettersWithMatch.groupValues[1][0])
+        }
+        // "letter g", "the letter g"
+        val letterXRegex = Regex("""letter\s+['"]?([bcdfghjklmnprstvwxyz])['"]?""")
+        val letterXMatch = letterXRegex.find(lower)
+        if (letterXMatch != null) {
+            return DetectedPattern.Onset(letterXMatch.groupValues[1][0])
+        }
+
+        // Coda patterns: "ending in t" (single consonant, not a rime)
+        val codaRegex = Regex("""end(?:ing)?\s+(?:in|with)\s+['"]?([bcdfghjklmnprstvwxyz])['"]?(?:\s|$)""")
+        val codaMatch = codaRegex.find(lower)
+        if (codaMatch != null) {
+            return DetectedPattern.Coda(codaMatch.groupValues[1][0])
+        }
+
+        // No structural pattern detected — needs AI
+        return null
+    }
+
+    /**
+     * Filter words using a detected structural pattern (no AI needed).
+     */
+    fun filterWordsByPattern(
+        pattern: DetectedPattern,
+        availableWords: List<Word>
+    ): List<String> {
+        return availableWords.mapNotNull { w ->
+            val lower = w.word.lowercase()
+            if (!isValidCVC(lower)) return@mapNotNull null
+            val onset = lower[0]
+            val vowel = lower[1]
+            val coda = lower[2]
+            val rime = "${lower[1]}${lower[2]}"
+            if (pattern.matches(onset, vowel, coda, rime)) w.word else null
+        }
+    }
+
+    /**
      * Create a GenerativeModel with the given system instruction.
      */
     private fun createModel(systemInstruction: String): GenerativeModel {
@@ -140,26 +254,46 @@ class GeminiRepository {
 
             // === Step 1: Filter Words ===
             onPhaseChange(GenerationPhase.Filtering)
-            val filteredWords = retryStep(MAX_RETRIES, "Step 1: Filter") {
-                stepFilterWords(prompt, analysisTable, patternsSummary)
-            }
 
             val wordBank = availableWords.map { it.word }.toSet()
-            if (filteredWords == null || filteredWords.words.isNullOrEmpty()) {
-                Log.w(TAG, "Step 1 failed or returned empty, using all words as fallback")
-                cachedFilteredWords = availableWords.map { it.word }
+            val detectedPattern = classifyPrompt(prompt)
+
+            if (detectedPattern != null) {
+                // Structural pattern: use deterministic code-based filtering
+                Log.d(TAG, "Structural pattern detected: ${detectedPattern.displayName}")
+                val codeFiltered = filterWordsByPattern(detectedPattern, availableWords)
+
+                if (codeFiltered.size < 3) {
+                    Log.w(TAG, "Insufficient words for pattern ${detectedPattern.displayName}: ${codeFiltered.size} found")
+                    return@withContext AiGenerationResult.InsufficientWords(
+                        pattern = detectedPattern.displayName,
+                        matchingWords = codeFiltered,
+                        needed = 3,
+                        originalPrompt = prompt
+                    )
+                }
+
+                cachedFilteredWords = codeFiltered
             } else {
-                // Strip hallucinated words not in word bank
-                val filtered = filteredWords.words.filter { it in wordBank }
-                if (filtered.size < 3) {
-                    Log.w(TAG, "Too few valid words after filtering (${filtered.size}), using all words")
+                // Semantic/thematic prompt: use AI Step 1
+                val filteredWords = retryStep(MAX_RETRIES, "Step 1: Filter") {
+                    stepFilterWords(prompt, analysisTable, patternsSummary)
+                }
+
+                if (filteredWords == null || filteredWords.words.isNullOrEmpty()) {
+                    Log.w(TAG, "Step 1 failed or returned empty, using all words as fallback")
                     cachedFilteredWords = availableWords.map { it.word }
                 } else {
-                    cachedFilteredWords = filtered
+                    val filtered = filteredWords.words.filter { it in wordBank }
+                    if (filtered.size < 3) {
+                        Log.w(TAG, "Too few valid words after filtering (${filtered.size}), using all words")
+                        cachedFilteredWords = availableWords.map { it.word }
+                    } else {
+                        cachedFilteredWords = filtered
+                    }
                 }
             }
             cacheTimestamp = System.currentTimeMillis()
-
             val cached = cachedFilteredWords ?: availableWords.map { it.word }
 
             // Rebuild analysis for filtered words only
@@ -931,14 +1065,17 @@ RULES — follow these strictly:
 - Letter 1 must be a consonant (b, c, d, f, g, h, j, k, l, m, n, p, r, s, t, v, w, x, y, z)
 - Letter 2 must be a vowel (a, e, i, o, u)
 - Letter 3 must be a consonant (b, c, d, f, g, h, j, k, l, m, n, p, r, s, t, v, w, x, y, z)
-- Every word must be a real, common English word that a child would recognize
+- Every word must be a real, common English word that a child aged 4-8 would recognize and understand
+- ONLY use words from a kindergarten/first-grade vocabulary level
+- Do NOT use obscure, technical, or adult-vocabulary words like: vat, lat, fen, ken, wen, cob, cot, cud, dab, din, don, dun, fad, gab, gig, hag, hem, hob, hod, jab, jig, jot, jut, keg, kin, lax, lob, nab, nib, nod, pal, peg, rig, rut, sag, sod, tab, tat, tux, vex, vim, wad, wig, wit, yam, zap
+- Prefer words that can be illustrated with a simple picture (cat, dog, sun, cup, bed, etc.)
 - No proper nouns, slang, or obscure words
 - No duplicate words in the list$existingSection
 
 PATTERN ENFORCEMENT — THIS IS THE MOST IMPORTANT RULE:
 - If the teacher's request specifies a word pattern or structure (e.g., "_en", "-at", "words ending in -un", "short 'a' words"), then EVERY SINGLE word you generate MUST follow that exact pattern. No exceptions.
-- For example, if the request is "_en words", ALL words must end in "en" (e.g., hen, pen, ten, den, men, ben, fen, ken, wen, yen). Do NOT include words that do not match the pattern.
-- If the request is "-at words", ALL words must end in "at" (e.g., cat, bat, hat, mat, rat, sat, fat, pat, vat, lat). Do NOT include words with different endings.
+- For example, if the request is "_en words", ALL words must end in "en" (e.g., hen, pen, ten, den, men, ben). Do NOT include words that do not match the pattern.
+- If the request is "-at words", ALL words must end in "at" (e.g., cat, bat, hat, mat, rat, sat, fat, pat). Do NOT include words with different endings.
 - The pattern takes absolute priority. Never substitute a non-matching word just to fill the count.
 
 Return a JSON object: {"words": ["word1", "word2", ...]}
@@ -952,6 +1089,7 @@ Return exactly $requestCount lowercase words. No extra text.
         val json = response.text ?: throw Exception("Empty response from CVC word generation")
 
         Log.d(TAG, "CVC word generation response: $json")
+        val detectedPattern = classifyPrompt(prompt)
         try {
             val parsed = gson.fromJson(json, GeneratedWordsResponse::class.java)
             parsed.words
@@ -959,6 +1097,16 @@ Return exactly $requestCount lowercase words. No extra text.
                 .filter { it.isNotBlank() }
                 .filter { isValidCVC(it) }
                 .filter { it !in BLOCKED_WORDS }
+                .filter { word ->
+                    // If a structural pattern was detected, enforce it programmatically
+                    if (detectedPattern != null) {
+                        val onset = word[0]
+                        val vowel = word[1]
+                        val coda = word[2]
+                        val rime = "${word[1]}${word[2]}"
+                        detectedPattern.matches(onset, vowel, coda, rime)
+                    } else true
+                }
                 .distinct()
         } catch (e: Exception) {
             Log.e(TAG, "CVC word generation JSON parse failed: ${e.message}", e)
