@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.app.R
+import com.example.app.util.ActivityIconMapper
 import com.example.app.util.ImageUtil
 import com.example.app.ui.components.classroom.AnalyticsCard
 import com.example.app.ui.components.classroom.LearnAnnotationCard
@@ -75,21 +76,7 @@ fun StudentDetailsScreen(
     val context = LocalContext.current
     val uiState by viewModel.studentDetailsUiState.collectAsState()
 
-    // Activity icons (same as LearnModeActivitySelectionScreen)
-    val allIcons = remember {
-        listOf(
-            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
-            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
-            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
-            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
-            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
-            R.drawable.ic_activity_21, R.drawable.ic_activity_22
-        )
-    }
-    fun getIconForActivity(activityId: Long): Int {
-        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
-        return allIcons[iconIndex]
-    }
+
     
     // State for edit dialogs
     var showEditNameDialog by remember { mutableStateOf(false) }
@@ -457,7 +444,7 @@ fun StudentDetailsScreen(
                     annotation = annotationText,
                     lessonName = "${completedSet.activityName} | ${completedSet.setName}",
                     date = formattedDate,
-                    iconRes = getIconForActivity(completedSet.activityId),
+                    iconRes = ActivityIconMapper.getIconForActivity(completedSet.activityName),
                     modifier = Modifier.padding(horizontal = 8.dp),
                     onClick = { onNavigateToLearnAnnotation("${completedSet.activityName}|${completedSet.setId}|${completedSet.activityId}") }
                 )

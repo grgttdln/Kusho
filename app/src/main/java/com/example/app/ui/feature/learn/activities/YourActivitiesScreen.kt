@@ -38,6 +38,7 @@ import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.DeleteConfirmationDialog
 import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.activities.ActivityItemCard
+import com.example.app.util.ActivityIconMapper
 
 @Composable
 fun YourActivitiesScreen(
@@ -63,26 +64,7 @@ fun YourActivitiesScreen(
         }
     }
 
-    // Default icons for activities (persistent assignment based on activity ID)
-    val allIcons = remember {
-        listOf(
-            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
-            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
-            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
-            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
-            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
-            R.drawable.ic_activity_21, R.drawable.ic_activity_22
-        )
-    }
 
-    // Function to get persistent icon for an activity based on its ID
-    fun getIconForActivity(activityId: Long): Int {
-        // Adjust for 1-based IDs to ensure ic_activity_1 is used
-        // Activity ID 1 → Index 0 → ic_activity_1
-        // Activity ID 2 → Index 1 → ic_activity_2, etc.
-        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
-        return allIcons[iconIndex]
-    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -213,7 +195,7 @@ fun YourActivitiesScreen(
                         key = { it.id }
                     ) { activity ->
                         // Get persistent icon for this activity based on its ID
-                        val activityIcon = getIconForActivity(activity.id)
+                        val activityIcon = ActivityIconMapper.getIconForActivity(activity.title)
 
                         // Check if this activity is selected for deletion
                         val isSelected = activityToDelete?.id == activity.id

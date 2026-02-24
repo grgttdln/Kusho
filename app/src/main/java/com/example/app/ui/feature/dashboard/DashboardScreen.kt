@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
+import com.example.app.util.ActivityIconMapper
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Activity as ActivityEntity
 import com.example.app.service.ConnectionState
@@ -124,20 +125,7 @@ fun DashboardScreen(
             // Return empty list to trigger the empty state in ActivityProgressSection
             emptyList()
         } else {
-            // prepare same icon pool as LearnModeActivitySelectionScreen for consistent assignment
-            val allIcons = listOf(
-                R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
-                R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
-                R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
-                R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
-                R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
-                R.drawable.ic_activity_21, R.drawable.ic_activity_22
-            )
 
-            fun getIconForActivity(activityId: Long): Int {
-                val iconIndex = ((activityId - 1) % allIcons.size).toInt()
-                return allIcons[iconIndex]
-            }
 
             activities.map { act: ActivityEntity ->
                  // If the activity doesn't have a coverImagePath, try to resolve a drawable named ic_<slugified title>
@@ -155,7 +143,7 @@ fun DashboardScreen(
                     activityId = act.id.toString(),
                     activityName = act.title,
                     coverImagePath = resolvedCover,
-                    iconRes = getIconForActivity(act.id),
+                    iconRes = ActivityIconMapper.getIconForActivity(act.title),
                     accuracyDeltaPercent = 0,
                     timeDeltaSeconds = 0,
                     masteryPercent = 0f,

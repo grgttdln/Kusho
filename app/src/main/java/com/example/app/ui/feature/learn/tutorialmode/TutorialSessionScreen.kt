@@ -925,17 +925,15 @@ fun TutorialSessionScreen(
                 contentAlignment = Alignment.Center
             ) {
                 // Phase 2.4: Replay (left) and Hand/Animation toggle (right) icons in top-right row
-                // Grayed out when student is air writing
                 Row(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .then(if (isStudentWriting) Modifier.alpha(0.35f) else Modifier),
+                        .align(Alignment.TopEnd),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Replay voice prompt icon
+                    // Replay voice prompt icon (always active, even during air writing)
                     IconButton(
-                        enabled = !isStudentWriting,
+                        enabled = true,
                         onClick = {
                             // Replay the pre-recorded voice prompt for the current letter
                             val voiceMap = if (letterType.lowercase() == "capital") capitalVoiceMap else smallVoiceMap
@@ -965,10 +963,11 @@ fun TutorialSessionScreen(
                             tint = YellowIconColor
                         )
                     }
-                    // Hand (pan_tool_alt) icon to toggle animation
+                    // Hand (pan_tool_alt) icon to toggle animation (grayed out during air writing)
                     IconButton(
                         onClick = { if (!isStudentWriting) showAnimation = !showAnimation },
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(40.dp)
+                            .then(if (isStudentWriting) Modifier.alpha(0.35f) else Modifier),
                         enabled = !isStudentWriting
                     ) {
                         Icon(
@@ -1607,11 +1606,13 @@ private fun ProgressCheckDialog(
                 val afd = context.resources.openRawResourceFd(resId)
                 mediaPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 afd.close()
-                mediaPlayer.prepare()
-                mediaPlayer.setOnCompletionListener {
-                    onComplete?.invoke()
+                mediaPlayer.setOnPreparedListener { mp ->
+                    mp.setOnCompletionListener {
+                        onComplete?.invoke()
+                    }
+                    mp.start()
                 }
-                mediaPlayer.start()
+                mediaPlayer.prepareAsync()
             } catch (e: Exception) {
                 e.printStackTrace()
                 onComplete?.invoke()
