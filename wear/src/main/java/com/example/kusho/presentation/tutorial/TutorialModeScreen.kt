@@ -64,18 +64,28 @@ fun TutorialModeScreen() {
         TutorialModeStateHolder.resetSession()
         // Mark watch as on Tutorial Mode screen for handshake gating
         TutorialModeStateHolder.setWatchOnTutorialScreen(true)
+        phoneCommunicationManager.sendTutorialModeWatchEnteredScreen()
         // Keep screen on during Tutorial Mode to prevent sleep during air writing
         view.keepScreenOn = true
         onDispose {
+            phoneCommunicationManager.sendTutorialModeWatchExitedScreen()
             TutorialModeStateHolder.setWatchOnTutorialScreen(false)
             view.keepScreenOn = false
             ttsManager.shutdown()
-            phoneCommunicationManager.cleanup()
         }
+    }
+
+    // Request current session state from phone on entry (handles re-entry recovery)
+    LaunchedEffect(Unit) {
+        phoneCommunicationManager.requestTutorialModeState()
     }
 
     val letterData by TutorialModeStateHolder.letterData.collectAsState()
     val isSessionComplete by TutorialModeStateHolder.isSessionComplete.collectAsState()
+
+    // Track whether we're waiting for teacher to resume after re-entering the screen
+    var waitingForResume by remember { mutableStateOf(false) }
+    val tutorialModeResumeEvent by phoneCommunicationManager.tutorialModeResumeEvent.collectAsState()
 
     // Debouncing state for skip gesture
     var lastSkipTime by remember { mutableLongStateOf(0L) }
@@ -178,6 +188,21 @@ fun TutorialModeScreen() {
         }
     }
 
+    // On screen entry: if phone is already in tutorial mode but we have no letter data,
+    // we're likely re-entering after an exit. Wait for teacher resume.
+    LaunchedEffect(isPhoneInTutorialMode) {
+        if (isPhoneInTutorialMode && letterData.letter.isEmpty()) {
+            waitingForResume = true
+        }
+    }
+
+    // When resume event fires, clear the waiting state
+    LaunchedEffect(tutorialModeResumeEvent) {
+        if (tutorialModeResumeEvent > 0L && waitingForResume) {
+            waitingForResume = false
+        }
+    }
+
     // Listen for feedback from phone (phone is single source of truth)
     LaunchedEffect(Unit) {
         phoneCommunicationManager.tutorialModeFeedbackEvent.collect { event ->
@@ -214,6 +239,10 @@ fun TutorialModeScreen() {
         Scaffold {
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
+                    waitingForResume && letterData.letter.isEmpty() -> {
+                        // Watch re-entered screen, waiting for teacher to tap Continue
+                        WaitingForResumeContent()
+                    }
                     !isPhoneInTutorialMode -> {
                         // Waiting for phone to start session
                         WaitingContent()
@@ -315,6 +344,30 @@ private fun ErrorContent(errorMessage: String) {
             text = "Please restart the app",
             color = AppColors.TutorialModeColor.copy(alpha = 0.5f),
             fontSize = 10.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun WaitingForResumeContent() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(32.dp),
+            strokeWidth = 3.dp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Waiting for\nteacher to resume...",
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center
         )
     }

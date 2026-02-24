@@ -73,16 +73,27 @@ fun LearnModeScreen() {
     DisposableEffect(Unit) {
         view.keepScreenOn = true
         LearnModeStateHolder.setWatchOnLearnScreen(true)
+        phoneCommunicationManager.sendLearnModeWatchEnteredScreen()
         onDispose {
+            phoneCommunicationManager.sendLearnModeWatchExitedScreen()
             LearnModeStateHolder.setWatchOnLearnScreen(false)
             view.keepScreenOn = false
         }
+    }
+
+    // Request current session state from phone on entry (handles re-entry recovery)
+    LaunchedEffect(Unit) {
+        phoneCommunicationManager.requestLearnModeState()
     }
 
     // Observe word data from LearnModeStateHolder
     val wordData by LearnModeStateHolder.wordData.collectAsState()
     val sessionData by LearnModeStateHolder.sessionData.collectAsState()
     val writeTheWordState by LearnModeStateHolder.writeTheWordState.collectAsState()
+
+    // Track whether we're waiting for teacher to resume after re-entering the screen
+    var waitingForResume by remember { mutableStateOf(false) }
+    val learnModeResumeEvent by phoneCommunicationManager.learnModeResumeEvent.collectAsState()
 
     // Global feedback state - persists across word changes
     var showingFeedback by remember { mutableStateOf(false) }
@@ -181,6 +192,21 @@ fun LearnModeScreen() {
         }
     }
 
+    // On screen entry: if phone is already in learn mode but we have no word data,
+    // we're likely re-entering after an exit. Wait for teacher resume.
+    LaunchedEffect(isPhoneInLearnMode) {
+        if (isPhoneInLearnMode && wordData.word.isEmpty()) {
+            waitingForResume = true
+        }
+    }
+
+    // When resume event fires, clear the waiting state
+    LaunchedEffect(learnModeResumeEvent) {
+        if (learnModeResumeEvent > 0L && waitingForResume) {
+            waitingForResume = false
+        }
+    }
+
     // "Tap to begin" wait screen - shown after handshake but before user taps
     var showWaitScreen by remember { mutableStateOf(true) }
 
@@ -198,6 +224,10 @@ fun LearnModeScreen() {
                     sessionData.isActivityComplete -> {
                         // Activity complete - show completion image
                         ActivityCompleteContent()
+                    }
+                    waitingForResume && wordData.word.isEmpty() -> {
+                        // Watch re-entered screen, waiting for teacher to tap Continue
+                        WaitingForResumeContent()
                     }
                     !isPhoneInLearnMode -> {
                         // Waiting state - phone hasn't started Learn Mode session yet
@@ -279,6 +309,30 @@ private fun WaitingContent() {
                 .fillMaxSize()
                 .padding(top = 14.dp),
             contentScale = ContentScale.Crop
+        )
+    }
+}
+
+@Composable
+private fun WaitingForResumeContent() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(32.dp),
+            strokeWidth = 3.dp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Waiting for\nteacher to resume...",
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center
         )
     }
 }

@@ -35,6 +35,7 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,6 +64,13 @@ import androidx.compose.ui.window.PopupPositionProvider
 import com.example.app.R
 import com.example.app.data.AppDatabase
 import com.example.app.service.WatchConnectionManager
+import com.example.app.ui.components.SessionPausedOverlay
+import com.example.app.ui.components.WatchDisconnectedDialog
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.example.app.service.SessionDisconnectReason
 import com.example.app.ui.components.common.ProgressIndicator
 import com.example.app.ui.components.common.EndSessionDialog
 import com.example.app.ui.components.common.ResumeSessionDialog
@@ -103,6 +111,15 @@ fun TutorialSessionScreen(
 ) {
     val context = LocalContext.current
     val watchConnectionManager = remember { WatchConnectionManager.getInstance(context) }
+    val isConnectionLost by watchConnectionManager.sessionConnectionLost.collectAsState()
+    val disconnectReason by watchConnectionManager.sessionDisconnectReason.collectAsState()
+    val isSessionPaused by watchConnectionManager.sessionPaused.collectAsState()
+    val isWatchOnModeScreen by watchConnectionManager.watchOnModeScreen.collectAsState()
+
+    // Bluetooth enable launcher - same pattern as DashboardScreen
+    val bluetoothEnableLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { /* BroadcastReceiver in WatchConnectionManager handles STATE_ON transition */ }
 
     // Pre-recorded voice prompt MediaPlayer for letter announcements
     val voiceMediaPlayer = remember { MediaPlayer() }
@@ -384,6 +401,22 @@ fun TutorialSessionScreen(
         } else ""
     }
 
+    // Track active session state for watch re-entry sync
+    DisposableEffect(Unit) {
+        watchConnectionManager.setTutorialModeSessionActive(true)
+        onDispose {
+            watchConnectionManager.setTutorialModeSessionActive(false)
+        }
+    }
+
+    // Start session health monitoring for disconnect detection
+    DisposableEffect(Unit) {
+        watchConnectionManager.startSessionMonitoring()
+        onDispose {
+            watchConnectionManager.stopSessionMonitoring()
+        }
+    }
+
     // Notify watch when Tutorial Mode session starts
     LaunchedEffect(Unit) {
         watchConnectionManager.notifyTutorialModeStarted(studentName, title)
@@ -431,6 +464,13 @@ fun TutorialSessionScreen(
     LaunchedEffect(currentStep, currentLetter, isWatchReady, showResumeDialog) {
         if (currentLetter.isNotEmpty() && isWatchReady && !showResumeDialog) {
             watchConnectionManager.sendTutorialModeLetterData(
+                letter = currentLetter,
+                letterCase = letterType,
+                currentIndex = currentStep,
+                totalLetters = calculatedTotalSteps,
+                dominantHand = dominantHand
+            )
+            watchConnectionManager.updateCurrentTutorialModeLetterData(
                 letter = currentLetter,
                 letterCase = letterType,
                 currentIndex = currentStep,
@@ -528,6 +568,22 @@ fun TutorialSessionScreen(
         }
     }
     
+    // Watch Disconnected Dialog - blocks session when watch is unreachable
+    if (isConnectionLost) {
+        WatchDisconnectedDialog(
+            isBluetoothOff = disconnectReason == SessionDisconnectReason.BLUETOOTH_OFF,
+            onTurnOnBluetooth = {
+                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                bluetoothEnableLauncher.launch(enableBtIntent)
+            },
+            onEndSession = {
+                watchConnectionManager.stopSessionMonitoring()
+                watchConnectionManager.notifyTutorialModeEnded()
+                onEarlyExit()
+            }
+        )
+    }
+
     // Progress Check Dialog (teacher-gated: only Continue button advances)
     if (showProgressCheck) {
         ProgressCheckDialog(
@@ -574,6 +630,13 @@ fun TutorialSessionScreen(
                     watchConnectionManager.notifyTutorialModeRetry()
                     if (currentLetter.isNotEmpty()) {
                         watchConnectionManager.sendTutorialModeLetterData(
+                            letter = currentLetter,
+                            letterCase = letterType,
+                            currentIndex = currentStep,
+                            totalLetters = calculatedTotalSteps,
+                            dominantHand = dominantHand
+                        )
+                        watchConnectionManager.updateCurrentTutorialModeLetterData(
                             letter = currentLetter,
                             letterCase = letterType,
                             currentIndex = currentStep,
@@ -1249,6 +1312,22 @@ fun TutorialSessionScreen(
                 showCardStackGrid = false
             },
             onDismiss = { showCardStackGrid = false }
+        )
+    }
+
+    // Session Paused Overlay - non-blocking, drawn on top of content inside Box
+    // Only show if not also showing the disconnect dialog (disconnect takes priority)
+    if (isSessionPaused && !isConnectionLost) {
+        SessionPausedOverlay(
+            watchOnScreen = isWatchOnModeScreen,
+            onContinue = {
+                watchConnectionManager.resumeTutorialModeSession()
+            },
+            onEndSession = {
+                watchConnectionManager.stopSessionMonitoring()
+                watchConnectionManager.notifyTutorialModeEnded()
+                onEarlyExit()
+            }
         )
     }
 
