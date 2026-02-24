@@ -143,7 +143,7 @@ fun WordSuggestionDialog(
 
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         candidates.forEach { word ->
@@ -227,6 +227,8 @@ private fun WordChip(
 
     Row(
         modifier = Modifier
+            .defaultMinSize(minWidth = 80.dp)
+            .height(40.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(backgroundColor)
             .border(
@@ -235,18 +237,17 @@ private fun WordChip(
                 shape = RoundedCornerShape(20.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
     ) {
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                tint = Color(0xFF49A9FF),
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-        }
+        Icon(
+            imageVector = Icons.Default.Check,
+            contentDescription = null,
+            tint = if (isSelected) Color(0xFF49A9FF) else Color.Transparent,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
 
         Text(
             text = word,
