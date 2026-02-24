@@ -18,6 +18,8 @@ import com.example.app.data.dao.LearnerProfileAnnotationDao
 import com.example.app.data.dao.StudentSetProgressDao
 import com.example.app.data.dao.AnnotationSummaryDao
 import com.example.app.data.dao.TutorialCompletionDao
+import com.example.app.data.dao.ActivityDescriptionCacheDao
+import com.example.app.data.dao.KuuRecommendationDao
 // Import all Entities
 import com.example.app.data.entity.User
 import com.example.app.data.entity.Word
@@ -33,6 +35,8 @@ import com.example.app.data.entity.LearnerProfileAnnotation
 import com.example.app.data.entity.StudentSetProgress
 import com.example.app.data.entity.AnnotationSummary
 import com.example.app.data.entity.TutorialCompletion
+import com.example.app.data.entity.ActivityDescriptionCache
+import com.example.app.data.entity.KuuRecommendation
 
 /**
  * Room Database for the Kusho application.
@@ -53,9 +57,11 @@ import com.example.app.data.entity.TutorialCompletion
         LearnerProfileAnnotation::class,
         StudentSetProgress::class,
         AnnotationSummary::class,
-        TutorialCompletion::class
+        TutorialCompletion::class,
+        ActivityDescriptionCache::class,
+        KuuRecommendation::class
     ],
-    version = 14, // Added activityId to annotations and summaries
+    version = 18, // Added KuuRecommendation table
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -74,6 +80,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun studentSetProgressDao(): StudentSetProgressDao
     abstract fun annotationSummaryDao(): AnnotationSummaryDao
     abstract fun tutorialCompletionDao(): TutorialCompletionDao
+    abstract fun activityDescriptionCacheDao(): ActivityDescriptionCacheDao
+    abstract fun kuuRecommendationDao(): KuuRecommendationDao
 
     companion object {
         private const val DATABASE_NAME = "kusho_database"

@@ -13,7 +13,9 @@ import kotlinx.coroutines.withContext
  * Provides a clean API for the UI layer to interact with word data.
  * All database operations are performed on the IO dispatcher.
  */
-class WordRepository(private val wordDao: WordDao) {
+class WordRepository(
+    private val wordDao: WordDao
+) {
 
     /**
      * Result class for add word operation.
@@ -29,6 +31,14 @@ class WordRepository(private val wordDao: WordDao) {
     sealed class UpdateWordResult {
         data object Success : UpdateWordResult()
         data class Error(val message: String) : UpdateWordResult()
+    }
+
+    /**
+     * Result class for batch delete word operation.
+     */
+    sealed class BatchDeleteResult {
+        data class Success(val count: Int) : BatchDeleteResult()
+        data class Error(val message: String) : BatchDeleteResult()
     }
 
     /**
@@ -104,6 +114,32 @@ class WordRepository(private val wordDao: WordDao) {
             wordDao.deleteWordById(wordId) > 0
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /**
+     * Delete multiple words by their IDs (batch delete).
+     *
+     * @param wordIds The list of word IDs to delete
+     * @return BatchDeleteResult indicating success with count or failure
+     */
+    suspend fun deleteWords(wordIds: List<Long>): BatchDeleteResult = withContext(Dispatchers.IO) {
+        try {
+            if (wordIds.isEmpty()) {
+                return@withContext BatchDeleteResult.Success(0)
+            }
+
+            var deletedCount = 0
+            wordIds.forEach { wordId ->
+                val rowsDeleted = wordDao.deleteWordById(wordId)
+                if (rowsDeleted > 0) {
+                    deletedCount++
+                }
+            }
+
+            BatchDeleteResult.Success(deletedCount)
+        } catch (e: Exception) {
+            BatchDeleteResult.Error(e.message ?: "Failed to delete words")
         }
     }
 

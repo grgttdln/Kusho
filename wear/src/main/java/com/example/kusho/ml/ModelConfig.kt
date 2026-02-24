@@ -65,9 +65,9 @@ data class ModelConfig(
                 description = "Specialized model for lowercase letters (right hand)"
                 // No offset needed - this model outputs indices 0-25 for a-z
             ),
-            // Left-hand models
+            // Left-hand models (CNN-LSTM)
             ModelConfig(
-                fileName = "tcn_multihead_model_CAPITAL_left.tflite",
+                fileName = "complete_cnn-lstm_model_CAPITAL_left.tflite",
                 displayName = "Uppercase Left Hand Model",
                 windowSize = 295,
                 channels = 6,
@@ -75,11 +75,11 @@ data class ModelConfig(
                     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
                     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
                 ),
-                description = "Specialized model for uppercase letters (left hand)",
+                description = "CNN-LSTM model for uppercase letters (left hand)",
                 indexOffset = 26
             ),
             ModelConfig(
-                fileName = "tcn_multihead_model_small_left.tflite",
+                fileName = "complete_cnn-lstm_model_small_left.tflite",
                 displayName = "Lowercase Left Hand Model",
                 windowSize = 295,
                 channels = 6,
@@ -87,7 +87,7 @@ data class ModelConfig(
                     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
                     "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
                 ),
-                description = "Specialized model for lowercase letters (left hand)"
+                description = "CNN-LSTM model for lowercase letters (left hand)"
                 // No offset needed
             )
         )
@@ -109,7 +109,8 @@ data class ModelConfig(
                 "small", "lowercase" -> "small"
                 else -> return getDefault()
             }
-            val targetFileName = "tcn_multihead_model_${casePart}_${hand}.tflite"
+            val prefix = if (hand == "left") "complete_cnn-lstm_model" else "tcn_multihead_model"
+            val targetFileName = "${prefix}_${casePart}_${hand}.tflite"
             return MODELS.find { it.fileName == targetFileName } ?: getDefault()
         }
 

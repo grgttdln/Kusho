@@ -140,11 +140,11 @@ fun EditSetScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Title text "Edit Set"
+                // Title text "Edit Activity"
                 Text(
-                    text = "Edit Set",
+                    text = "Edit Activity",
                     fontSize = 32.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     color = Color(0xFF0B0B0B),
                     textAlign = TextAlign.Center
                 )
@@ -158,13 +158,13 @@ fun EditSetScreen(
                         .padding(horizontal = 15.dp),
                     verticalArrangement = Arrangement.spacedBy(30.dp)
                 ) {
-                    // Set Title Field
+                    // Activity Title Field
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "Set Title",
+                            text = "Activity Title",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color(0xFF0B0B0B)
@@ -207,7 +207,7 @@ fun EditSetScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "Description",
+                            text = "Short Description",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color(0xFF0B0B0B)
@@ -251,7 +251,7 @@ fun EditSetScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = if (uiState.selectedWords.isEmpty()) "Words" else "Words in Set (${uiState.selectedWords.size})",
+                            text = if (uiState.selectedWords.isEmpty()) "Words" else "Words Added (${uiState.selectedWords.size})",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color(0xFF0B0B0B)
@@ -297,7 +297,7 @@ fun EditSetScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "No words in this set",
+                                    text = "No words in this activity",
                                     fontSize = 14.sp,
                                     color = Color(0xFF808080)
                                 )
@@ -343,7 +343,7 @@ fun EditSetScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
-            // Update Set Button at bottom
+            // Update Activity Button at bottom
             Button(
                 onClick = {
                     if (uiState.setTitle.isNotBlank() && uiState.selectedWords.isNotEmpty()) {
@@ -367,7 +367,7 @@ fun EditSetScreen(
                 enabled = uiState.setTitle.isNotBlank() && uiState.selectedWords.isNotEmpty() && !uiState.isSaving
             ) {
                 Text(
-                    text = if (uiState.isSaving) "Updating..." else "Update Set",
+                    text = if (uiState.isSaving) "Updating..." else "Update Activity",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,

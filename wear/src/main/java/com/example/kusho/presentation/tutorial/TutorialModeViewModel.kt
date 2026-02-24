@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.sensors.SensorSample
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,14 +20,16 @@ import kotlinx.coroutines.launch
 
 /**
  * ViewModel for Tutorial Mode gesture recognition.
- * Handles: countdown -> gesture recording -> classification -> send result to phone
+ * Mirrors LearnModeViewModel pattern: IDLE -> countdown -> recording -> classification -> SHOWING_PREDICTION -> (wait for phone)
+ * Phone is single source of truth for feedback. ViewModel stops at SHOWING_PREDICTION.
  */
 class TutorialModeViewModel(
     private val sensorManager: MotionSensorManager,
     private val classifierResult: ClassifierLoadResult,
     private val targetLetter: String,
     private val letterCase: String,
-    private val onGestureResult: (isCorrect: Boolean, predictedLetter: String) -> Unit
+    private val onGestureResult: (isCorrect: Boolean, predictedLetter: String) -> Unit,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModel() {
 
     companion object {
@@ -33,7 +37,9 @@ class TutorialModeViewModel(
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 3
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
-        
+        private const val GYRO_VARIANCE_THRESHOLD = 0.3f
+        private const val GYRO_RANGE_THRESHOLD = 1.0f
+
         // Letters with similar shapes in uppercase and lowercase
         private val SIMILAR_SHAPE_LETTERS = setOf(
             'C', 'K', 'O', 'P', 'S', 'V', 'W', 'X', 'Z'
@@ -41,21 +47,20 @@ class TutorialModeViewModel(
     }
 
     enum class State {
+        IDLE,
         COUNTDOWN,
         RECORDING,
         PROCESSING,
-        SHOWING_PREDICTION,
-        RESULT,
-        COMPLETE
+        SHOWING_PREDICTION
     }
 
     data class UiState(
-        val state: State = State.COUNTDOWN,
-        val countdownSeconds: Int = COUNTDOWN_SECONDS,
+        val state: State = State.IDLE,
+        val countdownSeconds: Int = 0,
         val recordingProgress: Float = 0f,
         val prediction: String? = null,
         val isCorrect: Boolean = false,
-        val statusMessage: String = "Get ready...",
+        val statusMessage: String = "Tap to begin",
         val errorMessage: String? = null
     )
 
@@ -77,31 +82,22 @@ class TutorialModeViewModel(
                 null
             }
         }
-        
-        // Auto-start the recognition flow
-        startRecognition()
     }
 
     /**
-     * Reset the ViewModel state and restart recognition.
-     * Call this when user wants to retry after incorrect/error.
+     * Start recording from IDLE state (user tapped to begin).
+     * Mirrors LearnModeViewModel.startRecording().
      */
-    fun reset() {
-        Log.d(TAG, "Resetting ViewModel for retry")
-        recordingJob?.cancel()
-        _uiState.value = UiState()  // Reset to initial state
-        startRecognition()
-    }
+    fun startRecording() {
+        if (_uiState.value.state != State.IDLE) {
+            Log.d(TAG, "Not in IDLE state, ignoring start")
+            return
+        }
 
-    /**
-     * Start the recognition flow: countdown -> record -> classify -> send result
-     */
-    private fun startRecognition() {
         if (classifier == null) {
             Log.e(TAG, "Cannot start: classifier is null")
             _uiState.update {
                 it.copy(
-                    state = State.COMPLETE,
                     errorMessage = "Model not loaded",
                     statusMessage = "Error"
                 )
@@ -111,9 +107,7 @@ class TutorialModeViewModel(
         }
 
         recordingJob?.cancel()
-        // Reset state to initial before starting
-        _uiState.value = UiState()
-        
+
         recordingJob = viewModelScope.launch(Dispatchers.Default) {
             try {
                 // === Phase 1: Countdown ===
@@ -143,6 +137,9 @@ class TutorialModeViewModel(
                         recordingProgress = 0f
                     )
                 }
+
+                // Notify phone that recording has started (student is writing)
+                onRecordingStarted()
 
                 // Start sensor recording
                 sensorManager.startRecording()
@@ -179,13 +176,30 @@ class TutorialModeViewModel(
                 val samples = sensorManager.getCollectedSamples()
                 Log.d(TAG, "Collected ${samples.size} samples")
 
+                // Check for significant wrist movement
+                if (!hasSignificantMotion(samples)) {
+                    Log.w(TAG, "No significant wrist movement detected — showing '?' as prediction")
+                    _uiState.update {
+                        it.copy(
+                            state = State.SHOWING_PREDICTION,
+                            prediction = "?",
+                            isCorrect = false,
+                            statusMessage = "?",
+                            errorMessage = null,
+                            recordingProgress = 0f
+                        )
+                    }
+                    onGestureResult(false, "?")
+                    return@launch
+                }
+
                 // Check if we have enough data
                 val minSamples = classifier.windowSize / 2
                 if (samples.size < minSamples) {
                     Log.w(TAG, "Not enough samples: ${samples.size} < $minSamples")
                     _uiState.update {
                         it.copy(
-                            state = State.COMPLETE,
+                            state = State.IDLE,
                             errorMessage = "Not enough motion",
                             statusMessage = "Try again",
                             recordingProgress = 0f
@@ -202,7 +216,7 @@ class TutorialModeViewModel(
                 if (!result.success) {
                     _uiState.update {
                         it.copy(
-                            state = State.COMPLETE,
+                            state = State.IDLE,
                             errorMessage = result.errorMessage,
                             statusMessage = "Try again",
                             recordingProgress = 0f
@@ -212,73 +226,55 @@ class TutorialModeViewModel(
                     return@launch
                 }
 
-                // === Phase 4: Show prediction ===
-                val predictedLetter = result.label  // Model always outputs uppercase
-                
-                // Show the predicted letter first
-                _uiState.update {
-                    it.copy(
-                        state = State.SHOWING_PREDICTION,
-                        prediction = predictedLetter,
-                        statusMessage = "$predictedLetter",
-                        errorMessage = null,
-                        recordingProgress = 0f
-                    )
-                }
-                
-                // Brief delay to show the prediction
-                delay(1000)
-                
-                // === Phase 5: Check if correct ===
-                // Determine the expected letter case based on letterCase parameter
+                // === Phase 4: Show prediction and send result to phone ===
+                val predictedLetter = result.label  // Small model outputs lowercase (a-z), capital model outputs uppercase (A-Z)
+
+                // Determine the expected letter case
                 val expectedLetter = when (letterCase.lowercase()) {
                     "small", "lowercase" -> targetLetter.lowercase()
                     else -> targetLetter.uppercase()
                 }
-                
+
                 // Check if this letter has similar shapes in both cases
                 val targetUppercase = targetLetter.uppercase().firstOrNull()
                 val isSimilarShape = targetUppercase != null && targetUppercase in SIMILAR_SHAPE_LETTERS
-                
-                // For similar shape letters, use case-insensitive comparison
-                // For others (like A/a), enforce case-sensitive
+
                 val isCorrect = if (isSimilarShape) {
                     predictedLetter.equals(expectedLetter, ignoreCase = true)
                 } else {
                     predictedLetter.equals(expectedLetter, ignoreCase = false)
                 }
-                
-                Log.d(TAG, "Predicted: $predictedLetter, Expected: $expectedLetter (case: $letterCase), Similar: $isSimilarShape, Correct: $isCorrect")
-                
-                // Show the result state
+
+                Log.d(TAG, "Comparison: predicted='$predictedLetter' expected='$expectedLetter' " +
+                    "case=$letterCase similar=$isSimilarShape result=$isCorrect")
+
+                // Show the predicted letter (stay in this state until phone sends feedback)
                 _uiState.update {
                     it.copy(
-                        state = State.RESULT,
-                        isCorrect = isCorrect
-                    )
-                }
-                
-                // Wait for TTS to complete (2 seconds)
-                delay(2000)
-                
-                if (!isActive) return@launch
-                
-                // Then transition to complete state
-                _uiState.update {
-                    it.copy(
-                        state = State.COMPLETE,
-                        statusMessage = if (isCorrect) "Correct!" else "Try again"
+                        state = State.SHOWING_PREDICTION,
+                        prediction = predictedLetter,
+                        isCorrect = isCorrect,
+                        statusMessage = predictedLetter,
+                        errorMessage = null,
+                        recordingProgress = 0f
                     )
                 }
 
-                // Send result to phone
+                // Send result to phone — phone will send feedback back
                 onGestureResult(isCorrect, predictedLetter)
 
+                // ViewModel stops here. Phone-driven feedback takes over in the composable.
+
+            } catch (e: CancellationException) {
+                // Job was cancelled (e.g., ViewModel cleared during letter transition).
+                // Do NOT send onGestureResult — this is not a real gesture attempt.
+                Log.d(TAG, "Recording job cancelled, not sending gesture result")
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Recognition error: ${e.message}", e)
                 _uiState.update {
                     it.copy(
-                        state = State.COMPLETE,
+                        state = State.IDLE,
                         errorMessage = "Error: ${e.message}",
                         statusMessage = "Try again",
                         recordingProgress = 0f
@@ -286,6 +282,28 @@ class TutorialModeViewModel(
                 }
                 onGestureResult(false, "")
             }
+        }
+    }
+
+    /**
+     * Reset to idle state, cancelling any pending recording.
+     * Called when phone-driven feedback is dismissed.
+     * Mirrors LearnModeViewModel.resetToIdle().
+     */
+    fun resetToIdle() {
+        Log.d(TAG, "Resetting to idle")
+        recordingJob?.cancel()
+        recordingJob = null
+        _uiState.update {
+            it.copy(
+                state = State.IDLE,
+                statusMessage = "Tap to begin",
+                errorMessage = null,
+                prediction = null,
+                isCorrect = false,
+                recordingProgress = 0f,
+                countdownSeconds = COUNTDOWN_SECONDS
+            )
         }
     }
 
@@ -304,6 +322,29 @@ class TutorialModeViewModel(
         recordingJob?.cancel()
         sensorManager.stopRecording()
     }
+
+    private fun hasSignificantMotion(samples: List<SensorSample>): Boolean {
+        // TODO: Motion gate temporarily bypassed for debugging — always allow ML classification
+        if (samples.size < 2) return false
+
+        val n = samples.size.toFloat()
+
+        val gyroMagnitudes = samples.map {
+            kotlin.math.sqrt((it.gx * it.gx + it.gy * it.gy + it.gz * it.gz).toDouble()).toFloat()
+        }
+        val gyroMean = gyroMagnitudes.sum() / n
+        val gyroVariance = gyroMagnitudes.sumOf { ((it - gyroMean) * (it - gyroMean)).toDouble() }.toFloat() / n
+        val gyroRange = gyroMagnitudes.max() - gyroMagnitudes.min()
+
+        Log.d(TAG, "Gyro: variance=%.4f (need>=%.4f), range=%.4f (need>=%.4f)".format(
+            gyroVariance, GYRO_VARIANCE_THRESHOLD, gyroRange, GYRO_RANGE_THRESHOLD))
+
+        val result = gyroVariance >= GYRO_VARIANCE_THRESHOLD && gyroRange >= GYRO_RANGE_THRESHOLD
+        Log.i(TAG, "Motion detected: $result (variance=${gyroVariance >= GYRO_VARIANCE_THRESHOLD}, range=${gyroRange >= GYRO_RANGE_THRESHOLD})")
+        // return result
+        Log.w(TAG, "Motion gate BYPASSED — returning true regardless (debugging)")
+        return true
+    }
 }
 
 /**
@@ -314,12 +355,13 @@ class TutorialModeViewModelFactory(
     private val classifierResult: ClassifierLoadResult,
     private val targetLetter: String,
     private val letterCase: String,
-    private val onGestureResult: (Boolean, String) -> Unit
+    private val onGestureResult: (Boolean, String) -> Unit,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(TutorialModeViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return TutorialModeViewModel(sensorManager, classifierResult, targetLetter, letterCase, onGestureResult) as T
+            return TutorialModeViewModel(sensorManager, classifierResult, targetLetter, letterCase, onGestureResult, onRecordingStarted) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: $modelClass")
     }

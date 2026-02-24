@@ -178,6 +178,15 @@ class GenerateActivityViewModel(application: Application) : AndroidViewModel(app
                         )
                     }
                 }
+                is AiGenerationResult.InsufficientWords -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    _uiState.update {
+                        it.copy(
+                            isGenerating = false,
+                            error = "Not enough words matching pattern \"${result.pattern}\". Found ${result.matchingWords.size}, need ${result.needed}."
+                        )
+                    }
+                }
             }
         }
     }
@@ -259,6 +268,10 @@ class GenerateActivityViewModel(application: Application) : AndroidViewModel(app
                     onResult(gson.toJson(result.data))
                 }
                 is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    onResult(null)
+                }
+                is AiGenerationResult.InsufficientWords -> {
                     _generationPhase.value = GenerationPhase.Idle
                     onResult(null)
                 }

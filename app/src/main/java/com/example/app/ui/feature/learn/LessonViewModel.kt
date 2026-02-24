@@ -29,15 +29,12 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
 
     // Initialize database and repositories
     private val database = AppDatabase.getInstance(application)
-    private val wordRepository = WordRepository(database.wordDao())
     private val sessionManager = SessionManager.getInstance(application)
     private val imageStorageManager = ImageStorageManager(application)
+    private val wordRepository = WordRepository(database.wordDao())
     private val activityDao = database.activityDao()
     private val setDao = database.setDao()
     private val geminiRepository = GeminiRepository()
-
-    // Cached existing set titles for regeneration support
-    private var cachedExistingSetTitles: List<String> = emptyList()
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -51,6 +48,15 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     // Cached generation context for regeneration
     private var lastGenerationPrompt: String = ""
     private var lastSelectedWords: List<Word> = emptyList()
+
+    // Cached suggested prompts for generation modal
+    private var cachedSuggestedPrompts: List<String> = emptyList()
+    private var cachedWordCountForPrompts: Int = -1
+
+    // Cached suggested prompts for activity creation modal
+    private var cachedActivitySuggestedPrompts: List<String> = emptyList()
+    private var cachedActivityWordCountForPrompts: Int = -1
+    private var cachedActivitySetCountForPrompts: Int = -1
 
     init {
         // Observe the current user session
@@ -101,7 +107,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 wordInput = "",
                 selectedMediaUri = null,
                 inputError = null,
-                imageError = null
+                imageError = null,
             )
         }
     }
@@ -113,7 +119,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 wordInput = word.trim(),
-                inputError = null // Clear error when user types
+                inputError = null,
             )
         }
     }
@@ -272,6 +278,84 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Toggle Word Bank edit mode for batch delete.
+     */
+    fun toggleWordBankEditMode() {
+        _uiState.update {
+            it.copy(
+                isWordBankEditMode = !it.isWordBankEditMode,
+                selectedWordIds = emptySet() // Clear selections when toggling mode
+            )
+        }
+    }
+
+    /**
+     * Toggle selection of a word in edit mode.
+     */
+    fun toggleWordSelection(wordId: Long) {
+        _uiState.update {
+            val currentSelections = it.selectedWordIds
+            val newSelections = if (currentSelections.contains(wordId)) {
+                currentSelections - wordId
+            } else {
+                currentSelections + wordId
+            }
+            it.copy(selectedWordIds = newSelections)
+        }
+    }
+
+    /**
+     * Select all words in Word Bank.
+     */
+    fun selectAllWords() {
+        _uiState.update {
+            val allWordIds = it.words.map { word -> word.id }.toSet()
+            it.copy(selectedWordIds = allWordIds)
+        }
+    }
+
+    /**
+     * Deselect all words in Word Bank.
+     */
+    fun deselectAllWords() {
+        _uiState.update {
+            it.copy(selectedWordIds = emptySet())
+        }
+    }
+
+    /**
+     * Delete selected words (batch delete).
+     */
+    fun deleteSelectedWords() {
+        val selectedIds = _uiState.value.selectedWordIds.toList()
+        if (selectedIds.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDeletingWords = true) }
+
+            val result = wordRepository.deleteWords(selectedIds)
+            
+            _uiState.update {
+                it.copy(
+                    isDeletingWords = false,
+                    isWordBankEditMode = false, // Exit edit mode after delete
+                    selectedWordIds = emptySet() // Clear selections
+                )
+            }
+
+            // Show error if deletion failed (optional - could add error state to UI)
+            when (result) {
+                is WordRepository.BatchDeleteResult.Success -> {
+                    // Successfully deleted
+                }
+                is WordRepository.BatchDeleteResult.Error -> {
+                    // Handle error (could show snackbar or toast)
+                }
+            }
+        }
+    }
+
+    /**
      * Handle word item click - opens the edit modal with the selected word.
      */
     fun onWordClick(word: Word) {
@@ -300,7 +384,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                 editSelectedMediaUri = null,
                 editInputError = null,
                 editImageError = null,
-                isEditLoading = false
+                isEditLoading = false,
             )
         }
     }
@@ -312,10 +396,11 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 editWordInput = word.trim(),
-                editInputError = null
+                editInputError = null,
             )
         }
     }
+
 
     /**
      * Update the selected media URI for editing.
@@ -511,12 +596,12 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
      * Hide the Activity Creation modal and reset its state.
      */
     fun hideActivityCreationModal() {
+        pendingGenerationCallback = null
         _generationPhase.value = GenerationPhase.Idle
         _uiState.update {
             it.copy(
                 isActivityCreationModalVisible = false,
                 activityInput = "",
-                selectedActivityWordIds = emptySet(),
                 isActivityCreationLoading = false
             )
         }
@@ -532,38 +617,7 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Toggle word selection for activity creation.
-     */
-    fun onActivityWordSelectionChanged(wordId: Long, isSelected: Boolean) {
-        _uiState.update { state: LessonUiState ->
-            val currentSelection = state.selectedActivityWordIds
-            val newSelection = if (isSelected) {
-                currentSelection + wordId
-            } else {
-                currentSelection - wordId
-            }
-            state.copy(selectedActivityWordIds = newSelection)
-        }
-    }
-
-    /**
-     * Select all words for activity creation.
-     */
-    fun onSelectAllActivityWords() {
-        _uiState.update { state: LessonUiState ->
-            val allWordIds = state.words.map { it.id }.toSet()
-            // If all words are already selected, deselect all; otherwise select all
-            val newSelection = if (state.selectedActivityWordIds == allWordIds) {
-                emptySet()
-            } else {
-                allWordIds
-            }
-            state.copy(selectedActivityWordIds = newSelection)
-        }
-    }
-
-    /**
-     * Generate activity using AI with selected words.
+     * Generate activity using AI with the entire word bank.
      * Stores the generated JSON result and signals completion via callback.
      */
     fun createActivity(onGenerationComplete: (String) -> Unit) {
@@ -574,33 +628,32 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val activityDescription = _uiState.value.activityInput.trim()
-        val selectedWordIds = _uiState.value.selectedActivityWordIds
 
-        if (activityDescription.isBlank() || selectedWordIds.isEmpty()) {
-            _uiState.update { it.copy(activityError = "Please enter a description and select at least one word") }
+        if (activityDescription.isBlank()) {
+            _uiState.update { it.copy(activityError = "Please enter a description") }
             return
         }
 
-        val selectedWords = _uiState.value.words
-            .filter { selectedWordIds.contains(it.id) }
+        val allWords = _uiState.value.words
+        if (allWords.isEmpty()) {
+            _uiState.update { it.copy(activityError = "No words in your Word Bank yet. Add some words first!") }
+            return
+        }
 
         // Cache for regeneration
         lastGenerationPrompt = activityDescription
-        lastSelectedWords = selectedWords
+        lastSelectedWords = allWords
 
         _uiState.update { it.copy(isActivityCreationLoading = true, activityError = null) }
         _generationPhase.value = GenerationPhase.Filtering
 
         viewModelScope.launch {
-            // Fetch existing titles for similarity detection
-            val existingActivityTitles = activityDao.getActivitiesByUserIdOnce(userId).map { it.title }
+            // Fetch existing set titles for similarity detection
             val existingSetTitles = setDao.getSetsWithWordNames(userId).map { it.setTitle }.distinct()
-            cachedExistingSetTitles = existingSetTitles
 
             val result = geminiRepository.generateActivity(
                 activityDescription,
-                selectedWords,
-                existingActivityTitles = existingActivityTitles,
+                allWords,
                 existingSetTitles = existingSetTitles
             ) { phase ->
                 _generationPhase.value = phase
@@ -614,7 +667,6 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                         it.copy(
                             isActivityCreationModalVisible = false,
                             activityInput = "",
-                            selectedActivityWordIds = emptySet(),
                             isActivityCreationLoading = false,
                             generatedJsonResult = jsonResult
                         )
@@ -629,6 +681,14 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                             activityError = result.message
                         )
                     }
+                }
+                is AiGenerationResult.InsufficientWords -> {
+                    handleInsufficientWords(
+                        pattern = result.pattern,
+                        matchingWords = result.matchingWords,
+                        originalPrompt = result.originalPrompt,
+                        onGenerationComplete = onGenerationComplete
+                    )
                 }
             }
         }
@@ -649,12 +709,14 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         viewModelScope.launch {
+            val existingSetTitles = setDao.getSetsWithWordNames(currentUserId ?: 0L).map { it.setTitle }.distinct()
+
             val result = geminiRepository.regenerateSet(
                 prompt = lastGenerationPrompt,
                 availableWords = lastSelectedWords,
                 currentSetTitle = currentSetTitle,
                 currentSetDescription = currentSetDescription,
-                existingSetTitles = cachedExistingSetTitles,
+                existingSetTitles = existingSetTitles,
                 onPhaseChange = { phase ->
                     _generationPhase.value = phase
                 }
@@ -667,6 +729,10 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
                     onResult(gson.toJson(result.data))
                 }
                 is AiGenerationResult.Error -> {
+                    _generationPhase.value = GenerationPhase.Idle
+                    onResult(null)
+                }
+                is AiGenerationResult.InsufficientWords -> {
                     _generationPhase.value = GenerationPhase.Idle
                     onResult(null)
                 }
@@ -675,48 +741,386 @@ class LessonViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Generate one additional set to append to the existing generated sets.
-     * Reuses the regenerateSet pipeline, passing all existing titles as avoidance context.
+     * Handle InsufficientWords result by generating suggestions and showing dialog.
      */
-    fun addMoreSet(
-        existingSetTitles: List<String>,
-        existingSetDescriptions: List<String>,
-        onResult: (String?) -> Unit
+    private fun handleInsufficientWords(
+        pattern: String,
+        matchingWords: List<String>,
+        originalPrompt: String,
+        onGenerationComplete: (String) -> Unit
     ) {
-        if (lastSelectedWords.isEmpty()) {
-            onResult(null)
+        _uiState.update {
+            it.copy(
+                isActivityCreationLoading = false,
+                activityError = null,
+                isWordSuggestionDialogVisible = true,
+                wordSuggestionPattern = pattern,
+                wordSuggestionMatching = matchingWords,
+                wordSuggestionCandidates = emptyList(),
+                wordSuggestionSelected = emptySet(),
+                isWordSuggestionLoading = true,
+                wordSuggestionError = null
+            )
+        }
+        _generationPhase.value = GenerationPhase.Idle
+
+        pendingGenerationCallback = onGenerationComplete
+
+        viewModelScope.launch {
+            try {
+                val existingWords = _uiState.value.words
+                val suggestionPrompt = if (originalPrompt.isNotBlank()) originalPrompt else "$pattern words"
+                val candidates = geminiRepository.generateCVCWords(
+                    prompt = suggestionPrompt,
+                    count = 8,
+                    existingWords = existingWords
+                )
+                val existingWordSet = existingWords.map { it.word.lowercase() }.toSet()
+                val filtered = candidates.filter { it.lowercase() !in existingWordSet }
+
+                if (filtered.isEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isWordSuggestionLoading = false,
+                            wordSuggestionError = "Could not generate suggestions. Please add words manually."
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isWordSuggestionLoading = false,
+                            wordSuggestionCandidates = filtered,
+                            wordSuggestionSelected = filtered.toSet()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isWordSuggestionLoading = false,
+                        wordSuggestionError = "Failed to generate suggestions: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    private var pendingGenerationCallback: ((String) -> Unit)? = null
+
+    /**
+     * Toggle selection of a suggested word.
+     */
+    fun toggleWordSuggestion(word: String) {
+        _uiState.update { state ->
+            val current = state.wordSuggestionSelected
+            val updated = if (word in current) current - word else current + word
+            state.copy(wordSuggestionSelected = updated)
+        }
+    }
+
+    /**
+     * Add selected suggested words to the word bank and resume generation.
+     */
+    fun confirmWordSuggestions() {
+        val userId = currentUserId ?: return
+        val selected = _uiState.value.wordSuggestionSelected.toList()
+
+        if (selected.isEmpty()) {
+            _uiState.update { it.copy(wordSuggestionError = "Select at least one word to add") }
             return
         }
 
-        // Combine existing titles into avoidance context for the AI
-        val avoidTitle = existingSetTitles.joinToString(", ").take(50)
-        val avoidDescription = existingSetDescriptions.joinToString("; ").take(100)
+        _uiState.update { it.copy(isWordSuggestionLoading = true, wordSuggestionError = null) }
 
         viewModelScope.launch {
-            val allTitlesToAvoid = (cachedExistingSetTitles + existingSetTitles).distinct()
+            val addedWords = mutableListOf<String>()
 
-            val result = geminiRepository.regenerateSet(
-                prompt = lastGenerationPrompt,
-                availableWords = lastSelectedWords,
-                currentSetTitle = avoidTitle,
-                currentSetDescription = avoidDescription,
-                existingSetTitles = allTitlesToAvoid,
-                onPhaseChange = { phase ->
-                    _generationPhase.value = phase
-                }
-            )
-
-            when (result) {
-                is AiGenerationResult.Success -> {
-                    _generationPhase.value = GenerationPhase.Idle
-                    val gson = com.google.gson.Gson()
-                    onResult(gson.toJson(result.data))
-                }
-                is AiGenerationResult.Error -> {
-                    _generationPhase.value = GenerationPhase.Idle
-                    onResult(null)
+            for (word in selected) {
+                try {
+                    wordRepository.addWord(userId, word, null)
+                    addedWords.add(word)
+                } catch (e: Exception) {
+                    android.util.Log.w("LessonViewModel", "Failed to insert suggestion '$word': ${e.message}")
                 }
             }
+
+            if (addedWords.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isWordSuggestionLoading = false,
+                        wordSuggestionError = "Failed to add words. Please try again."
+                    )
+                }
+                return@launch
+            }
+
+            cachedWordCountForPrompts = -1
+            geminiRepository.invalidateWordCache()
+
+            _uiState.update {
+                it.copy(
+                    isWordSuggestionDialogVisible = false,
+                    isWordSuggestionLoading = false,
+                    wordSuggestionCandidates = emptyList(),
+                    wordSuggestionSelected = emptySet()
+                )
+            }
+
+            val callback = pendingGenerationCallback
+            pendingGenerationCallback = null
+            if (callback != null) {
+                createActivity(callback)
+            }
+        }
+    }
+
+    /**
+     * Dismiss the word suggestion dialog without adding words.
+     */
+    fun dismissWordSuggestionDialog() {
+        pendingGenerationCallback = null
+        _uiState.update {
+            it.copy(
+                isWordSuggestionDialogVisible = false,
+                wordSuggestionCandidates = emptyList(),
+                wordSuggestionSelected = emptySet(),
+                wordSuggestionError = null
+            )
+        }
+    }
+
+    /**
+     * Load suggested prompts for the generation modal.
+     * Uses cached prompts if word bank size hasn't changed.
+     */
+    fun loadSuggestedPrompts() {
+        val currentWords = _uiState.value.words
+        val currentWordCount = currentWords.size
+
+        // Use cache if word bank size hasn't changed
+        if (currentWordCount == cachedWordCountForPrompts && cachedSuggestedPrompts.isNotEmpty()) {
+            _uiState.update { it.copy(suggestedPrompts = cachedSuggestedPrompts) }
+            return
+        }
+
+        // Generate new suggestions
+        _uiState.update { it.copy(isSuggestionsLoading = true, suggestedPrompts = emptyList()) }
+
+        viewModelScope.launch {
+            try {
+                val prompts = geminiRepository.generateSuggestedPrompts(currentWords)
+
+                if (prompts.isNotEmpty()) {
+                    cachedSuggestedPrompts = prompts
+                    cachedWordCountForPrompts = currentWordCount
+                }
+
+                _uiState.update {
+                    it.copy(
+                        suggestedPrompts = prompts,
+                        isSuggestionsLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        suggestedPrompts = emptyList(),
+                        isSuggestionsLoading = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Load suggested prompts for the activity creation modal.
+     * Uses cached prompts if word bank size hasn't changed.
+     */
+    fun loadActivitySuggestedPrompts() {
+        val userId = currentUserId ?: return
+        val currentWords = _uiState.value.words
+        val currentWordCount = currentWords.size
+
+        // Don't load suggestions for empty word bank
+        if (currentWordCount == 0) return
+
+        // Generate new suggestions (cache check deferred until we know set count)
+        _uiState.update { it.copy(isActivitySuggestionsLoading = true, activitySuggestedPrompts = emptyList()) }
+
+        viewModelScope.launch {
+            try {
+                // Fetch existing sets with their words
+                val setWordNames = setDao.getSetsWithWordNames(userId)
+                val existingSetsMap = setWordNames.groupBy { it.setTitle }
+                    .mapValues { (_, rows) -> rows.map { it.wordName } }
+                val currentSetCount = existingSetsMap.size
+
+                // Use cache if word bank size and set count haven't changed
+                if (currentWordCount == cachedActivityWordCountForPrompts &&
+                    currentSetCount == cachedActivitySetCountForPrompts &&
+                    cachedActivitySuggestedPrompts.isNotEmpty()
+                ) {
+                    _uiState.update {
+                        it.copy(
+                            activitySuggestedPrompts = cachedActivitySuggestedPrompts,
+                            isActivitySuggestionsLoading = false
+                        )
+                    }
+                    return@launch
+                }
+
+                val prompts = geminiRepository.generateActivitySuggestedPrompts(currentWords, existingSetsMap)
+
+                if (prompts.isNotEmpty()) {
+                    cachedActivitySuggestedPrompts = prompts
+                    cachedActivityWordCountForPrompts = currentWordCount
+                    cachedActivitySetCountForPrompts = currentSetCount
+                }
+
+                _uiState.update {
+                    it.copy(
+                        activitySuggestedPrompts = prompts,
+                        isActivitySuggestionsLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        activitySuggestedPrompts = emptyList(),
+                        isActivitySuggestionsLoading = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Generate CVC words using Gemini and add them to the word bank.
+     * Orchestrates: Gemini call → CVC filter → dedup → batch DB insert → success state.
+     *
+     * @param prompt Teacher's description of what CVC words to generate
+     * @param count Number of words requested (from stepper)
+     */
+    fun generateWords(prompt: String, count: Int) {
+        val userId = currentUserId
+        if (userId == null || userId == 0L) {
+            _uiState.update { it.copy(wordGenerationError = "Please log in to generate words") }
+            return
+        }
+
+        if (prompt.isBlank()) {
+            _uiState.update { it.copy(wordGenerationError = "Please enter a description") }
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                isWordGenerationLoading = true,
+                wordGenerationError = null,
+                generatedWords = emptyList(),
+                wordGenerationRequestedCount = count
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                // 1. Fetch existing words for dedup context
+                val existingWords = wordRepository.getWordsForUserOnce(userId)
+                val existingWordSet = existingWords.map { it.word.lowercase() }.toSet()
+
+                // 2. Call Gemini to generate CVC word candidates
+                val candidates = geminiRepository.generateCVCWords(prompt, count, existingWords)
+
+                // 3. CVC regex safety filter
+                val cvcValid = candidates.filter { com.example.app.util.WordValidator.isCVCPattern(it) }
+
+                // 4. Dedup against existing word bank
+                val deduped = cvcValid.filter { it.lowercase() !in existingWordSet }
+
+                // 5. Take requested count
+                val wordsToAdd = deduped.take(count)
+
+                if (wordsToAdd.isEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isWordGenerationLoading = false,
+                            wordGenerationError = if (cvcValid.isEmpty()) {
+                                "No valid CVC words could be generated. Try a different prompt."
+                            } else {
+                                "All generated words already exist in your word bank. Try a different prompt."
+                            }
+                        )
+                    }
+                    return@launch
+                }
+
+                // 6. Batch insert to DB
+                val wordDao = database.wordDao()
+                val addedWords = mutableListOf<String>()
+                for (word in wordsToAdd) {
+                    try {
+                        val id = wordDao.insertWord(
+                            com.example.app.data.entity.Word(
+                                userId = userId,
+                                word = word
+                            )
+                        )
+                        if (id > 0) {
+                            addedWords.add(word)
+                        }
+                    } catch (e: Exception) {
+                        // Skip words that fail insertion (e.g., unique constraint)
+                        android.util.Log.w("LessonViewModel", "Failed to insert word '$word': ${e.message}")
+                    }
+                }
+
+                // 7. Update state with results
+                if (addedWords.isEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isWordGenerationLoading = false,
+                            wordGenerationError = "Failed to add words to the word bank. Please try again."
+                        )
+                    }
+                } else {
+                    // Invalidate suggested prompts cache since word bank changed
+                    cachedWordCountForPrompts = -1
+
+                    _uiState.update {
+                        it.copy(
+                            isWordGenerationLoading = false,
+                            generatedWords = addedWords
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                val errorMsg = if (e.message?.contains("blocked", ignoreCase = true) == true ||
+                    e.message?.contains("safety", ignoreCase = true) == true) {
+                    "The request couldn't be processed. Please rephrase your description."
+                } else {
+                    "Word generation failed: ${e.message}"
+                }
+                _uiState.update {
+                    it.copy(
+                        isWordGenerationLoading = false,
+                        wordGenerationError = errorMsg
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Clear word generation state. Called when the generation modal is dismissed.
+     */
+    fun clearWordGenerationState() {
+        _uiState.update {
+            it.copy(
+                isWordGenerationLoading = false,
+                wordGenerationError = null,
+                generatedWords = emptyList(),
+                wordGenerationRequestedCount = 0
+            )
         }
     }
 }
@@ -742,12 +1146,33 @@ data class LessonUiState(
     val editInputError: String? = null,
     val editImageError: String? = null,
     val isEditLoading: Boolean = false,
+    // Word Bank edit mode state (for batch delete)
+    val isWordBankEditMode: Boolean = false,
+    val selectedWordIds: Set<Long> = emptySet(),
+    val isDeletingWords: Boolean = false,
     // Activity creation modal state
     val isActivityCreationModalVisible: Boolean = false,
     val activityInput: String = "",
-    val selectedActivityWordIds: Set<Long> = emptySet(),
     val isActivityCreationLoading: Boolean = false,
     val activityError: String? = null,
-    val generatedJsonResult: String? = null
+    val activitySuggestedPrompts: List<String> = emptyList(),
+    val isActivitySuggestionsLoading: Boolean = false,
+    val generatedJsonResult: String? = null,
+    // Suggested prompts state (generation modal)
+    val suggestedPrompts: List<String> = emptyList(),
+    val isSuggestionsLoading: Boolean = false,
+    // Word generation modal state
+    val isWordGenerationLoading: Boolean = false,
+    val wordGenerationError: String? = null,
+    val generatedWords: List<String> = emptyList(),
+    val wordGenerationRequestedCount: Int = 0,
+    // Word suggestion dialog state (for insufficient word bank)
+    val isWordSuggestionDialogVisible: Boolean = false,
+    val wordSuggestionPattern: String = "",
+    val wordSuggestionMatching: List<String> = emptyList(),
+    val wordSuggestionCandidates: List<String> = emptyList(),
+    val wordSuggestionSelected: Set<String> = emptySet(),
+    val isWordSuggestionLoading: Boolean = false,
+    val wordSuggestionError: String? = null
 )
 

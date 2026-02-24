@@ -3,7 +3,7 @@ package com.example.kusho.presentation.pairing
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,7 +83,11 @@ fun PairingScreen(
             is PairingState.Error -> {
                 ErrorContent(
                     message = (pairingState as PairingState.Error).message,
-                    onRetry = { viewModel.retry() }
+                    onRetry = { viewModel.retry() },
+                    onSkip = {
+                        viewModel.skipPairing()
+                        onPairingComplete()
+                    }
                 )
             }
             is PairingState.BluetoothOff -> {
@@ -259,13 +263,13 @@ private fun SuccessContent() {
 @Composable
 private fun ErrorContent(
     message: String,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onSkip: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .clickable { onRetry() },
+            .padding(5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -273,30 +277,76 @@ private fun ErrorContent(
         Image(
             painter = painterResource(id = R.drawable.dis_remove),
             contentDescription = "Error",
-            modifier = Modifier
-                .size(100.dp)
-                .padding(bottom = 16.dp),
+            modifier = Modifier.size(50.dp),
             contentScale = ContentScale.Fit
         )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         Text(
             text = "Connection Lost",
-            fontSize = 16.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFFFF6B6B),
             textAlign = TextAlign.Center
         )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
+
+        Spacer(modifier = Modifier.height(2.dp))
+
         Text(
-            text = "Tap to retry",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Normal,
-            color = Color.White,
+            text = message,
+            fontSize = 10.sp,
+            color = Color(0xFFAAAAAA),
             textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Retry button
+        Button(
+            onClick = onRetry,
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                .height(38.dp),
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = Color(0xFF4A90E2)
+            )
+        ) {
+            Text(
+                text = "Retry",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Skip button
+        Button(
+            onClick = onSkip,
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                .height(32.dp),
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = Color(0xFF3A3A3A)
+            )
+        ) {
+            Text(
+                text = "Skip",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFFBBBBBB)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "Practice Mode only",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color(0xFFBBBBBB)
         )
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +34,7 @@ import com.example.app.R
 fun LearnModeStatusCard(
     title: String,
     status: String = "Not Started",
+    completionPercentage: Int = 0,
     modifier: Modifier = Modifier,
     isSelected: Boolean = false
 ) {
@@ -67,30 +69,51 @@ fun LearnModeStatusCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             val isCompleted = status == "Completed"
-            
+            val fillFraction = (completionPercentage.coerceIn(0, 100)) / 100f
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
+                    .height(28.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .border(
-                        width = if (isCompleted && !isSelected) 0.dp else if (!isCompleted) 2.dp else 0.dp,
+                        width = if (isCompleted && !isSelected) 0.dp else if (!isCompleted && completionPercentage == 0) 2.dp else 0.dp,
                         color = Color(0xFFBA9BFF),
                         shape = RoundedCornerShape(12.dp)
                     )
                     .background(
-                        if (isCompleted && !isSelected) Color(0xFFAE8EFB) else if (isSelected) Color.White else Color.Transparent,
+                        if (isSelected) Color.White else Color(0xFFF0EAFF),
                         RoundedCornerShape(12.dp)
                     )
-                    .padding(vertical = 6.dp),
-                contentAlignment = Alignment.Center
             ) {
+                // Fill layer (proportional)
+                if (fillFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction = fillFraction)
+                            .background(
+                                if (isSelected) Color(0xFFBA9BFF) else Color(0xFFAE8EFB),
+                                RoundedCornerShape(12.dp)
+                            )
+                    )
+                }
+
+                // Text layer (centered)
                 Text(
                     text = status,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (isCompleted && !isSelected) Color.White else if (isSelected) Color(0xFFAE8EFB) else Color(0xFFBA9BFF),
-                    textAlign = TextAlign.Center
+                    color = when {
+                        isSelected && isCompleted -> Color(0xFFAE8EFB)
+                        isSelected -> Color(0xFFAE8EFB)
+                        isCompleted -> Color.White
+                        completionPercentage > 0 -> Color.White
+                        else -> Color(0xFFBA9BFF)
+                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
         }
@@ -114,7 +137,29 @@ fun LearnModeStatusCardPreview() {
             ) {
                 LearnModeStatusCard(
                     title = "Short Vowels",
-                    status = "Not Started"
+                    status = "Not Started",
+                    completionPercentage = 0
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "LearnModeStatusCard In Progress", showBackground = true, backgroundColor = 0xFFFFFFFF)
+@Composable
+fun LearnModeStatusCardInProgressPreview() {
+    MaterialTheme {
+        Surface(color = Color.White) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                LearnModeStatusCard(
+                    title = "Short Vowels",
+                    status = "60% Progress",
+                    completionPercentage = 60
                 )
             }
         }
@@ -135,6 +180,7 @@ fun LearnModeStatusCardSelectedPreview() {
                 LearnModeStatusCard(
                     title = "Short Vowels",
                     status = "Not Started",
+                    completionPercentage = 0,
                     isSelected = true
                 )
             }

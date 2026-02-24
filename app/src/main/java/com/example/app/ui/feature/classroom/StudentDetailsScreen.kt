@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.app.R
+import com.example.app.util.ActivityIconMapper
 import com.example.app.util.ImageUtil
 import com.example.app.ui.components.classroom.AnalyticsCard
 import com.example.app.ui.components.classroom.LearnAnnotationCard
@@ -54,6 +55,8 @@ import com.example.app.ui.components.classroom.ProgressItemCard
 import com.example.app.ui.components.classroom.ProgressStatus
 import com.example.app.ui.components.classroom.TipCard
 import com.example.app.ui.components.classroom.TutorialAnnotationCard
+import com.example.app.ui.components.classroom.KuuRecommendationCard
+import com.example.app.data.entity.KuuRecommendation
 
 @Composable
 fun StudentDetailsScreen(
@@ -66,26 +69,14 @@ fun StudentDetailsScreen(
     onEditStudent: () -> Unit = {},
     onNavigateToTutorialAnnotation: (String) -> Unit = {},
     onNavigateToLearnAnnotation: (String) -> Unit = {},
+    onNavigateToTutorial: (Long) -> Unit = {},
+    onNavigateToLearnSetStatus: (Long) -> Unit = {},
     viewModel: ClassroomViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.studentDetailsUiState.collectAsState()
 
-    // Activity icons (same as LearnModeActivitySelectionScreen)
-    val allIcons = remember {
-        listOf(
-            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
-            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
-            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
-            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
-            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
-            R.drawable.ic_activity_21, R.drawable.ic_activity_22
-        )
-    }
-    fun getIconForActivity(activityId: Long): Int {
-        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
-        return allIcons[iconIndex]
-    }
+
     
     // State for edit dialogs
     var showEditNameDialog by remember { mutableStateOf(false) }
@@ -332,72 +323,26 @@ fun StudentDetailsScreen(
 
             Spacer(Modifier.height(42.dp))
 
-            // Kuu Card with Overlay
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.dis_kuu_card),
-                    contentDescription = "Kuu Card",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentScale = ContentScale.Fit
+            // Kuu Recommendation Card
+            if (uiState.isRecommendationLoading && uiState.kuuRecommendation == null) {
+                KuuRecommendationCard(
+                    title = "",
+                    description = "",
+                    onStartClick = {},
+                    isLoading = true
                 )
-
-                // Overlay Content
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .padding(horizontal = 20.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Main Content
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 80.dp),
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Spacer(Modifier.height(22.dp))
-                        Text(
-                            text = "Try Consonants Tutorial!",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "You're amazing at vowel tracing! Let's try consonants next.",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = Color.White.copy(alpha = 0.9f),
-                            lineHeight = 20.sp
-                        )
-                    }
-
-                    // Start Tutorial Button
-                    Button(
-                        onClick = { /* TODO: Navigate to tutorial */ },
-                        modifier = Modifier
-                            .wrapContentWidth()
-                            .height(32.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
-                    ) {
-                        Text(
-                            text = "Start Tutorial",
-                            color = Color(0xFF3FA9F8),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+            } else {
+                uiState.kuuRecommendation?.let { rec ->
+                    KuuRecommendationCard(
+                        title = rec.title,
+                        description = rec.description,
+                        onStartClick = {
+                            when (rec.activityType) {
+                                KuuRecommendation.TYPE_TUTORIAL -> onNavigateToTutorial(rec.targetActivityId)
+                                KuuRecommendation.TYPE_LEARN -> onNavigateToLearnSetStatus(rec.targetActivityId)
+                            }
+                        }
+                    )
                 }
             }
 
@@ -499,7 +444,7 @@ fun StudentDetailsScreen(
                     annotation = annotationText,
                     lessonName = "${completedSet.activityName} | ${completedSet.setName}",
                     date = formattedDate,
-                    iconRes = getIconForActivity(completedSet.activityId),
+                    iconRes = ActivityIconMapper.getIconForActivity(completedSet.activityName),
                     modifier = Modifier.padding(horizontal = 8.dp),
                     onClick = { onNavigateToLearnAnnotation("${completedSet.activityName}|${completedSet.setId}|${completedSet.activityId}") }
                 )

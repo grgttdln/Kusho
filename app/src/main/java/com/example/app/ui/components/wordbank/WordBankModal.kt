@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +40,8 @@ import androidx.compose.ui.window.DialogProperties
  * @param onRemoveImage Callback when remove image button is clicked
  * @param onAddClick Callback when "Add to Word Bank" button is clicked
  * @param onDismiss Callback when modal is dismissed
+ * @param dictionarySuggestions List of suggested words from dictionary validation
+ * @param onSuggestionClick Callback when a suggestion chip is clicked
  */
 @Composable
 fun WordBankModal(
@@ -52,7 +56,9 @@ fun WordBankModal(
     onMediaUploadClick: () -> Unit,
     onRemoveImage: () -> Unit,
     onAddClick: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    dictionarySuggestions: List<String> = emptyList(),
+    onSuggestionClick: (String) -> Unit = {}
 ) {
     if (!isVisible) return
 
@@ -99,7 +105,9 @@ fun WordBankModal(
                     onSubmit = {
                         focusManager.clearFocus()
                         onAddClick()
-                    }
+                    },
+                    dictionarySuggestions = dictionarySuggestions,
+                    onSuggestionClick = onSuggestionClick
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -175,7 +183,9 @@ private fun WordInputSection(
     isLoading: Boolean,
     isSubmitEnabled: Boolean,
     onWordInputChanged: (String) -> Unit,
-    onSubmit: () -> Unit
+    onSubmit: () -> Unit,
+    dictionarySuggestions: List<String> = emptyList(),
+    onSuggestionClick: (String) -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -232,6 +242,46 @@ private fun WordInputSection(
                 }
             )
         )
+
+        // Dictionary suggestion chips
+        if (dictionarySuggestions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Did you mean:",
+                fontSize = 12.sp,
+                color = Color.Gray,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                dictionarySuggestions.forEach { suggestion ->
+                    SuggestionChip(
+                        onClick = { onSuggestionClick(suggestion) },
+                        label = {
+                            Text(
+                                text = suggestion,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = Color(0xFFE8F4FD),
+                            labelColor = Color(0xFF49A9FF)
+                        ),
+                        border = SuggestionChipDefaults.suggestionChipBorder(
+                            enabled = true,
+                            borderColor = Color(0xFF49A9FF),
+                            borderWidth = 1.dp
+                        )
+                    )
+                }
+            }
+        }
     }
 }
 

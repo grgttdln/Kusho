@@ -58,7 +58,7 @@ class PairingViewModel(private val context: Context) : ViewModel() {
         private const val MESSAGE_PATH_PAIRING_DECLINED = "/pairing_declined"
         private const val MESSAGE_PATH_PING = "/kusho/ping"
         private const val MESSAGE_PATH_PONG = "/kusho/pong"
-        private const val PING_TIMEOUT_MS = 3000L // Wait 3 seconds for pong response
+        private const val PING_TIMEOUT_MS = 5000L // Wait 5 seconds for pong response (BT reconnection can be slow)
         private const val ACCEPTANCE_TIMEOUT_MS = 30000L // Wait 30 seconds for phone user to accept
         private const val SUCCESS_DISPLAY_DURATION_MS = 3000L // Show success for 3 seconds
         private const val MAX_RETRY_ATTEMPTS = 2 // Max attempts before showing skip option
@@ -250,8 +250,7 @@ class PairingViewModel(private val context: Context) : ViewModel() {
      * Retry connection - called from error or declined states
      */
     fun retry() {
-        Log.d(TAG, "🔄 Retry requested by user")
-        retryAttempts = 0
+        Log.d(TAG, "🔄 Retry requested by user (attempt $retryAttempts)")
         connectToPhone()
     }
     

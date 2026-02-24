@@ -32,6 +32,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.ui.components.learnmode.LearnModeActivityCard
 import com.example.app.data.SessionManager
+import com.example.app.util.ActivityIconMapper
 
 @Composable
 fun LearnModeActivitySelectionScreen(
@@ -47,23 +48,7 @@ fun LearnModeActivitySelectionScreen(
     val userId = remember { sessionManager.getUserId() }
     val uiState by viewModel.uiState.collectAsState()
 
-    // Default icons for activities (persistent assignment based on activity ID)
-    val allIcons = remember {
-        listOf(
-            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
-            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
-            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
-            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
-            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
-            R.drawable.ic_activity_21, R.drawable.ic_activity_22
-        )
-    }
 
-    // Function to get persistent icon for an activity based on its ID
-    fun getIconForActivity(activityId: Long): Int {
-        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
-        return allIcons[iconIndex]
-    }
 
     LaunchedEffect(userId) {
         if (userId > 0) {
@@ -191,7 +176,7 @@ fun LearnModeActivitySelectionScreen(
                             ) {
                                 LearnModeActivityCard(
                                     title = activity.title,
-                                    iconRes = getIconForActivity(activity.id),
+                                    iconRes = ActivityIconMapper.getIconForActivity(activity.title),
                                     isSelected = uiState.selectedActivity?.id == activity.id,
                                     onClick = { viewModel.toggleActivitySelection(activity) }
                                 )

@@ -37,6 +37,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.wear.compose.foundation.CurvedLayout
+import androidx.wear.compose.material.curvedText
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
@@ -134,6 +136,30 @@ private fun PracticeModeContent(
     )
 
     val uiState by viewModel.uiState.collectAsState()
+
+    // Play countdown voice audio (3, 2, 1)
+    LaunchedEffect(uiState.countdownSeconds) {
+        val resId = when (uiState.countdownSeconds) {
+            3 -> R.raw.voice_3
+            2 -> R.raw.voice_2
+            1 -> R.raw.voice_1
+            else -> null
+        }
+        if (resId != null && uiState.state == PracticeModeViewModel.State.COUNTDOWN) {
+            val mp = MediaPlayer.create(context, resId)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
+
+    // Play "go" voice when recording starts
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == PracticeModeViewModel.State.RECORDING) {
+            val mp = MediaPlayer.create(context, R.raw.voice_go)
+            mp?.start()
+            mp?.setOnCompletionListener { it.release() }
+        }
+    }
 
     // Play the question audio or speak it with TTS when entering QUESTION state
     LaunchedEffect(uiState.state, uiState.currentQuestion) {
@@ -243,6 +269,13 @@ private fun PracticeModeContent(
         }
     }
 
+    // Speak "oops" message when entering NO_MOVEMENT state
+    LaunchedEffect(uiState.state) {
+        if (uiState.state == PracticeModeViewModel.State.NO_MOVEMENT) {
+            ttsManager.speak("Oops, you did not air write!")
+        }
+    }
+
     // Speak feedback when we enter RESULT state
     LaunchedEffect(uiState.state, uiState.isAnswerCorrect) {
         if (uiState.state == PracticeModeViewModel.State.RESULT) {
@@ -323,6 +356,7 @@ private fun PracticeModeContent(
             PracticeModeViewModel.State.COUNTDOWN -> CountdownContent(uiState, viewModel)
             PracticeModeViewModel.State.RECORDING -> RecordingContent(uiState, viewModel)
             PracticeModeViewModel.State.PROCESSING -> ProcessingContent(uiState)
+            PracticeModeViewModel.State.NO_MOVEMENT -> NoMovementContent(viewModel)
             PracticeModeViewModel.State.SHOWING_PREDICTION -> PredictionContent(uiState)
             PracticeModeViewModel.State.RESULT -> ResultContent(uiState, viewModel)
         }
@@ -407,6 +441,17 @@ private fun QuestionContent(
             ) { viewModel.startAnswering() },
         contentAlignment = Alignment.Center
     ) {
+        // Curved question text along the top arc of the watch face
+        if (question != null) {
+            CurvedLayout(anchor = 270f) {
+                curvedText(
+                    text = question.question,
+                    fontSize = 12.sp,
+                    color = Color.White
+                )
+            }
+        }
+
         if (isPictureMatch && emoji != null) {
             // For Picture Match: Show ONLY the emoji centered, no text
             Text(
@@ -573,6 +618,30 @@ private fun ResultContent(
                 id = if (isCorrect) R.drawable.dis_watch_correct else R.drawable.dis_watch_wrong
             ),
             contentDescription = if (isCorrect) "Correct" else "Wrong",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+@Composable
+private fun NoMovementContent(
+    viewModel: PracticeModeViewModel
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { viewModel.retryAfterNoMovement() },
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.dis_ops),
+            contentDescription = "Oops, no movement detected",
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),

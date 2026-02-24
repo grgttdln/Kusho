@@ -34,27 +34,23 @@ object TutorialModeStateHolder {
         val timestamp: Long = 0L
     )
 
-    data class FeedbackData(
-        val isCorrect: Boolean = false,
-        val timestamp: Long = 0L,
-        val shouldShow: Boolean = false
-    )
-
     private val _letterData = MutableStateFlow(LetterData())
     val letterData: StateFlow<LetterData> = _letterData.asStateFlow()
 
     private val _sessionData = MutableStateFlow(SessionData())
     val sessionData: StateFlow<SessionData> = _sessionData.asStateFlow()
 
-    private val _feedbackData = MutableStateFlow(FeedbackData())
-    val feedbackData: StateFlow<FeedbackData> = _feedbackData.asStateFlow()
-
     private val _isSessionComplete = MutableStateFlow(false)
     val isSessionComplete: StateFlow<Boolean> = _isSessionComplete.asStateFlow()
     
-    // Retry trigger - timestamp when retry was requested from mobile
-    private val _retryTrigger = MutableStateFlow(0L)
-    val retryTrigger: StateFlow<Long> = _retryTrigger.asStateFlow()
+    // Tracks whether the watch user is currently on the TutorialModeScreen
+    // Used to gate handshake replies so we don't reply when on other screens
+    private val _isWatchOnTutorialScreen = MutableStateFlow(false)
+    val isWatchOnTutorialScreen: StateFlow<Boolean> = _isWatchOnTutorialScreen.asStateFlow()
+
+    fun setWatchOnTutorialScreen(onScreen: Boolean) {
+        _isWatchOnTutorialScreen.value = onScreen
+    }
 
     /**
      * Called by WearMessageListenerService when letter data is received
@@ -62,6 +58,16 @@ object TutorialModeStateHolder {
     fun updateLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int, dominantHand: String = "RIGHT") {
         runOnMainThread {
             try {
+                // Deduplication guard: reject duplicate calls within 500ms for the same letter/case/index
+                val current = _letterData.value
+                if (current.letter == letter &&
+                    current.letterCase == letterCase &&
+                    current.currentIndex == currentIndex &&
+                    System.currentTimeMillis() - current.timestamp < 500) {
+                    Log.d(TAG, "Duplicate letter data within 500ms, skipping")
+                    return@runOnMainThread
+                }
+
                 Log.d(TAG, "📝 Updating letter data: $letter ($letterCase), index: $currentIndex/$totalLetters, hand: $dominantHand")
                 _letterData.value = LetterData(
                     letter = letter,
@@ -83,12 +89,20 @@ object TutorialModeStateHolder {
     fun startSession(studentName: String, lessonTitle: String) {
         runOnMainThread {
             try {
+                // Guard against duplicate calls (both WearMessageListenerService and
+                // PhoneCommunicationManager process /tutorial_mode_started). Without this,
+                // the second call can clear letterData that arrived between the two calls.
+                val current = _sessionData.value
+                if (current.isActive && current.studentName == studentName && current.lessonTitle == lessonTitle) {
+                    Log.d(TAG, "⏭️ Session already active for $studentName/$lessonTitle, skipping duplicate start")
+                    return@runOnMainThread
+                }
+
                 Log.d(TAG, "🎯 Starting session: $lessonTitle for $studentName")
                 // Clear all previous state first
                 _letterData.value = LetterData()
-                _feedbackData.value = FeedbackData()
                 _isSessionComplete.value = false
-                
+
                 // Then set new session data
                 _sessionData.value = SessionData(
                     studentName = studentName,
@@ -114,7 +128,6 @@ object TutorialModeStateHolder {
                     timestamp = System.currentTimeMillis()
                 )
                 _letterData.value = LetterData()
-                _feedbackData.value = FeedbackData()
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error ending session", e)
             }
@@ -136,43 +149,6 @@ object TutorialModeStateHolder {
     }
 
     /**
-     * Show feedback on watch (correct/incorrect)
-     */
-    fun showFeedback(isCorrect: Boolean) {
-        runOnMainThread {
-            try {
-                Log.d(TAG, if (isCorrect) "✅ Showing correct feedback" else "❌ Showing incorrect feedback")
-                _feedbackData.value = FeedbackData(
-                    isCorrect = isCorrect,
-                    timestamp = System.currentTimeMillis(),
-                    shouldShow = true
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Error showing feedback", e)
-            }
-        }
-    }
-
-    /**
-     * Clear feedback display
-     */
-    fun clearFeedback() {
-        runOnMainThread {
-            _feedbackData.value = FeedbackData(shouldShow = false)
-        }
-    }
-    
-    /**
-     * Trigger retry from mobile app
-     */
-    fun triggerRetry() {
-        runOnMainThread {
-            Log.d(TAG, "🔄 Retry triggered from mobile")
-            _retryTrigger.value = System.currentTimeMillis()
-        }
-    }
-    
-    /**
      * Reset entire session state (called when session ends or user navigates away)
      */
     fun resetSession() {
@@ -180,9 +156,7 @@ object TutorialModeStateHolder {
             Log.d(TAG, "♻️ Resetting entire session state")
             _letterData.value = LetterData()
             _sessionData.value = SessionData()
-            _feedbackData.value = FeedbackData()
             _isSessionComplete.value = false
-            _retryTrigger.value = 0L
         }
     }
 
@@ -193,7 +167,6 @@ object TutorialModeStateHolder {
         runOnMainThread {
             _letterData.value = LetterData()
             _sessionData.value = SessionData()
-            _feedbackData.value = FeedbackData()
             _isSessionComplete.value = false
         }
     }

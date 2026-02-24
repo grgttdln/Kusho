@@ -54,6 +54,15 @@ object LearnModeStateHolder {
     private val _writeTheWordState = MutableStateFlow(WriteTheWordState())
     val writeTheWordState: StateFlow<WriteTheWordState> = _writeTheWordState.asStateFlow()
 
+    // Tracks whether the watch user is currently on the LearnModeScreen
+    // Used to gate handshake replies so we don't reply when on other screens
+    private val _isWatchOnLearnScreen = MutableStateFlow(false)
+    val isWatchOnLearnScreen: StateFlow<Boolean> = _isWatchOnLearnScreen.asStateFlow()
+
+    fun setWatchOnLearnScreen(onScreen: Boolean) {
+        _isWatchOnLearnScreen.value = onScreen
+    }
+
     /**
      * Called by WearMessageListenerService when word data is received
      */
@@ -123,6 +132,7 @@ object LearnModeStateHolder {
             _wordData.value = WordData()
             _sessionData.value = SessionData()
             _writeTheWordState.value = WriteTheWordState()
+            _isWatchOnLearnScreen.value = false
         }
     }
 

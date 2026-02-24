@@ -63,7 +63,9 @@ fun WordBankEditModal(
     onRemoveImage: () -> Unit,
     onSaveClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    dictionarySuggestions: List<String> = emptyList(),
+    onSuggestionClick: (String) -> Unit = {}
 ) {
     if (!isVisible) return
 
@@ -123,7 +125,9 @@ fun WordBankEditModal(
                     onSubmit = {
                         focusManager.clearFocus()
                         onSaveClick()
-                    }
+                    },
+                    dictionarySuggestions = dictionarySuggestions,
+                    onSuggestionClick = onSuggestionClick
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -217,7 +221,9 @@ private fun EditWordInputSection(
     isLoading: Boolean,
     isSaveEnabled: Boolean,
     onWordInputChanged: (String) -> Unit,
-    onSubmit: () -> Unit
+    onSubmit: () -> Unit,
+    dictionarySuggestions: List<String> = emptyList(),
+    onSuggestionClick: (String) -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -274,6 +280,46 @@ private fun EditWordInputSection(
                 }
             )
         )
+
+        // Dictionary suggestion chips
+        if (dictionarySuggestions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Did you mean:",
+                fontSize = 12.sp,
+                color = Color.Gray,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                dictionarySuggestions.forEach { suggestion ->
+                    SuggestionChip(
+                        onClick = { onSuggestionClick(suggestion) },
+                        label = {
+                            Text(
+                                text = suggestion,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = Color(0xFFE8F4FD),
+                            labelColor = Color(0xFF49A9FF)
+                        ),
+                        border = SuggestionChipDefaults.suggestionChipBorder(
+                            enabled = true,
+                            borderColor = Color(0xFF49A9FF),
+                            borderWidth = 1.dp
+                        )
+                    )
+                }
+            }
+        }
     }
 }
 

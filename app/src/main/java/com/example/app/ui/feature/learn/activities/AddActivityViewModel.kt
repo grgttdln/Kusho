@@ -44,12 +44,12 @@ class AddActivityViewModel(application: Application) : AndroidViewModel(applicat
     val uiState: StateFlow<AddActivityUiState> = _uiState.asStateFlow()
 
     /**
-     * Load all sets from the database
+     * Load sets for a specific user from the database
      */
-    fun loadAllSets() {
+    fun loadSetsForUser(userId: Long) {
         viewModelScope.launch {
             try {
-                setRepository.getAllSets().collect { sets ->
+                setRepository.getSetsForUser(userId).collect { sets ->
                     _uiState.update { it.copy(availableSets = sets) }
                 }
             } catch (e: Exception) {

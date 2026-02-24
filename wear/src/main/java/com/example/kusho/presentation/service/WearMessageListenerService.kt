@@ -5,7 +5,6 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
 import com.example.kusho.presentation.learn.LearnModeStateHolder
-import com.example.kusho.presentation.tutorial.TutorialModeStateHolder
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
@@ -36,14 +35,9 @@ class WearMessageListenerService : WearableListenerService() {
 
         // Learn Mode message paths
         private const val MESSAGE_PATH_LEARN_MODE_WORD_DATA = "/learn_mode_word_data"
-        private const val MESSAGE_PATH_LEARN_MODE_SESSION_START = "/learn_mode_session_start"
-        private const val MESSAGE_PATH_LEARN_MODE_SESSION_END = "/learn_mode_session_end"
+        private const val MESSAGE_PATH_LEARN_MODE_SESSION_START = "/learn_mode_started"
+        private const val MESSAGE_PATH_LEARN_MODE_SESSION_END = "/learn_mode_ended"
 
-        // Tutorial Mode message paths
-        private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
-        private const val MESSAGE_PATH_TUTORIAL_MODE_ENDED = "/tutorial_mode_ended"
-        private const val MESSAGE_PATH_TUTORIAL_MODE_LETTER_DATA = "/tutorial_mode_letter_data"
-        private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_COMPLETE = "/tutorial_mode_session_complete"
     }
     
     override fun onMessageReceived(messageEvent: MessageEvent) {
@@ -80,22 +74,8 @@ class WearMessageListenerService : WearableListenerService() {
                 Log.d(TAG, "🏁 Learn mode session end received")
                 LearnModeStateHolder.endSession()
             }
-            MESSAGE_PATH_TUTORIAL_MODE_STARTED -> {
-                Log.d(TAG, "📝 Tutorial mode session start received")
-                handleTutorialModeStarted(messageEvent.data)
-            }
-            MESSAGE_PATH_TUTORIAL_MODE_ENDED -> {
-                Log.d(TAG, "🏁 Tutorial mode session end received")
-                TutorialModeStateHolder.endSession()
-            }
-            MESSAGE_PATH_TUTORIAL_MODE_LETTER_DATA -> {
-                Log.d(TAG, "📝 Letter data received from phone")
-                handleLetterData(messageEvent.data)
-            }
-            MESSAGE_PATH_TUTORIAL_MODE_SESSION_COMPLETE -> {
-                Log.d(TAG, "🎊 Tutorial mode session complete received")
-                TutorialModeStateHolder.markSessionComplete()
-            }
+            // Tutorial Mode messages are handled exclusively by PhoneCommunicationManager
+            // (foreground-only; the app is always open during Tutorial Mode).
         }
     }
 
@@ -140,51 +120,6 @@ class WearMessageListenerService : WearableListenerService() {
             LearnModeStateHolder.startSession(setTitle, totalWords)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error parsing session start data", e)
-        }
-    }
-
-    /**
-     * Handle incoming Tutorial Mode session start message
-     * Expected JSON format: {"studentName": "John", "lessonTitle": "Vowels"}
-     */
-    private fun handleTutorialModeStarted(data: ByteArray) {
-        try {
-            val jsonString = String(data)
-            val json = JSONObject(jsonString)
-
-            val studentName = json.optString("studentName", "")
-            val lessonTitle = json.optString("lessonTitle", "")
-
-            Log.d(TAG, "📝 Parsed session data: student=$studentName, lesson=$lessonTitle")
-
-            TutorialModeStateHolder.startSession(studentName, lessonTitle)
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error parsing tutorial session data", e)
-        }
-    }
-
-    /**
-     * Handle incoming letter data for air writing practice
-     * Expected JSON format: {"letter": "A", "letterCase": "uppercase", "currentIndex": 1, "totalLetters": 5, "dominantHand": "RIGHT"}
-     */
-    private fun handleLetterData(data: ByteArray) {
-        try {
-            val jsonString = String(data)
-            val json = JSONObject(jsonString)
-
-            val letter = json.optString("letter", "")
-            val letterCase = json.optString("letterCase", "")
-            val currentIndex = json.optInt("currentIndex", 0)
-            val totalLetters = json.optInt("totalLetters", 0)
-            val dominantHand = json.optString("dominantHand", "RIGHT")
-
-            Log.d(TAG, "📝 Parsed letter data: letter=$letter, case=$letterCase, index=$currentIndex/$totalLetters, hand=$dominantHand")
-
-            if (letter.isNotEmpty()) {
-                TutorialModeStateHolder.updateLetterData(letter, letterCase, currentIndex, totalLetters, dominantHand)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error parsing letter data", e)
         }
     }
 

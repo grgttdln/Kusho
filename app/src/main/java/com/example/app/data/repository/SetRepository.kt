@@ -172,8 +172,12 @@ class SetRepository(
 
                 // Create SetWord entries for each selected word (all words are guaranteed to exist)
                 Log.d(TAG_REPO, "📝 Creating SetWord entries for ${selectedWords.size} selected words...")
-                val setWords = selectedWords.map { selected ->
-                    val word = wordMap[selected.wordName]!!
+                val setWords = selectedWords.mapNotNull { selected ->
+                    val word = wordMap[selected.wordName]
+                    if (word == null) {
+                        Log.w(TAG_REPO, "Word '${selected.wordName}' not found in wordMap, skipping")
+                        return@mapNotNull null
+                    }
                     Log.d(TAG_REPO, "  ✅ Creating SetWord for '${selected.wordName}' with ID: ${word.id}")
                     SetWord(
                         setId = setId,
@@ -422,8 +426,12 @@ class SetRepository(
 
                 // Create new SetWord entries for each selected word (all guaranteed to exist)
                 Log.d(TAG_REPO, "📝 Creating SetWord entries for ${selectedWords.size} selected words...")
-                val setWords = selectedWords.map { selected ->
-                    val word = wordMap[selected.wordName]!!
+                val setWords = selectedWords.mapNotNull { selected ->
+                    val word = wordMap[selected.wordName]
+                    if (word == null) {
+                        Log.w(TAG_REPO, "Word '${selected.wordName}' not found in wordMap, skipping")
+                        return@mapNotNull null
+                    }
                     Log.d(TAG_REPO, "  ✅ Creating SetWord for '${selected.wordName}' with ID: ${word.id}")
                     SetWord(
                         setId = setId,
@@ -512,7 +520,7 @@ class SetRepository(
             }
 
             if (bestMatch != null) {
-                results[genIndex] = bestMatch!!
+                results[genIndex] = bestMatch
             }
         }
 
@@ -601,8 +609,12 @@ class SetRepository(
                 // Delete all existing set-word relationships and rebuild
                 setWordDao.deleteSetWords(setId)
 
-                val setWordsToInsert = allWords.map { selected ->
-                    val word = wordMap[selected.wordName]!!
+                val setWordsToInsert = allWords.mapNotNull { selected ->
+                    val word = wordMap[selected.wordName]
+                    if (word == null) {
+                        Log.w(TAG_REPO, "Word '${selected.wordName}' not found in wordMap, skipping")
+                        return@mapNotNull null
+                    }
                     SetWord(
                         setId = setId,
                         wordId = word.id,
@@ -673,7 +685,11 @@ class SetRepository(
                 val existingWordIds = existingSetWords.map { it.wordId }.toSet()
 
                 val setWordsToInsert = newWords.mapNotNull { selected ->
-                    val word = wordMap[selected.wordName]!!
+                    val word = wordMap[selected.wordName]
+                    if (word == null) {
+                        Log.w(TAG_REPO, "Word '${selected.wordName}' not found in wordMap, skipping")
+                        return@mapNotNull null
+                    }
                     if (word.id in existingWordIds) {
                         null // Skip duplicates
                     } else {

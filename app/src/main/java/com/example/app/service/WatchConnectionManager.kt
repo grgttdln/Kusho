@@ -32,6 +32,12 @@ enum class ConnectionState {
     WATCH_CONNECTED         // Watch paired AND Kusho app running
 }
 
+enum class SessionDisconnectReason {
+    NONE,              // Connected / no issue
+    BLUETOOTH_OFF,     // Phone Bluetooth disabled
+    WATCH_UNREACHABLE  // BT on, watch not responding to PING
+}
+
 data class WatchDeviceInfo(
     val name: String = "Unknown Watch",
     val model: String = "",
@@ -91,6 +97,57 @@ class WatchConnectionManager private constructor(private val context: Context) {
     private val _tutorialModeFeedbackDismissed = MutableStateFlow(0L)
     val tutorialModeFeedbackDismissed: StateFlow<Long> = _tutorialModeFeedbackDismissed.asStateFlow()
 
+    // Watch ready signal - watch has entered Tutorial Mode screen and is ready to receive data
+    private val _tutorialModeWatchReady = MutableStateFlow(0L)
+    val tutorialModeWatchReady: StateFlow<Long> = _tutorialModeWatchReady.asStateFlow()
+
+    // Gesture recording signal - watch has started recording (student is writing)
+    private val _tutorialModeGestureRecording = MutableStateFlow(0L)
+    val tutorialModeGestureRecording: StateFlow<Long> = _tutorialModeGestureRecording.asStateFlow()
+
+    // Watch ready signal for Learn Mode - watch has entered Learn Mode screen and is ready
+    private val _learnModeWatchReady = MutableStateFlow(0L)
+    val learnModeWatchReady: StateFlow<Long> = _learnModeWatchReady.asStateFlow()
+
+    // Gesture recording signal for Learn Mode - watch has started recording (student is writing)
+    private val _learnModeGestureRecording = MutableStateFlow(0L)
+    val learnModeGestureRecording: StateFlow<Long> = _learnModeGestureRecording.asStateFlow()
+
+    // Track whether phone is currently in an active Learn Mode session
+    // (set true when LearnModeSessionScreen starts, false when it ends)
+    private val _isInLearnModeSession = MutableStateFlow(false)
+    val isInLearnModeSession: StateFlow<Boolean> = _isInLearnModeSession.asStateFlow()
+
+    // Track whether phone is currently in an active Tutorial Mode session
+    private val _isInTutorialModeSession = MutableStateFlow(false)
+    val isInTutorialModeSession: StateFlow<Boolean> = _isInTutorialModeSession.asStateFlow()
+
+    // Current Learn Mode word data for state recovery (set by session screen)
+    private val _currentLearnModeWordData = MutableStateFlow<String?>(null)
+
+    // Current Tutorial Mode letter data for state recovery (set by session screen)
+    private val _currentTutorialModeLetterData = MutableStateFlow<String?>(null)
+
+    // Session health monitoring state
+    private var sessionMonitoringJob: Job? = null
+    private val _receivedPong = MutableStateFlow(false)
+
+    // Exposed to session screens - true when watch is unreachable during active session
+    private val _sessionConnectionLost = MutableStateFlow(false)
+    val sessionConnectionLost: StateFlow<Boolean> = _sessionConnectionLost.asStateFlow()
+
+    // Reason for session disconnection - used to differentiate BT off vs watch unreachable
+    private val _sessionDisconnectReason = MutableStateFlow(SessionDisconnectReason.NONE)
+    val sessionDisconnectReason: StateFlow<SessionDisconnectReason> = _sessionDisconnectReason.asStateFlow()
+
+    // Session paused state - true when watch has exited the mode screen during active session
+    private val _sessionPaused = MutableStateFlow(false)
+    val sessionPaused: StateFlow<Boolean> = _sessionPaused.asStateFlow()
+
+    // Whether watch is currently on the mode screen (for enabling/disabling Continue button)
+    private val _watchOnModeScreen = MutableStateFlow(true)
+    val watchOnModeScreen: StateFlow<Boolean> = _watchOnModeScreen.asStateFlow()
+
     // Pairing request from watch
     private val _pairingRequest = MutableStateFlow<PairingRequestEvent?>(null)
     val pairingRequest: StateFlow<PairingRequestEvent?> = _pairingRequest.asStateFlow()
@@ -135,6 +192,9 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_ACTIVITY_COMPLETE = "/learn_mode_activity_complete"
         private const val MESSAGE_PATH_LEARN_MODE_FEEDBACK_DISMISSED = "/learn_mode_feedback_dismissed"
         private const val MESSAGE_PATH_LEARN_MODE_SHOW_FEEDBACK = "/learn_mode_show_feedback"
+        private const val MESSAGE_PATH_LEARN_MODE_PHONE_READY = "/learn_mode_phone_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_WATCH_READY = "/learn_mode_watch_ready"
+        private const val MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING = "/learn_mode_gesture_recording"
 
         // Tutorial Mode message paths
         private const val MESSAGE_PATH_TUTORIAL_MODE_STARTED = "/tutorial_mode_started"
@@ -146,8 +206,29 @@ class WatchConnectionManager private constructor(private val context: Context) {
         private const val MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED = "/tutorial_mode_feedback_dismissed"
         private const val MESSAGE_PATH_TUTORIAL_MODE_RETRY = "/tutorial_mode_retry"
         private const val MESSAGE_PATH_TUTORIAL_MODE_SESSION_RESET = "/tutorial_mode_session_reset"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY = "/tutorial_mode_watch_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY = "/tutorial_mode_phone_ready"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING = "/tutorial_mode_gesture_recording"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK = "/tutorial_mode_show_feedback"
+
+        // State request/response message paths (for watch re-entry sync)
+        private const val MESSAGE_PATH_REQUEST_LEARN_MODE_STATE = "/request_learn_mode_state"
+        private const val MESSAGE_PATH_LEARN_MODE_STATE_RESPONSE = "/learn_mode_state_response"
+        private const val MESSAGE_PATH_REQUEST_TUTORIAL_MODE_STATE = "/request_tutorial_mode_state"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_STATE_RESPONSE = "/tutorial_mode_state_response"
+
+        // Session pause/resume message paths (watch screen exit/enter)
+        private const val MESSAGE_PATH_LEARN_MODE_WATCH_EXITED_SCREEN = "/learn_mode_watch_exited_screen"
+        private const val MESSAGE_PATH_LEARN_MODE_WATCH_ENTERED_SCREEN = "/learn_mode_watch_entered_screen"
+        private const val MESSAGE_PATH_LEARN_MODE_RESUME = "/learn_mode_resume"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_EXITED_SCREEN = "/tutorial_mode_watch_exited_screen"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_WATCH_ENTERED_SCREEN = "/tutorial_mode_watch_entered_screen"
+        private const val MESSAGE_PATH_TUTORIAL_MODE_RESUME = "/tutorial_mode_resume"
 
         private const val POLLING_INTERVAL_MS = 30000L // 30 seconds
+        private const val SESSION_HEALTH_CHECK_INTERVAL_MS = 5000L // 5 seconds
+        private const val PING_TIMEOUT_MS = 3000L // 3 seconds to wait for PONG
+        private const val MAX_CONSECUTIVE_FAILURES = 2 // failures before marking disconnected
     }
     
     private var monitoringJob: Job? = null
@@ -171,19 +252,28 @@ class WatchConnectionManager private constructor(private val context: Context) {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                     when (state) {
                         BluetoothAdapter.STATE_OFF -> {
-                            // Bluetooth turned off - clear pairing so handshake is required on reconnect
-                            this@WatchConnectionManager.context.getSharedPreferences(PREFS_PAIRING, Context.MODE_PRIVATE)
-                                .edit().remove("paired_watch_node_id").apply()
-                            Log.d(TAG, "🔵 Bluetooth OFF — cleared paired_watch_node_id")
+                            Log.d(TAG, "🔵 Bluetooth OFF")
                             _deviceInfo.value = WatchDeviceInfo(
                                 isConnected = false,
                                 connectionState = ConnectionState.BLUETOOTH_OFF
                             )
+                            // Instantly notify session screens if a session is active
+                            if (_isInLearnModeSession.value || _isInTutorialModeSession.value) {
+                                Log.d(TAG, "🔵 Bluetooth OFF during active session - instant disconnect notification")
+                                _sessionDisconnectReason.value = SessionDisconnectReason.BLUETOOTH_OFF
+                                _sessionConnectionLost.value = true
+                            }
                         }
                         BluetoothAdapter.STATE_ON -> {
                             // Bluetooth turned on - check for watches
                             scope.launch {
                                 checkConnection()
+                            }
+                            // Transition from BT-off to watch-unreachable so dialog shows "Reconnecting..."
+                            // PING/PONG will clear sessionConnectionLost once watch responds
+                            if (_sessionDisconnectReason.value == SessionDisconnectReason.BLUETOOTH_OFF) {
+                                Log.d(TAG, "🔵 Bluetooth ON - transitioning to WATCH_UNREACHABLE, waiting for watch reconnect")
+                                _sessionDisconnectReason.value = SessionDisconnectReason.WATCH_UNREACHABLE
                             }
                         }
                     }
@@ -241,7 +331,79 @@ class WatchConnectionManager private constructor(private val context: Context) {
         monitoringJob?.cancel()
         monitoringJob = null
     }
-    
+
+    /**
+     * Start aggressive health check monitoring during active sessions.
+     * Sends PING every 5 seconds and waits for PONG.
+     * After 2 consecutive failures, sets sessionConnectionLost = true.
+     */
+    fun startSessionMonitoring() {
+        sessionMonitoringJob?.cancel()
+        _sessionConnectionLost.value = false
+        var consecutiveFailures = 0
+
+        sessionMonitoringJob = scope.launch {
+            while (isActive) {
+                delay(SESSION_HEALTH_CHECK_INTERVAL_MS)
+
+                val pairedNodeId = getPairedWatchNodeId() ?: continue
+
+                try {
+                    // Send PING
+                    _receivedPong.value = false
+                    messageClient.sendMessage(
+                        pairedNodeId,
+                        MESSAGE_PATH_PING,
+                        "ping".toByteArray()
+                    ).await()
+
+                    // Wait for PONG with timeout
+                    val startTime = System.currentTimeMillis()
+                    while (!_receivedPong.value && System.currentTimeMillis() - startTime < PING_TIMEOUT_MS) {
+                        delay(100)
+                    }
+
+                    if (_receivedPong.value) {
+                        if (consecutiveFailures > 0) {
+                            Log.d(TAG, "✅ Session health check recovered after $consecutiveFailures failures")
+                        }
+                        consecutiveFailures = 0
+                        if (_sessionConnectionLost.value) {
+                            Log.d(TAG, "🔄 Watch reconnected during session - resuming")
+                            _sessionDisconnectReason.value = SessionDisconnectReason.NONE
+                            _sessionConnectionLost.value = false
+                        }
+                    } else {
+                        consecutiveFailures++
+                        Log.w(TAG, "⚠️ Session health check failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES)")
+                        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                            Log.e(TAG, "❌ Watch unreachable during session - marking connection lost")
+                            _sessionDisconnectReason.value = SessionDisconnectReason.WATCH_UNREACHABLE
+                            _sessionConnectionLost.value = true
+                        }
+                    }
+                } catch (e: Exception) {
+                    consecutiveFailures++
+                    Log.w(TAG, "⚠️ Session health check exception ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES)", e)
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                        _sessionDisconnectReason.value = SessionDisconnectReason.WATCH_UNREACHABLE
+                        _sessionConnectionLost.value = true
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Stop session health check monitoring. Call when leaving session screen.
+     */
+    fun stopSessionMonitoring() {
+        sessionMonitoringJob?.cancel()
+        sessionMonitoringJob = null
+        _sessionConnectionLost.value = false
+        _sessionDisconnectReason.value = SessionDisconnectReason.NONE
+    }
+
     /**
      * Check if watch is connected and update device info
      * Now with proper Bluetooth state checking
@@ -366,6 +528,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
      * Notify watch that Learn Mode session has started
      */
     fun notifyLearnModeStarted() {
+        _learnModeWatchReady.value = 0L // Reset handshake state for fresh session
         scope.launch {
             try {
                 val nodes = nodeClient.connectedNodes.await()
@@ -634,7 +797,15 @@ class WatchConnectionManager private constructor(private val context: Context) {
             MESSAGE_PATH_TUTORIAL_MODE_SKIP,
             MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RESULT,
             MESSAGE_PATH_TUTORIAL_MODE_FEEDBACK_DISMISSED,
-            MESSAGE_PATH_BATTERY_STATUS
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY,
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING,
+            MESSAGE_PATH_BATTERY_STATUS,
+            MESSAGE_PATH_REQUEST_LEARN_MODE_STATE,
+            MESSAGE_PATH_REQUEST_TUTORIAL_MODE_STATE,
+            MESSAGE_PATH_LEARN_MODE_WATCH_EXITED_SCREEN,
+            MESSAGE_PATH_LEARN_MODE_WATCH_ENTERED_SCREEN,
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_EXITED_SCREEN,
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_ENTERED_SCREEN
         )
         
         if (messageEvent.path in lockedDownPaths) {
@@ -678,6 +849,10 @@ class WatchConnectionManager private constructor(private val context: Context) {
                         Log.e(TAG, "❌ Failed to send PONG", e)
                     }
                 }
+            }
+            MESSAGE_PATH_PONG -> {
+                Log.d(TAG, "🏓 Received PONG from watch")
+                _receivedPong.value = true
             }
             MESSAGE_PATH_BATTERY_STATUS -> {
                 val batteryLevel = String(messageEvent.data).toIntOrNull()
@@ -745,9 +920,89 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "👆 Watch dismissed feedback - dismissing mobile dialog")
                 _tutorialModeFeedbackDismissed.value = System.currentTimeMillis()
             }
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_READY -> {
+                Log.d(TAG, "✅ Watch is ready for Tutorial Mode")
+                _tutorialModeWatchReady.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_GESTURE_RECORDING -> {
+                Log.d(TAG, "✍️ Watch started recording gesture (student is writing)")
+                _tutorialModeGestureRecording.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_LEARN_MODE_WATCH_READY -> {
+                Log.d(TAG, "✅ Watch is ready for Learn Mode")
+                _learnModeWatchReady.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_LEARN_MODE_GESTURE_RECORDING -> {
+                Log.d(TAG, "✍️ Watch started recording gesture in Learn Mode (student is writing)")
+                _learnModeGestureRecording.value = System.currentTimeMillis()
+            }
+            MESSAGE_PATH_REQUEST_LEARN_MODE_STATE -> {
+                Log.d(TAG, "📋 Watch requesting Learn Mode state")
+                scope.launch {
+                    try {
+                        val json = org.json.JSONObject().apply {
+                            put("isActive", _isInLearnModeSession.value)
+                            _currentLearnModeWordData.value?.let { wordData ->
+                                put("wordData", wordData)
+                            }
+                        }.toString()
+                        messageClient.sendMessage(
+                            messageEvent.sourceNodeId,
+                            MESSAGE_PATH_LEARN_MODE_STATE_RESPONSE,
+                            json.toByteArray()
+                        ).await()
+                        Log.d(TAG, "✅ Learn Mode state response sent: active=${_isInLearnModeSession.value}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Failed to send Learn Mode state response", e)
+                    }
+                }
+            }
+            MESSAGE_PATH_REQUEST_TUTORIAL_MODE_STATE -> {
+                Log.d(TAG, "📋 Watch requesting Tutorial Mode state")
+                scope.launch {
+                    try {
+                        val json = org.json.JSONObject().apply {
+                            put("isActive", _isInTutorialModeSession.value)
+                            _currentTutorialModeLetterData.value?.let { letterData ->
+                                put("letterData", letterData)
+                            }
+                        }.toString()
+                        messageClient.sendMessage(
+                            messageEvent.sourceNodeId,
+                            MESSAGE_PATH_TUTORIAL_MODE_STATE_RESPONSE,
+                            json.toByteArray()
+                        ).await()
+                        Log.d(TAG, "✅ Tutorial Mode state response sent: active=${_isInTutorialModeSession.value}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Failed to send Tutorial Mode state response", e)
+                    }
+                }
+            }
+            MESSAGE_PATH_LEARN_MODE_WATCH_EXITED_SCREEN -> {
+                Log.d(TAG, "📴 Watch exited Learn Mode screen")
+                if (_isInLearnModeSession.value) {
+                    _sessionPaused.value = true
+                    _watchOnModeScreen.value = false
+                }
+            }
+            MESSAGE_PATH_LEARN_MODE_WATCH_ENTERED_SCREEN -> {
+                Log.d(TAG, "📱 Watch entered Learn Mode screen")
+                _watchOnModeScreen.value = true
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_EXITED_SCREEN -> {
+                Log.d(TAG, "📴 Watch exited Tutorial Mode screen")
+                if (_isInTutorialModeSession.value) {
+                    _sessionPaused.value = true
+                    _watchOnModeScreen.value = false
+                }
+            }
+            MESSAGE_PATH_TUTORIAL_MODE_WATCH_ENTERED_SCREEN -> {
+                Log.d(TAG, "📱 Watch entered Tutorial Mode screen")
+                _watchOnModeScreen.value = true
+            }
         }
     }
-    
+
     /**
      * Parse device name to get user-friendly name
      */
@@ -901,6 +1156,7 @@ class WatchConnectionManager private constructor(private val context: Context) {
         // Clear previous state before starting new session
         _tutorialModeSkipTrigger.value = 0L
         _tutorialModeGestureResult.value = emptyMap()
+        _tutorialModeWatchReady.value = 0L
 
         scope.launch {
             try {
@@ -920,6 +1176,155 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Tutorial Mode started notification sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to notify watch of Tutorial Mode start", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the phone is on TutorialSessionScreen and ready for handshake.
+     * The watch will reply with /tutorial_mode_watch_ready when it receives this.
+     */
+    fun sendTutorialModePhoneReady() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_PHONE_READY,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "\u2705 Phone ready signal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "\u274C Failed to send phone ready signal", e)
+            }
+        }
+    }
+
+    /**
+     * Notify watch that the phone is on LearnModeSessionScreen and ready for handshake.
+     * The watch will reply with /learn_mode_watch_ready when it receives this.
+     */
+    fun sendLearnModePhoneReady() {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_PHONE_READY,
+                        ByteArray(0)
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode phone ready signal sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Learn Mode phone ready signal", e)
+            }
+        }
+    }
+
+    /**
+     * Mark phone as in Learn Mode session (called by LearnModeSessionScreen on entry)
+     */
+    fun setLearnModeSessionActive(active: Boolean) {
+        _isInLearnModeSession.value = active
+        if (!active) {
+            _currentLearnModeWordData.value = null
+            _sessionPaused.value = false
+            _watchOnModeScreen.value = true
+        } else {
+            _sessionPaused.value = false
+            _watchOnModeScreen.value = true
+        }
+    }
+
+    /**
+     * Mark phone as in Tutorial Mode session (called by TutorialSessionScreen on entry)
+     */
+    fun setTutorialModeSessionActive(active: Boolean) {
+        _isInTutorialModeSession.value = active
+        if (!active) {
+            _currentTutorialModeLetterData.value = null
+            _sessionPaused.value = false
+            _watchOnModeScreen.value = true
+        } else {
+            _sessionPaused.value = false
+            _watchOnModeScreen.value = true
+        }
+    }
+
+    /**
+     * Update current word data for state recovery (called when word changes)
+     */
+    fun updateCurrentLearnModeWordData(word: String, maskedIndex: Int, configurationType: String, dominantHand: String = "RIGHT") {
+        val json = org.json.JSONObject().apply {
+            put("word", word)
+            put("maskedIndex", maskedIndex)
+            put("configurationType", configurationType)
+            put("dominantHand", dominantHand)
+        }.toString()
+        _currentLearnModeWordData.value = json
+    }
+
+    /**
+     * Update current letter data for state recovery (called when letter changes)
+     */
+    fun updateCurrentTutorialModeLetterData(letter: String, letterCase: String, currentIndex: Int, totalLetters: Int, dominantHand: String = "RIGHT") {
+        val json = org.json.JSONObject().apply {
+            put("letter", letter)
+            put("letterCase", letterCase)
+            put("currentIndex", currentIndex)
+            put("totalLetters", totalLetters)
+            put("dominantHand", dominantHand)
+        }.toString()
+        _currentTutorialModeLetterData.value = json
+    }
+
+    /**
+     * Resume Learn Mode session after watch re-entered the screen.
+     * Sends current word data to watch so it can show "Tap to begin!".
+     */
+    fun resumeLearnModeSession() {
+        _sessionPaused.value = false
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = _currentLearnModeWordData.value ?: "{}"
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_LEARN_MODE_RESUME,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Learn Mode resume sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Learn Mode resume", e)
+            }
+        }
+    }
+
+    /**
+     * Resume Tutorial Mode session after watch re-entered the screen.
+     * Sends current letter data to watch so it can show "Tap to begin!".
+     */
+    fun resumeTutorialModeSession() {
+        _sessionPaused.value = false
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = _currentTutorialModeLetterData.value ?: "{}"
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_RESUME,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Tutorial Mode resume sent to watch")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Tutorial Mode resume", e)
             }
         }
     }
@@ -1018,6 +1423,35 @@ class WatchConnectionManager private constructor(private val context: Context) {
                 Log.d(TAG, "✅ Mobile feedback dismissal sent to watch")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to notify watch of feedback dismissal", e)
+            }
+        }
+    }
+
+    /**
+     * Send feedback result to watch so it shows the same correct/incorrect screen.
+     * Mirrors sendLearnModeFeedback() for single source of truth.
+     * @param isCorrect Whether the gesture was correct
+     * @param predictedLetter The letter that was predicted by the watch ML model
+     */
+    fun sendTutorialModeFeedback(isCorrect: Boolean, predictedLetter: String) {
+        scope.launch {
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                val payload = org.json.JSONObject().apply {
+                    put("isCorrect", isCorrect)
+                    put("predictedLetter", predictedLetter)
+                }.toString()
+
+                nodes.forEach { node ->
+                    messageClient.sendMessage(
+                        node.id,
+                        MESSAGE_PATH_TUTORIAL_MODE_SHOW_FEEDBACK,
+                        payload.toByteArray()
+                    ).await()
+                }
+                Log.d(TAG, "✅ Tutorial Mode feedback sent: correct=$isCorrect, letter=$predictedLetter")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send Tutorial Mode feedback", e)
             }
         }
     }

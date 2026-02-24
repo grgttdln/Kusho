@@ -31,7 +31,9 @@ enum class DeleteType {
     SET,
     ACTIVITY,
     SET_FROM_ACTIVITY,
-    WORD
+    WORD,
+    WORDS, // Batch delete
+    DISCARD_ACTIVITY
 }
 
 /**
@@ -42,21 +44,28 @@ enum class DeleteType {
  * @param deleteType The type of deletion being performed
  * @param onConfirm Callback when the user confirms deletion
  * @param onDismiss Callback when the dialog is dismissed or cancelled
+ * @param itemCount Optional count for batch operations (e.g., number of words to delete)
  */
 @Composable
 fun DeleteConfirmationDialog(
     isVisible: Boolean,
     deleteType: DeleteType,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    itemCount: Int? = null
 ) {
     if (!isVisible) return
 
     val message = when (deleteType) {
-        DeleteType.SET -> "Delete this Set?"
-        DeleteType.ACTIVITY -> "Delete this Activity?"
-        DeleteType.SET_FROM_ACTIVITY -> "Remove Set From this Activity?"
+        DeleteType.SET -> "Delete this Activity?"
+        DeleteType.ACTIVITY -> "Delete this Activity Set?"
+        DeleteType.SET_FROM_ACTIVITY -> "Remove Activity From this Activity Set?"
         DeleteType.WORD -> "Delete this Word?"
+        DeleteType.WORDS -> {
+            val count = itemCount ?: 0
+            if (count > 1) "Delete $count words?" else "Delete this word?"
+        }
+        DeleteType.DISCARD_ACTIVITY -> "Discard this Activity?"
     }
 
     Dialog(

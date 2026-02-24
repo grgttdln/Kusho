@@ -36,6 +36,9 @@ import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.DeleteConfirmationDialog
 import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.SetItemCard
+import com.example.app.ui.components.wordbank.ActivityCreationModal
+import com.example.app.ui.components.wordbank.WordSuggestionDialog
+import com.example.app.ui.feature.learn.LessonViewModel
 
 @Composable
 fun YourSetsScreen(
@@ -45,14 +48,25 @@ fun YourSetsScreen(
     onBackClick: () -> Unit,
     onAddSetClick: () -> Unit = {},
     onEditSetClick: (Long) -> Unit = {},
-    viewModel: YourSetsViewModel = viewModel()
+    onNavigateToAIGenerate: (String) -> Unit = {},
+    viewModel: YourSetsViewModel = viewModel(),
+    lessonViewModel: LessonViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val lessonUiState by lessonViewModel.uiState.collectAsState()
+    val generationPhase by lessonViewModel.generationPhase.collectAsState()
 
     // Edit mode state for delete functionality
     var isEditMode by remember { mutableStateOf(false) }
     var setToDelete by remember { mutableStateOf<Set?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // Load activity suggested prompts when creation modal becomes visible
+    LaunchedEffect(lessonUiState.isActivityCreationModalVisible) {
+        if (lessonUiState.isActivityCreationModalVisible) {
+            lessonViewModel.loadActivitySuggestedPrompts()
+        }
+    }
 
     // Create stable callback references using rememberUpdatedState
     // This ensures the lambda always has the latest callback reference
@@ -126,7 +140,7 @@ fun YourSetsScreen(
 
             // Title
             Text(
-                text = "Your Activity Sets",
+                text = "My Activities",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -169,7 +183,7 @@ fun YourSetsScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "No Sets Yet",
+                            text = "No Activities Yet",
                             color = Color(0xFF4A4A4A),
                             fontSize = 24.sp,
                             fontWeight = FontWeight.SemiBold
@@ -178,7 +192,7 @@ fun YourSetsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Tap the button below to create\nyour first activity set.",
+                            text = "Tap the button below to create\nyour first activity.",
                             color = Color(0xFF7A7A7A),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center
@@ -240,33 +254,56 @@ fun YourSetsScreen(
             Spacer(Modifier.height(32.dp))
         }
 
-        // Floating "Add Sets" Button
-        Button(
-            onClick = { currentOnAddSetClick() },
+        // Action Buttons: "Add Activity" and Magic Wand
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 96.dp)
-                .width(207.dp)
-                .height(75.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF3FA9F8)
-            ),
-            contentPadding = PaddingValues(horizontal = 16.dp)
+                .padding(bottom = 96.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Add",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Add a Set",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color.White
-            )
+            Button(
+                onClick = { currentOnAddSetClick() },
+                modifier = Modifier
+                    .width(217.dp)
+                    .height(75.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3FA9F8)
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Add Activity",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Magic Wand Button
+            IconButton(
+                onClick = { lessonViewModel.showActivityCreationModal() },
+                modifier = Modifier
+                    .size(75.dp)
+                    .background(Color(0xFF3FA9F8), RoundedCornerShape(37.5.dp))
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_wand),
+                    contentDescription = "Magic Wand",
+                    modifier = Modifier.size(28.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
 
         // Bottom Navigation Bar
@@ -293,6 +330,43 @@ fun YourSetsScreen(
                 setToDelete = null
             }
         )
+
+        // Activity Creation Modal (AI wand)
+        ActivityCreationModal(
+            isVisible = lessonUiState.isActivityCreationModalVisible,
+            activityInput = lessonUiState.activityInput,
+            words = lessonUiState.words,
+            isLoading = lessonUiState.isActivityCreationLoading,
+            generationPhase = generationPhase,
+            error = lessonUiState.activityError,
+            suggestedPrompts = lessonUiState.activitySuggestedPrompts,
+            isSuggestionsLoading = lessonUiState.isActivitySuggestionsLoading,
+            onActivityInputChanged = { lessonViewModel.onActivityInputChanged(it) },
+            onSuggestionClick = { suggestion ->
+                lessonViewModel.onActivityInputChanged(suggestion)
+            },
+            onCreateActivity = {
+                lessonViewModel.createActivity { jsonResult ->
+                    onNavigateToAIGenerate(jsonResult)
+                }
+            },
+            onDismiss = { lessonViewModel.hideActivityCreationModal() }
+        )
+
+        // Word Suggestion Dialog (shown when word bank has insufficient words for a pattern)
+        if (lessonUiState.isWordSuggestionDialogVisible) {
+            WordSuggestionDialog(
+                pattern = lessonUiState.wordSuggestionPattern,
+                matchingWords = lessonUiState.wordSuggestionMatching,
+                candidates = lessonUiState.wordSuggestionCandidates,
+                selectedWords = lessonUiState.wordSuggestionSelected,
+                isLoading = lessonUiState.isWordSuggestionLoading,
+                error = lessonUiState.wordSuggestionError,
+                onToggleWord = { lessonViewModel.toggleWordSuggestion(it) },
+                onConfirm = { lessonViewModel.confirmWordSuggestions() },
+                onDismiss = { lessonViewModel.dismissWordSuggestionDialog() }
+            )
+        }
     }
 }
 

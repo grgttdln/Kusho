@@ -42,7 +42,6 @@ import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.Text
 import com.example.kusho.R
 import com.example.kusho.presentation.service.ConnectionMonitor
-import com.example.kusho.presentation.service.DisconnectionReason
 import com.example.kusho.presentation.components.drawModeArc
 import com.example.kusho.presentation.navigation.NavigationRoutes
 import com.example.kusho.presentation.theme.AppColors
@@ -74,19 +73,6 @@ fun HomeScreen(navController: NavHostController) {
         }
     }
     
-    // Navigate to pairing screen immediately when connection fails
-    LaunchedEffect(isConnected) {
-        if (!isConnected && isPaired && !isSkipped) {
-            // Connection lost - navigate to pairing screen
-            Log.w("HomeScreen", "Connection lost - navigating to pairing screen")
-            prefs.edit().putBoolean("is_paired", false).apply()
-            connectionMonitor.stopMonitoring()
-            connectionMonitor.resetFailureCounter()
-            navController.navigate(NavigationRoutes.PAIRING) {
-                popUpTo(NavigationRoutes.HOME) { inclusive = true }
-            }
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -212,114 +198,5 @@ private fun PairingIndicator(
             modifier = Modifier.size(24.dp),
             contentScale = ContentScale.Fit
         )
-    }
-}
-
-/**
- * Connection Lost Dialog - Blocks user until they retry or skip
- * Shows immediately when connection fails (any layer)
- */
-@Composable
-private fun ConnectionLostDialog(
-    reason: DisconnectionReason,
-    onRetry: () -> Unit,
-    onSkip: () -> Unit
-) {
-    // Full-screen overlay
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.95f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Error icon
-            Image(
-                painter = painterResource(id = R.drawable.dis_remove),
-                contentDescription = "Connection lost",
-                modifier = Modifier
-                    .size(60.dp)
-                    .padding(bottom = 8.dp),
-                contentScale = ContentScale.Fit
-            )
-            
-            // Title
-            Text(
-                text = "Connection Lost",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFFF6B6B),
-                textAlign = TextAlign.Center
-            )
-            
-            Spacer(modifier = Modifier.height(6.dp))
-            
-            // Reason message
-            val reasonText = when (reason) {
-                DisconnectionReason.BLUETOOTH_DISCONNECTED -> "Phone disconnected"
-                DisconnectionReason.APP_NOT_RESPONDING -> "Kusho app not running"
-                DisconnectionReason.NONE -> "Unknown error"
-            }
-            
-            Text(
-                text = reasonText,
-                fontSize = 12.sp,
-                color = Color.Gray,
-                textAlign = TextAlign.Center
-            )
-            
-            Spacer(modifier = Modifier.height(14.dp))
-            
-            // Buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Retry button
-                Button(
-                    onClick = onRetry,
-                    modifier = Modifier.width(75.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        backgroundColor = Color(0xFF4A90E2)
-                    )
-                ) {
-                    Text(
-                        text = "Retry",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                
-                // Skip button
-                Button(
-                    onClick = onSkip,
-                    modifier = Modifier.width(75.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        backgroundColor = Color(0xFF666666)
-                    )
-                ) {
-                    Text(
-                        text = "Skip",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(6.dp))
-            
-            Text(
-                text = "Skip = Practice only",
-                fontSize = 9.sp,
-                color = Color(0xFFAAAAAA),
-                textAlign = TextAlign.Center
-            )
-        }
     }
 }

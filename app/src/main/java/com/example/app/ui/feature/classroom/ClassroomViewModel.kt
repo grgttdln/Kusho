@@ -11,8 +11,11 @@ import com.example.app.data.repository.EnrollmentRepository
 import com.example.app.data.repository.StudentRepository
 import com.example.app.data.repository.StudentTeacherRepository
 import com.example.app.data.entity.AnnotationSummary
+import com.example.app.data.entity.KuuRecommendation
 import com.example.app.data.entity.LearnerProfileAnnotation
 import com.example.app.data.repository.GeminiRepository
+import android.util.Log
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -119,6 +122,8 @@ data class StudentDetailsUiState(
     val completedLearnSets: List<CompletedActivitySet> = emptyList(),
     val completedTutorialSessions: List<CompletedTutorialSession> = emptyList(),
     val annotationSummaries: Map<String, String> = emptyMap(),
+    val kuuRecommendation: KuuRecommendation? = null,
+    val isRecommendationLoading: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -137,7 +142,9 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
     private val studentTeacherRepository = StudentTeacherRepository(database.studentTeacherDao())
     private val sessionManager = SessionManager.getInstance(application)
     private val annotationSummaryDao = database.annotationSummaryDao()
+    private val kuuRecommendationDao = database.kuuRecommendationDao()
     private val geminiRepository = GeminiRepository()
+    private var recommendationJob: Job? = null
 
     private val _classListUiState = MutableStateFlow(ClassListUiState())
     val classListUiState: StateFlow<ClassListUiState> = _classListUiState.asStateFlow()
@@ -428,13 +435,33 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                 val summaries = annotationSummaryDao.getSummariesForStudent(studentId.toString())
                 val summaryMap = summaries.associate { "${it.setId}|${it.sessionMode}|${it.activityId}" to it.summaryText }
 
+                // Load Kuu recommendation
+                val existingRecommendation = kuuRecommendationDao.getRecommendationForStudent(studentId)
+
                 uiState = uiState.copy(
                     completedLearnSets = completedSets,
                     completedTutorialSessions = tutorialSessions,
-                    annotationSummaries = summaryMap
+                    annotationSummaries = summaryMap,
+                    kuuRecommendation = existingRecommendation
                 )
 
                 _studentDetailsUiState.value = uiState
+
+                // Check if recommendation needs (re)generation
+                val shouldRegenerate = if (existingRecommendation == null) {
+                    true
+                } else {
+                    // Check if any annotation is newer than the recommendation
+                    val allAnnotations = annotationDao.getAnnotationsForStudent(studentId.toString())
+                    val hasNewerAnnotation = allAnnotations.any { it.updatedAt > existingRecommendation.generatedAt }
+                    // Check if enough completions since last generation
+                    val completionThresholdReached = existingRecommendation.completionsSinceGeneration >= 1
+                    hasNewerAnnotation || completionThresholdReached
+                }
+
+                if (shouldRegenerate) {
+                    generateKuuRecommendation(studentId, classId)
+                }
             } catch (e: Exception) {
                 _studentDetailsUiState.value = StudentDetailsUiState(
                     error = "Failed to load student details: ${e.message}",
@@ -476,6 +503,204 @@ class ClassroomViewModel(application: Application) : AndroidViewModel(applicatio
                 android.util.Log.e("ClassroomViewModel", "Summary generation failed: ${e.message}", e)
             }
         }
+    }
+
+    /**
+     * Generate a Kuu recommendation for a student.
+     * Uses deterministic rule-based logic when tutorials are incomplete (no API call needed).
+     * Only calls Gemini AI when all tutorials are done and a learn activity must be chosen.
+     */
+    private fun generateKuuRecommendation(studentId: Long, classId: Long? = null) {
+        recommendationJob?.cancel()
+        recommendationJob = viewModelScope.launch {
+            _studentDetailsUiState.value = _studentDetailsUiState.value.copy(isRecommendationLoading = true)
+
+            try {
+                val annotationDao = database.learnerProfileAnnotationDao()
+                val tutorialCompletionDao = database.tutorialCompletionDao()
+
+                val tutorialCombinations = listOf(
+                    Triple("Vowels", "Capital", -1L),
+                    Triple("Vowels", "Small", -2L),
+                    Triple("Consonants", "Capital", -3L),
+                    Triple("Consonants", "Small", -4L)
+                )
+
+                // Gather completed tutorials
+                val tutorialCompletions = tutorialCompletionDao.getCompletionsForStudent(studentId)
+                val completedTutorialSetIds = tutorialCompletions.map { it.tutorialSetId }.toSet()
+
+                // Also check tutorial annotations for completions
+                val tutorialAnnotationSetIds = mutableSetOf<Long>()
+                tutorialCombinations.forEach { (_, _, setId) ->
+                    val annotations = annotationDao.getAnnotationsForStudentInSet(
+                        studentId = studentId.toString(),
+                        setId = setId,
+                        sessionMode = LearnerProfileAnnotation.MODE_TUTORIAL
+                    )
+                    if (annotations.isNotEmpty()) tutorialAnnotationSetIds.add(setId)
+                }
+
+                val allCompletedTutorialIds = completedTutorialSetIds + tutorialAnnotationSetIds
+                val allTutorialSetIds = tutorialCombinations.map { it.third }.toSet()
+                val allTutorialsComplete = allTutorialSetIds.all { it in allCompletedTutorialIds }
+
+                if (!allTutorialsComplete) {
+                    // Rule-based: recommend the next tutorial in progression
+                    val recommendation = createFallbackRecommendation(studentId, allCompletedTutorialIds)
+                    kuuRecommendationDao.insertOrUpdate(recommendation)
+
+                    val saved = kuuRecommendationDao.getRecommendationForStudent(studentId)
+                    _studentDetailsUiState.value = _studentDetailsUiState.value.copy(
+                        kuuRecommendation = saved,
+                        isRecommendationLoading = false
+                    )
+                    return@launch
+                }
+
+                // All tutorials complete — use Gemini to pick a learn activity
+                val student = studentRepository.getStudentById(studentId)
+                val studentName = student?.fullName ?: "Student"
+
+                val studentSetProgressDao = database.studentSetProgressDao()
+                val activityDao = database.activityDao()
+                val setDao = database.setDao()
+
+                val allCompletedTutorialNames = tutorialCombinations
+                    .filter { (_, _, setId) -> setId in allCompletedTutorialIds }
+                    .map { (type, letterType, _) -> "$type $letterType" }
+
+                // Gather completed learn sets
+                val completedProgress = studentSetProgressDao.getProgressForStudent(studentId)
+                    .first()
+                    .filter { it.isCompleted }
+
+                val completedLearnSetNames = completedProgress.mapNotNull { progress ->
+                    val activity = activityDao.getActivityById(progress.activityId)
+                    val set = setDao.getSetById(progress.setId)
+                    if (activity != null && set != null) "${activity.title} - ${set.title}" else null
+                }
+
+                // Build annotation summary text
+                val allAnnotations = annotationDao.getAnnotationsForStudent(studentId.toString())
+                val annotationSummaryText = if (allAnnotations.isEmpty()) {
+                    ""
+                } else {
+                    val levelCounts = allAnnotations.mapNotNull { it.levelOfProgress }
+                        .groupingBy { it }.eachCount()
+                    val strengthsList = allAnnotations.flatMap { it.getStrengthsList() }
+                        .groupingBy { it }.eachCount()
+                    val challengesList = allAnnotations.flatMap { it.getChallengesList() }
+                        .groupingBy { it }.eachCount()
+                    val strengthNotes = allAnnotations.map { it.strengthsNote.trim() }
+                        .filter { it.isNotBlank() }
+                    val challengeNotes = allAnnotations.map { it.challengesNote.trim() }
+                        .filter { it.isNotBlank() }
+
+                    buildString {
+                        if (levelCounts.isNotEmpty()) {
+                            appendLine("Progress levels: ${levelCounts.entries.joinToString(", ") { "${it.key}: ${it.value}" }}")
+                        }
+                        if (strengthsList.isNotEmpty()) {
+                            appendLine("Common strengths: ${strengthsList.entries.sortedByDescending { it.value }.take(3).joinToString(", ") { it.key }}")
+                        }
+                        if (strengthNotes.isNotEmpty()) {
+                            appendLine("Teacher notes on strengths: ${strengthNotes.joinToString("; ")}")
+                        }
+                        if (challengesList.isNotEmpty()) {
+                            appendLine("Common challenges: ${challengesList.entries.sortedByDescending { it.value }.take(3).joinToString(", ") { it.key }}")
+                        }
+                        if (challengeNotes.isNotEmpty()) {
+                            appendLine("Teacher notes on challenges: ${challengeNotes.joinToString("; ")}")
+                        }
+                    }
+                }
+
+                // Available tutorials (all 4)
+                val availableTutorials = tutorialCombinations.map { (type, letterType, setId) ->
+                    GeminiRepository.AvailableTutorial(type, letterType, setId)
+                }
+
+                // Available learn activities (from current teacher)
+                val userId = sessionManager.currentUser.value?.id ?: sessionManager.getUserId()
+                val activities = activityDao.getActivitiesByUserIdOnce(userId)
+                val availableLearnActivities = activities.map { activity ->
+                    val activitySets = setDao.getSetsForActivity(activity.id).first()
+                    GeminiRepository.AvailableLearnActivity(
+                        activityId = activity.id,
+                        activityName = activity.title,
+                        sets = activitySets.map { it.title }
+                    )
+                }
+
+                val context = GeminiRepository.RecommendationContext(
+                    studentName = studentName,
+                    completedTutorials = allCompletedTutorialNames,
+                    completedLearnSets = completedLearnSetNames,
+                    annotationSummary = annotationSummaryText,
+                    availableTutorials = availableTutorials,
+                    availableLearnActivities = availableLearnActivities
+                )
+
+                val response = geminiRepository.generateRecommendation(context)
+
+                if (response != null) {
+                    val recommendation = KuuRecommendation(
+                        studentId = studentId,
+                        title = response.title.take(35),
+                        description = response.description,
+                        activityType = response.activityType,
+                        targetActivityId = response.targetActivityId,
+                        targetSetId = response.targetSetId,
+                        completionsSinceGeneration = 0
+                    )
+                    kuuRecommendationDao.insertOrUpdate(recommendation)
+
+                    val saved = kuuRecommendationDao.getRecommendationForStudent(studentId)
+                    _studentDetailsUiState.value = _studentDetailsUiState.value.copy(
+                        kuuRecommendation = saved,
+                        isRecommendationLoading = false
+                    )
+                } else {
+                    // Gemini failed - use a fallback recommendation
+                    val fallback = createFallbackRecommendation(studentId, allCompletedTutorialIds)
+                    kuuRecommendationDao.insertOrUpdate(fallback)
+
+                    val saved = kuuRecommendationDao.getRecommendationForStudent(studentId)
+                    _studentDetailsUiState.value = _studentDetailsUiState.value.copy(
+                        kuuRecommendation = saved,
+                        isRecommendationLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("ClassroomViewModel", "Recommendation generation failed: ${e.message}", e)
+                _studentDetailsUiState.value = _studentDetailsUiState.value.copy(isRecommendationLoading = false)
+            }
+        }
+    }
+
+    /**
+     * Create a fallback recommendation when Gemini fails.
+     * Follows tutorial progression: Vowels Capital -> Small -> Consonants Capital -> Small.
+     */
+    private fun createFallbackRecommendation(studentId: Long, completedTutorialSetIds: Set<Long>): KuuRecommendation {
+        val progression = listOf(
+            Triple("Vowels", "Capital", -1L),
+            Triple("Vowels", "Small", -2L),
+            Triple("Consonants", "Capital", -3L),
+            Triple("Consonants", "Small", -4L)
+        )
+
+        val nextTutorial = progression.firstOrNull { (_, _, setId) -> setId !in completedTutorialSetIds }
+            ?: progression.first()
+
+        return KuuRecommendation(
+            studentId = studentId,
+            title = "Try ${nextTutorial.first} Tutorial!",
+            description = "Let's practice ${nextTutorial.first.lowercase()} ${nextTutorial.second.lowercase()} letters!",
+            activityType = KuuRecommendation.TYPE_TUTORIAL,
+            targetActivityId = nextTutorial.third
+        )
     }
 
     /**

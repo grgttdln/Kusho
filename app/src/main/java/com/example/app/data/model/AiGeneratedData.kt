@@ -58,4 +58,10 @@ data class AiWordConfig(
 sealed class AiGenerationResult {
     data class Success(val data: AiGeneratedActivity) : AiGenerationResult()
     data class Error(val message: String, val canRetry: Boolean = true) : AiGenerationResult()
+    data class InsufficientWords(
+        val pattern: String,
+        val matchingWords: List<String>,
+        val needed: Int = 3,
+        val originalPrompt: String = ""
+    ) : AiGenerationResult()
 }

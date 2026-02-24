@@ -103,7 +103,7 @@ fun LinkSetsToActivityScreen(
 
             // Title
             Text(
-                text = "Add Sets to Activity",
+                text = "Add Activities to Activity Set",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF000000),
@@ -122,7 +122,7 @@ fun LinkSetsToActivityScreen(
                     .padding(horizontal = 15.dp),
                 placeholder = {
                     Text(
-                        text = "Search for Sets",
+                        text = "Search for Activities",
                         fontSize = 16.sp,
                         color = Color(0xFF3FA9F8),
                         fontWeight = FontWeight.Normal
@@ -179,7 +179,7 @@ fun LinkSetsToActivityScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No sets available.\nCreate sets first in 'Your Sets'!",
+                            text = "No activities available.\nCreate activities first in 'My Activities'!",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color(0xFF808080),
@@ -252,7 +252,7 @@ fun LinkSetsToActivityScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (selectedSetIds.isEmpty()) "Select Sets" else "Add ${selectedSetIds.size} Set(s)",
+                text = if (selectedSetIds.isEmpty()) "Select Activities" else if (selectedSetIds.size == 1) "Add 1 Activity" else "Add ${selectedSetIds.size} Activities",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White

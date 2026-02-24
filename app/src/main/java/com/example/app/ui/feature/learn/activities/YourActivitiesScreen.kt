@@ -38,6 +38,7 @@ import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.DeleteConfirmationDialog
 import com.example.app.ui.components.DeleteType
 import com.example.app.ui.components.activities.ActivityItemCard
+import com.example.app.util.ActivityIconMapper
 
 @Composable
 fun YourActivitiesScreen(
@@ -63,26 +64,7 @@ fun YourActivitiesScreen(
         }
     }
 
-    // Default icons for activities (persistent assignment based on activity ID)
-    val allIcons = remember {
-        listOf(
-            R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
-            R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
-            R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
-            R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
-            R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
-            R.drawable.ic_activity_21, R.drawable.ic_activity_22
-        )
-    }
 
-    // Function to get persistent icon for an activity based on its ID
-    fun getIconForActivity(activityId: Long): Int {
-        // Adjust for 1-based IDs to ensure ic_activity_1 is used
-        // Activity ID 1 → Index 0 → ic_activity_1
-        // Activity ID 2 → Index 1 → ic_activity_2, etc.
-        val iconIndex = ((activityId - 1) % allIcons.size).toInt()
-        return allIcons[iconIndex]
-    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -142,7 +124,7 @@ fun YourActivitiesScreen(
 
             // Title
             Text(
-                text = "Your Activities",
+                text = "My Activity Sets",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0B0B0B)
@@ -185,7 +167,7 @@ fun YourActivitiesScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "No Activities Yet",
+                            text = "No Activity Sets Yet",
                             color = Color(0xFF4A4A4A),
                             fontSize = 24.sp,
                             fontWeight = FontWeight.SemiBold
@@ -194,7 +176,7 @@ fun YourActivitiesScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Tap the button below to create\nyour first activity.",
+                            text = "Tap the button below to create\nyour first activity set.",
                             color = Color(0xFF7A7A7A),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center
@@ -213,7 +195,7 @@ fun YourActivitiesScreen(
                         key = { it.id }
                     ) { activity ->
                         // Get persistent icon for this activity based on its ID
-                        val activityIcon = getIconForActivity(activity.id)
+                        val activityIcon = ActivityIconMapper.getIconForActivity(activity.title)
 
                         // Check if this activity is selected for deletion
                         val isSelected = activityToDelete?.id == activity.id
@@ -266,7 +248,7 @@ fun YourActivitiesScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 96.dp)
                 .height(75.dp)
-                .width(180.dp),
+                .width(240.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF3FA9F8)
             ),
@@ -281,7 +263,7 @@ fun YourActivitiesScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Add Activity",
+                text = "Add Activity Set",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.White

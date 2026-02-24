@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.kusho.ml.AirWritingClassifier
 import com.example.kusho.ml.ClassifierLoadResult
 import com.example.kusho.sensors.MotionSensorManager
+import com.example.kusho.sensors.SensorSample
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * ViewModel for Learn Mode.
@@ -22,7 +24,8 @@ import kotlinx.coroutines.launch
  */
 class LearnModeViewModel(
     private val sensorManager: MotionSensorManager,
-    private val classifierResult: ClassifierLoadResult
+    private val classifierResult: ClassifierLoadResult,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModel() {
 
     companion object {
@@ -30,42 +33,13 @@ class LearnModeViewModel(
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 3
         private const val PREDICTION_DISPLAY_MS = 1500L // 1.5 seconds
-        private const val RESULT_DISPLAY_SECONDS = 3
+        private const val PHONE_FEEDBACK_TIMEOUT_MS = 8000L
         private const val PROGRESS_UPDATE_INTERVAL_MS = 50L
+        private const val NO_MOVEMENT_DISPLAY_SECONDS = 3
 
-        /**
-         * Letters that have very similar writing structures between uppercase and lowercase
-         * in air writing. These letters should be checked case-insensitively.
-         */
-        private val similarCaseLetters = setOf(
-            'c', 'C', 'k', 'K', 'o', 'O', 'p', 'P', 's', 'S',
-            'u', 'U', 'v', 'V', 'w', 'W', 'x', 'X', 'z', 'Z'
-        )
-
-        /**
-         * Check if the input letter matches the expected letter.
-         * For letters with similar writing structures (c, k, o, p, s, u, v, w, x, z),
-         * the comparison is case-insensitive.
-         * For other letters, the comparison is case-sensitive.
-         */
-        private fun isLetterMatch(inputLetter: String?, expectedLetter: String?): Boolean {
-            if (inputLetter.isNullOrEmpty() || expectedLetter.isNullOrEmpty()) {
-                Log.d(TAG, "isLetterMatch: null/empty input=$inputLetter, expected=$expectedLetter")
-                return false
-            }
-            val input = inputLetter.firstOrNull() ?: return false
-            val expected = expectedLetter.firstOrNull() ?: return false
-
-            val isSimilarCase = expected in similarCaseLetters
-            val result = if (isSimilarCase) {
-                input.lowercaseChar() == expected.lowercaseChar()
-            } else {
-                input == expected
-            }
-
-            Log.d(TAG, "isLetterMatch: input='$input', expected='$expected', isSimilarCase=$isSimilarCase, result=$result")
-            return result
-        }
+        // Motion detection thresholds
+        private const val GYRO_VARIANCE_THRESHOLD = 0.3f
+        private const val GYRO_RANGE_THRESHOLD = 1.0f
     }
 
     enum class State {
@@ -73,8 +47,8 @@ class LearnModeViewModel(
         COUNTDOWN,
         RECORDING,
         PROCESSING,
-        SHOWING_PREDICTION,
-        RESULT
+        NO_MOVEMENT,
+        SHOWING_PREDICTION
     }
 
     data class UiState(
@@ -84,7 +58,6 @@ class LearnModeViewModel(
         val recordingProgress: Float = 0f,
         val prediction: String? = null,
         val confidence: Float? = null,
-        val isCorrect: Boolean? = null,
         val statusMessage: String = "Tap to guess",
         val errorMessage: String? = null,
         val isModelLoaded: Boolean = false
@@ -95,9 +68,6 @@ class LearnModeViewModel(
 
     private var recordingJob: Job? = null
     private val classifier: AirWritingClassifier?
-
-    // Current word data from LearnModeStateHolder
-    private var currentMaskedLetter: String = ""
 
     init {
         // Process classifier load result
@@ -122,23 +92,18 @@ class LearnModeViewModel(
             }
         }
 
-        // Observe word data from LearnModeStateHolder
+        // Reset to idle when new word data arrives
         viewModelScope.launch {
             LearnModeStateHolder.wordData.collect { wordData ->
-                if (wordData.word.isNotEmpty() && wordData.maskedIndex >= 0) {
-                    // Preserve the original case of the masked letter
-                    currentMaskedLetter = wordData.word.getOrNull(wordData.maskedIndex)?.toString() ?: ""
-                    Log.d(TAG, "📚 Masked letter to guess: $currentMaskedLetter")
-                    // Reset to idle when new word arrives
-                    if (_uiState.value.state == State.RESULT) {
-                        _uiState.update {
-                            it.copy(
-                                state = State.IDLE,
-                                statusMessage = "Tap to guess",
-                                prediction = null,
-                                isCorrect = null
-                            )
-                        }
+                if (wordData.word.isNotEmpty() && _uiState.value.state != State.IDLE) {
+                    recordingJob?.cancel()
+                    recordingJob = null
+                    _uiState.update {
+                        it.copy(
+                            state = State.IDLE,
+                            statusMessage = "Tap to guess",
+                            prediction = null
+                        )
                     }
                 }
             }
@@ -160,9 +125,10 @@ class LearnModeViewModel(
             return
         }
 
-        if (currentMaskedLetter.isEmpty()) {
-            Log.e(TAG, "Cannot start: no masked letter to guess")
-            _uiState.update { it.copy(errorMessage = "No letter to guess") }
+        val wordData = LearnModeStateHolder.wordData.value
+        if (wordData.word.isEmpty()) {
+            Log.e(TAG, "Cannot start: no word data")
+            _uiState.update { it.copy(errorMessage = "No word to practice") }
             return
         }
 
@@ -179,8 +145,7 @@ class LearnModeViewModel(
                             countdownSeconds = i,
                             statusMessage = "Get ready...",
                             errorMessage = null,
-                            prediction = null,
-                            isCorrect = null
+                            prediction = null
                         )
                     }
                     delay(1000)
@@ -197,6 +162,9 @@ class LearnModeViewModel(
                         recordingProgress = 0f
                     )
                 }
+
+                // Notify phone that recording has started (student is writing)
+                onRecordingStarted()
 
                 sensorManager.startRecording()
 
@@ -229,6 +197,34 @@ class LearnModeViewModel(
                 val samples = sensorManager.getCollectedSamples()
                 Log.d(TAG, "Collected ${samples.size} samples")
 
+                // Check for significant wrist movement
+                if (!hasSignificantMotion(samples)) {
+                    Log.w(TAG, "No significant wrist movement detected — showing '?' as prediction")
+                    _uiState.update {
+                        it.copy(
+                            state = State.SHOWING_PREDICTION,
+                            prediction = "?",
+                            confidence = 0f,
+                            errorMessage = null,
+                            recordingProgress = 0f
+                        )
+                    }
+
+                    // Show prediction briefly, then wait for phone feedback
+                    delay(PREDICTION_DISPLAY_MS)
+                    if (!isActive) return@launch
+
+                    // Safety timeout: if phone doesn't respond within 8 seconds, reset to idle
+                    delay(PHONE_FEEDBACK_TIMEOUT_MS)
+                    if (isActive && _uiState.value.state == State.SHOWING_PREDICTION) {
+                        Log.w(TAG, "Phone feedback timeout — resetting to idle")
+                        _uiState.update {
+                            it.copy(state = State.IDLE, statusMessage = "Tap to guess")
+                        }
+                    }
+                    return@launch
+                }
+
                 val minSamples = classifier.windowSize / 2
                 if (samples.size < minSamples) {
                     Log.w(TAG, "Not enough samples: ${samples.size} < $minSamples")
@@ -258,50 +254,38 @@ class LearnModeViewModel(
                     return@launch
                 }
 
-                // === Phase 4: Show the predicted letter first ===
-                // Keep the predicted letter as the raw input from the user (no case conversion)
+                // === Phase 4: Show the predicted letter ===
                 val predictedLetter = result.label?.trim()
-                // Use case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
-                val isCorrect = isLetterMatch(predictedLetter, currentMaskedLetter.trim())
+                Log.d(TAG, "Predicted: '$predictedLetter' (confidence: %.2f), Expected: '${wordData.word}'".format(result.confidence))
+                Log.d(TAG, "Top 5 probs: ${result.allProbabilities.withIndex().sortedByDescending { it.value }.take(5).joinToString { "(${it.index}:%.2f)".format(it.value) }}")
 
-                Log.d(TAG, "Predicted: '$predictedLetter', Expected: '$currentMaskedLetter', Correct: $isCorrect")
-
-                // Show the predicted letter for 1.5 seconds
                 _uiState.update {
                     it.copy(
                         state = State.SHOWING_PREDICTION,
                         prediction = predictedLetter,
                         confidence = result.confidence,
-                        isCorrect = isCorrect,
                         errorMessage = null,
                         recordingProgress = 0f
                     )
                 }
 
-                // Wait 1.5 seconds showing the prediction
+                // Show prediction briefly, then wait for phone feedback
                 delay(PREDICTION_DISPLAY_MS)
-
                 if (!isActive) return@launch
 
-                // === Phase 5: Show the result (correct/wrong) ===
-                _uiState.update {
-                    it.copy(
-                        state = State.RESULT,
-                        statusMessage = if (isCorrect) "Correct! ✓" else "Try again"
-                    )
-                }
-
-                // Auto-reset after showing result
-                delay(RESULT_DISPLAY_SECONDS * 1000L)
-                if (isActive && _uiState.value.state == State.RESULT) {
+                // Safety timeout: if phone doesn't respond within 8 seconds, reset to idle
+                delay(PHONE_FEEDBACK_TIMEOUT_MS)
+                if (isActive && _uiState.value.state == State.SHOWING_PREDICTION) {
+                    Log.w(TAG, "Phone feedback timeout — resetting to idle")
                     _uiState.update {
-                        it.copy(
-                            state = State.IDLE,
-                            statusMessage = "Tap to guess"
-                        )
+                        it.copy(state = State.IDLE, statusMessage = "Tap to guess")
                     }
                 }
 
+            } catch (e: CancellationException) {
+                // Normal cancellation (e.g., resetToIdle cancelled the recording job) — re-throw
+                Log.d(TAG, "Recording coroutine cancelled (normal)")
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Recording error: ${e.message}", e)
                 _uiState.update {
@@ -336,17 +320,18 @@ class LearnModeViewModel(
     }
 
     /**
-     * Reset from result state back to idle
+     * Reset to idle state, cancelling any pending recording or timeout
      */
     fun resetToIdle() {
         Log.d(TAG, "Resetting to idle")
+        recordingJob?.cancel()
+        recordingJob = null
         _uiState.update {
             it.copy(
                 state = State.IDLE,
                 statusMessage = "Tap to guess",
                 errorMessage = null,
                 prediction = null,
-                isCorrect = null,
                 recordingProgress = 0f,
                 countdownSeconds = 0
             )
@@ -354,26 +339,70 @@ class LearnModeViewModel(
     }
 
     /**
-     * Get the current masked letter (for UI display)
+     * Retry after no movement was detected.
+     * Cancels any pending auto-return and immediately goes back to IDLE.
      */
-    fun getCurrentMaskedLetter(): String = currentMaskedLetter
+    fun retryAfterNoMovement() {
+        if (_uiState.value.state != State.NO_MOVEMENT) return
+        Log.d(TAG, "Retrying after no movement")
+        recordingJob?.cancel()
+        recordingJob = null
+        _uiState.update {
+            it.copy(
+                state = State.IDLE,
+                statusMessage = "Tap to guess",
+                prediction = null
+            )
+        }
+    }
+
+    /**
+     * Check if the recorded sensor samples contain significant wrist movement.
+     * Uses gyroscope as the sole gate — air writing always involves rapid wrist rotation.
+     */
+    private fun hasSignificantMotion(samples: List<SensorSample>): Boolean {
+        // TODO: Motion gate temporarily bypassed for debugging — always allow ML classification
+        if (samples.size < 2) return false
+
+        val n = samples.size.toFloat()
+
+        val gyroMagnitudes = samples.map {
+            kotlin.math.sqrt((it.gx * it.gx + it.gy * it.gy + it.gz * it.gz).toDouble()).toFloat()
+        }
+        val gyroMean = gyroMagnitudes.sum() / n
+        val gyroVariance = gyroMagnitudes.sumOf { ((it - gyroMean) * (it - gyroMean)).toDouble() }.toFloat() / n
+        val gyroRange = gyroMagnitudes.max() - gyroMagnitudes.min()
+
+        Log.d(TAG, "Gyro: variance=%.4f (need>=%.4f), range=%.4f (need>=%.4f)".format(
+            gyroVariance, GYRO_VARIANCE_THRESHOLD, gyroRange, GYRO_RANGE_THRESHOLD))
+
+        val result = gyroVariance >= GYRO_VARIANCE_THRESHOLD && gyroRange >= GYRO_RANGE_THRESHOLD
+        Log.i(TAG, "Motion detected: $result (variance=${gyroVariance >= GYRO_VARIANCE_THRESHOLD}, range=${gyroRange >= GYRO_RANGE_THRESHOLD})")
+        // return result
+        Log.w(TAG, "Motion gate BYPASSED — returning true regardless (debugging)")
+        return true
+    }
 
     override fun onCleared() {
         super.onCleared()
         recordingJob?.cancel()
         sensorManager.stopRecording()
-        classifier?.close()
+        // NOTE: Do NOT close the classifier here — its lifecycle is managed by the
+        // Screen composable's LaunchedEffect. Closing it here causes "Interpreter
+        // has already been closed" when a new ViewModel is created with the same
+        // classifier instance (e.g., when word/timestamp changes but model doesn't).
     }
 }
 
 class LearnModeViewModelFactory(
     private val sensorManager: MotionSensorManager,
-    private val classifierResult: ClassifierLoadResult
+    private val classifierResult: ClassifierLoadResult,
+    private val onRecordingStarted: () -> Unit = {}
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(LearnModeViewModel::class.java)) {
-            return LearnModeViewModel(sensorManager, classifierResult) as T
+            return LearnModeViewModel(sensorManager, classifierResult, onRecordingStarted) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

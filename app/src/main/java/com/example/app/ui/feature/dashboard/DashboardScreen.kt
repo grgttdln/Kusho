@@ -45,11 +45,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
+import com.example.app.util.ActivityIconMapper
 import com.example.app.data.SessionManager
 import com.example.app.data.entity.Activity as ActivityEntity
 import com.example.app.service.ConnectionState
@@ -126,20 +125,7 @@ fun DashboardScreen(
             // Return empty list to trigger the empty state in ActivityProgressSection
             emptyList()
         } else {
-            // prepare same icon pool as LearnModeActivitySelectionScreen for consistent assignment
-            val allIcons = listOf(
-                R.drawable.ic_activity_1, R.drawable.ic_activity_2, R.drawable.ic_activity_3, R.drawable.ic_activity_4,
-                R.drawable.ic_activity_5, R.drawable.ic_activity_6, R.drawable.ic_activity_7, R.drawable.ic_activity_8,
-                R.drawable.ic_activity_9, R.drawable.ic_activity_10, R.drawable.ic_activity_11, R.drawable.ic_activity_12,
-                R.drawable.ic_activity_13, R.drawable.ic_activity_14, R.drawable.ic_activity_15, R.drawable.ic_activity_16,
-                R.drawable.ic_activity_17, R.drawable.ic_activity_18, R.drawable.ic_activity_19, R.drawable.ic_activity_20,
-                R.drawable.ic_activity_21, R.drawable.ic_activity_22
-            )
 
-            fun getIconForActivity(activityId: Long): Int {
-                val iconIndex = ((activityId - 1) % allIcons.size).toInt()
-                return allIcons[iconIndex]
-            }
 
             activities.map { act: ActivityEntity ->
                  // If the activity doesn't have a coverImagePath, try to resolve a drawable named ic_<slugified title>
@@ -157,7 +143,7 @@ fun DashboardScreen(
                     activityId = act.id.toString(),
                     activityName = act.title,
                     coverImagePath = resolvedCover,
-                    iconRes = getIconForActivity(act.id),
+                    iconRes = ActivityIconMapper.getIconForActivity(act.title),
                     accuracyDeltaPercent = 0,
                     timeDeltaSeconds = 0,
                     masteryPercent = 0f,
@@ -238,130 +224,6 @@ fun DashboardScreen(
                         }
                     }
                 )
-            }
-
-            // Watch Pairing Request Modal
-            pairingRequest?.let { request ->
-                Dialog(
-                    onDismissRequest = { viewModel.declinePairingRequest(request.nodeId) },
-                    properties = DialogProperties(
-                        dismissOnBackPress = true,
-                        dismissOnClickOutside = true,
-                        usePlatformDefaultWidth = false
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .wrapContentHeight(),
-                        contentAlignment = Alignment.TopCenter
-                    ) {
-                        // Main card content (positioned below the mascot)
-                        Column(
-                            modifier = Modifier
-                                .padding(top = 80.dp)
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(Color.White)
-                        ) {
-                            // Blue header section
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(70.dp)
-                                    .background(Color(0xFF49A9FF))
-                            )
-
-                            // White content section
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp)
-                                    .padding(top = 24.dp, bottom = 32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Watch Pairing Request",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0B0B0B),
-                                    textAlign = TextAlign.Center
-                                )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Text(
-                                    text = "\"${request.watchName}\" is requesting to connect.",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = Color(0xFF555555),
-                                    textAlign = TextAlign.Center
-                                )
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
-                                // Buttons row
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    // Accept button
-                                    Button(
-                                        onClick = { viewModel.acceptPairingRequest(request.nodeId) },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(56.dp),
-                                        shape = RoundedCornerShape(28.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF49A9FF)
-                                        )
-                                    ) {
-                                        Text(
-                                            text = "Accept",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White
-                                        )
-                                    }
-
-                                    // Decline button
-                                    Button(
-                                        onClick = { viewModel.declinePairingRequest(request.nodeId) },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(56.dp)
-                                            .border(
-                                                width = 0.dp,
-                                                color = Color.Transparent,
-                                                shape = RoundedCornerShape(28.dp)
-                                            ),
-                                        shape = RoundedCornerShape(28.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFFD6EDFF)
-                                        )
-                                    ) {
-                                        Text(
-                                            text = "Decline",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF49A9FF)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Mascot image overlapping the top
-                        Image(
-                            painter = painterResource(id = R.drawable.dis_question),
-                            contentDescription = "Pairing request",
-                            modifier = Modifier
-                                .size(160.dp)
-                                .offset(y = 0.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-                }
             }
 
             // User Profile Section

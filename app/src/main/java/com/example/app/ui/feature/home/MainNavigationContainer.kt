@@ -12,6 +12,7 @@ import com.example.app.ui.feature.dashboard.DashboardScreen
 import com.example.app.ui.feature.learn.LearnScreen
 import com.example.app.ui.feature.classroom.*
 import com.example.app.ui.feature.learn.LessonScreen
+import com.example.app.ui.feature.learn.WordBankScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialModeScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialModeStudentScreen
 import com.example.app.ui.feature.learn.tutorialmode.TutorialSessionScreen
@@ -38,7 +39,6 @@ import com.example.app.ui.feature.learn.generate.EditableWord
 import com.example.app.ui.feature.learn.generate.TitleSimilarityInfo
 import com.example.app.ui.feature.learn.generate.mapAiConfigTypeToUi
 import com.example.app.data.model.AiGeneratedActivity
-import com.example.app.ui.components.common.SimilarTitleDialog
 import com.google.gson.Gson
 import com.example.app.ui.feature.learn.LessonViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -78,6 +78,9 @@ fun MainNavigationContainer(
     
     // --- DASHBOARD TUTORIAL FLOW STATE ---
     var dashboardTutorialSection by remember { mutableStateOf("") } // "Vowels" or "Consonants"
+
+    // --- KUU RECOMMENDATION FLOW STATE ---
+    var kuuRecommendationOrigin by remember { mutableStateOf(false) } // true when navigating from Kuu card
     
     // --- DASHBOARD LEARN FLOW STATE ---
     var dashboardLearnActivityId by remember { mutableStateOf(0L) }
@@ -104,43 +107,20 @@ fun MainNavigationContainer(
     var aiActivityDescription by remember { mutableStateOf("") }
     var aiGeneratedJsonResult by remember { mutableStateOf("") }
     var aiEditableSets by remember { mutableStateOf(listOf<EditableSet>()) }
-    var currentAiSetIndex by remember { mutableIntStateOf(0) }
     var aiWordsToAdd by remember { mutableStateOf(listOf<SetRepository.SelectedWordConfig>()) }
 
     // --- TITLE SIMILARITY STATE ---
-    var showActivityTitleSimilarityDialog by remember { mutableStateOf(false) }
-    var activityTitleSimilarityExistingTitle by remember { mutableStateOf("") }
-    var activityTitleSimilarityExistingId by remember { mutableStateOf(0L) }
-    var activityTitleSimilarityReason by remember { mutableStateOf("") }
     var existingSetTitleMap by remember { mutableStateOf(mapOf<String, Long>()) }
 
     // --- REPOSITORY & CONTEXT HELPERS ---
     val context = LocalContext.current
     val sessionManager = remember { SessionManager.getInstance(context) }
-    val userId = remember { sessionManager.getUserId() }
+    val currentUser by sessionManager.currentUser.collectAsState()
+    val userId = currentUser?.id ?: 0L
     val wordRepository = remember { WordRepository(AppDatabase.getInstance(context).wordDao()) }
     val database = remember { AppDatabase.getInstance(context) }
     val setRepository = remember { SetRepository(database) }
     val coroutineScope = rememberCoroutineScope()
-
-    // Activity title similarity dialog (shown when AI reports similar activity title)
-    SimilarTitleDialog(
-        isVisible = showActivityTitleSimilarityDialog,
-        existingTitle = activityTitleSimilarityExistingTitle,
-        reason = activityTitleSimilarityReason,
-        onViewExisting = {
-            showActivityTitleSimilarityDialog = false
-            // Navigate to the existing activity's sets screen
-            selectedActivityId = activityTitleSimilarityExistingId
-            selectedActivityTitle = activityTitleSimilarityExistingTitle
-            currentScreen = 16
-        },
-        onDismiss = {
-            showActivityTitleSimilarityDialog = false
-            // Let user proceed to review the generated sets even though title is similar
-            currentScreen = 48
-        }
-    )
 
     when (currentScreen) {
         0 -> DashboardScreen(
@@ -186,110 +166,10 @@ fun MainNavigationContainer(
         )
         3 -> LessonScreen(
             onNavigate = { currentScreen = it },
+            onNavigateToWordBank = { currentScreen = 52 },
             onNavigateToActivities = { currentScreen = 6 },
             onNavigateToSets = { currentScreen = 7 },
-            onNavigateToAIGenerate = { jsonResult ->
-                aiGeneratedJsonResult = jsonResult
-                // Parse JSON, resolve image availability, and initialize editable sets
-                coroutineScope.launch {
-                    try {
-                        val activity = Gson().fromJson(jsonResult, AiGeneratedActivity::class.java)
-                        val allWords = wordRepository.getWordsForUserOnce(userId)
-                        val wordsWithImages = allWords
-                            .filter { !it.imagePath.isNullOrBlank() }
-                            .map { it.word }
-                            .toSet()
-
-                        // Build existingSetTitleMap for title similarity resolution
-                        val setDao = database.setDao()
-                        val setWordRows = setDao.getSetsWithWordNames(userId)
-                        existingSetTitleMap = setWordRows
-                            .groupBy { it.setTitle }
-                            .mapValues { (_, rows) -> rows.first().setId }
-
-                        val parsedSets = activity?.sets?.map { set ->
-                            // Resolve set-level title similarity
-                            val titleSimMatch = set.titleSimilarity?.let { sim ->
-                                val matchKey = existingSetTitleMap.keys.firstOrNull {
-                                    it.equals(sim.similarToExisting, ignoreCase = true)
-                                }
-                                if (matchKey != null) {
-                                    TitleSimilarityInfo(
-                                        existingTitle = matchKey,
-                                        existingId = existingSetTitleMap[matchKey] ?: 0L,
-                                        reason = sim.reason
-                                    )
-                                } else null
-                            }
-
-                            EditableSet(
-                                title = set.title,
-                                description = set.description,
-                                words = set.words.map { word ->
-                                    EditableWord(
-                                        word = word.word,
-                                        configurationType = mapAiConfigTypeToUi(word.configurationType),
-                                        selectedLetterIndex = word.selectedLetterIndex,
-                                        hasImage = word.word in wordsWithImages
-                                    )
-                                },
-                                titleSimilarityMatch = titleSimMatch
-                            )
-                        } ?: emptyList()
-
-                        // Run overlap detection before showing review screen
-                        try {
-                            val generatedWordLists = parsedSets.map { set ->
-                                set.words.map { it.word }
-                            }
-                            val overlaps = setRepository.findOverlappingSets(userId, generatedWordLists)
-
-                            aiEditableSets = parsedSets.mapIndexed { index, set ->
-                                val match = overlaps[index]
-                                if (match != null) {
-                                    set.copy(overlapMatch = match)
-                                } else {
-                                    set
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // Overlap detection failed -- proceed without overlap data
-                            android.util.Log.e("MainNavigation", "Overlap detection failed", e)
-                            aiEditableSets = parsedSets
-                        }
-
-                        // Check activity title similarity
-                        val activitySim = activity?.activity?.titleSimilarity
-                        if (activitySim != null) {
-                            val activityDao = database.activityDao()
-                            val existingActivities = activityDao.getActivitiesByUserIdOnce(userId)
-                            val matchingActivity = existingActivities.firstOrNull {
-                                it.title.equals(activitySim.similarToExisting, ignoreCase = true)
-                            }
-                            if (matchingActivity != null) {
-                                // Show dialog, DON'T navigate to screen 48
-                                activityTitleSimilarityExistingTitle = matchingActivity.title
-                                activityTitleSimilarityExistingId = matchingActivity.id
-                                activityTitleSimilarityReason = activitySim.reason
-                                showActivityTitleSimilarityDialog = true
-                                currentAiSetIndex = 0
-                                return@launch
-                            } else {
-                                android.util.Log.d("MainNavigation", "AI reported similarity to '${activitySim.similarToExisting}' but no match found in DB")
-                            }
-                        }
-
-                        currentAiSetIndex = 0
-                        currentScreen = 48
-                    } catch (e: Exception) {
-                        aiEditableSets = emptyList()
-                        currentAiSetIndex = 0
-                        currentScreen = 48
-                    }
-                }
-            },
-            modifier = modifier,
-            viewModel = lessonViewModel
+            modifier = modifier
         )
         4 -> TutorialModeScreen(
             onBack = { currentScreen = 1 },
@@ -340,7 +220,85 @@ fun MainNavigationContainer(
                         wordsForEdit = emptyList()
                         currentScreen = 14
                     },
-                    modifier = modifier
+                    onNavigateToAIGenerate = { jsonResult ->
+                        aiGeneratedJsonResult = jsonResult
+                        // Parse JSON, resolve image availability, and initialize editable sets
+                        coroutineScope.launch {
+                            try {
+                                val activity = Gson().fromJson(jsonResult, AiGeneratedActivity::class.java)
+                                val allWords = wordRepository.getWordsForUserOnce(userId)
+                                val wordsWithImages = allWords
+                                    .filter { !it.imagePath.isNullOrBlank() }
+                                    .map { it.word }
+                                    .toSet()
+
+                                // Build existingSetTitleMap for title similarity resolution
+                                val setDao = database.setDao()
+                                val setWordRows = setDao.getSetsWithWordNames(userId)
+                                existingSetTitleMap = setWordRows
+                                    .groupBy { it.setTitle }
+                                    .mapValues { (_, rows) -> rows.first().setId }
+
+                                val parsedSets = activity?.sets?.map { set ->
+                                    // Resolve set-level title similarity
+                                    val titleSimMatch = set.titleSimilarity?.let { sim ->
+                                        val matchKey = existingSetTitleMap.keys.firstOrNull {
+                                            it.equals(sim.similarToExisting, ignoreCase = true)
+                                        }
+                                        if (matchKey != null) {
+                                            TitleSimilarityInfo(
+                                                existingTitle = matchKey,
+                                                existingId = existingSetTitleMap[matchKey] ?: 0L,
+                                                reason = sim.reason
+                                            )
+                                        } else null
+                                    }
+
+                                    EditableSet(
+                                        title = set.title,
+                                        description = set.description,
+                                        words = set.words.map { word ->
+                                            EditableWord(
+                                                word = word.word,
+                                                configurationType = mapAiConfigTypeToUi(word.configurationType),
+                                                selectedLetterIndex = word.selectedLetterIndex,
+                                                hasImage = word.word in wordsWithImages
+                                            )
+                                        },
+                                        titleSimilarityMatch = titleSimMatch
+                                    )
+                                } ?: emptyList()
+
+                                // Run overlap detection before showing review screen
+                                try {
+                                    val generatedWordLists = parsedSets.map { set ->
+                                        set.words.map { it.word }
+                                    }
+                                    val overlaps = setRepository.findOverlappingSets(userId, generatedWordLists)
+
+                                    aiEditableSets = parsedSets.mapIndexed { index, set ->
+                                        val match = overlaps[index]
+                                        if (match != null) {
+                                            set.copy(overlapMatch = match)
+                                        } else {
+                                            set
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    // Overlap detection failed -- proceed without overlap data
+                                    android.util.Log.e("MainNavigation", "Overlap detection failed", e)
+                                    aiEditableSets = parsedSets
+                                }
+
+                                currentScreen = 48
+                            } catch (e: Exception) {
+                                aiEditableSets = emptyList()
+                                currentScreen = 48
+                            }
+                        }
+                    },
+                    modifier = modifier,
+                    lessonViewModel = lessonViewModel
                 )
             }
         }
@@ -352,12 +310,13 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         9 -> SelectSetsScreen(
+            userId = userId,
             onNavigate = { currentScreen = it },
             onBackClick = { currentScreen = 8 },
             modifier = modifier
         )
         10 -> ConfirmationScreen(
-            title = "Activity Created!",
+            title = "Activity Set Created!",
             onContinueClick = { currentScreen = 6 },
             modifier = modifier
         )
@@ -377,8 +336,10 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         12 -> {
-            LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId)
+            LaunchedEffect(userId) {
+                if (userId != 0L) {
+                    availableWords = wordRepository.getWordsForUserOnce(userId)
+                }
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -392,7 +353,7 @@ fun MainNavigationContainer(
             )
         }
         13 -> ConfirmationScreen(
-            title = "Set Created!",
+            title = "Activity Created!",
             subtitle = createdSetTitle,
             onContinueClick = {
                 yourSetsScreenKey++
@@ -420,8 +381,10 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         15 -> {
-            LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId)
+            LaunchedEffect(userId) {
+                if (userId != 0L) {
+                    availableWords = wordRepository.getWordsForUserOnce(userId)
+                }
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -446,6 +409,9 @@ fun MainNavigationContainer(
                     onViewSetClick = { setId ->
                         selectedSetId = setId
                         currentScreen = 14
+                    },
+                    onTitleUpdated = { newTitle ->
+                        selectedActivityTitle = newTitle
                     },
                     modifier = modifier
                 )
@@ -547,6 +513,31 @@ fun MainNavigationContainer(
                 selectedLearnAnnotationActivityId = if (parts.size >= 3) parts[2].toLongOrNull() ?: 0L else 0L
                 currentScreen = 47
             },
+            onNavigateToTutorial = { tutorialSetId ->
+                // Map tutorial setId to type/letterType and navigate to tutorial student screen
+                tutorialModeStudentId = selectedStudentId.toLongOrNull() ?: 0L
+                tutorialModeStudentName = selectedStudentName
+                tutorialModeClassId = selectedClassId.toLongOrNull() ?: 0L
+                kuuRecommendationOrigin = true
+                when (tutorialSetId) {
+                    -1L -> { dashboardTutorialSection = "Vowels"; tutorialLetterType = "capital" }
+                    -2L -> { dashboardTutorialSection = "Vowels"; tutorialLetterType = "small" }
+                    -3L -> { dashboardTutorialSection = "Consonants"; tutorialLetterType = "capital" }
+                    -4L -> { dashboardTutorialSection = "Consonants"; tutorialLetterType = "small" }
+                    else -> { dashboardTutorialSection = "Vowels"; tutorialLetterType = "capital" }
+                }
+                currentScreen = 27 // Navigate to TutorialModeStudentScreen
+            },
+            onNavigateToLearnSetStatus = { activityId ->
+                // Navigate to learn mode set status screen for the recommended activity
+                selectedActivityId = activityId
+                kuuRecommendationOrigin = true
+                coroutineScope.launch {
+                    val activity = database.activityDao().getActivityById(activityId)
+                    selectedActivityTitle = activity?.title ?: ""
+                }
+                currentScreen = 32 // Navigate to LearnModeSetStatusScreen
+            },
             modifier = modifier
         )
         46 -> TutorialAnnotationDetailsScreen(
@@ -568,7 +559,15 @@ fun MainNavigationContainer(
             studentId = tutorialModeStudentId,
             classId = tutorialModeClassId,
             studentName = tutorialModeStudentName,
-            onBack = { currentScreen = 4 },
+            preselectedSection = if (kuuRecommendationOrigin) dashboardTutorialSection.ifEmpty { null } else null,
+            onBack = {
+                if (kuuRecommendationOrigin) {
+                    kuuRecommendationOrigin = false
+                    currentScreen = 26 // Back to StudentDetailsScreen
+                } else {
+                    currentScreen = 4
+                }
+            },
             onStartSession = { title, letterType, studentName ->
                 tutorialSessionTitle = title
                 tutorialLetterType = letterType
@@ -585,6 +584,7 @@ fun MainNavigationContainer(
             studentId = tutorialSessionStudentId,
             dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 29 },
+            onEarlyExit = { currentScreen = 27 },
             modifier = modifier
         )
         29 -> SessionAnalyticsScreen(
@@ -623,22 +623,35 @@ fun MainNavigationContainer(
                 }
             }
             val progressList by progressFlow.collectAsState(initial = emptyList())
-            val completedSetIds = remember(progressList) {
-                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            val progressBySetId = remember(progressList) {
+                progressList.associateBy { it.setId }
             }
             val activitySetStatuses = sets.map { set ->
-                val isCompleted = completedSetIds.contains(set.id)
+                val progress = progressBySetId[set.id]
+                val percentage = progress?.completionPercentage ?: 0
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
                     setId = set.id,
                     title = set.title,
-                    status = if (isCompleted) "Completed" else "Not Started"
+                    status = when {
+                        progress?.isCompleted == true || percentage == 100 -> "Completed"
+                        percentage > 0 -> "$percentage% Progress"
+                        else -> "Not Started"
+                    },
+                    completionPercentage = percentage
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
                 activityIconRes = selectedActivityIconRes,
                 activityTitle = selectedActivityTitle,
                 sets = activitySetStatuses,
-                onBack = { currentScreen = 31 },
+                onBack = {
+                    if (kuuRecommendationOrigin) {
+                        kuuRecommendationOrigin = false
+                        currentScreen = 26 // Back to StudentDetailsScreen
+                    } else {
+                        currentScreen = 31
+                    }
+                },
                 onStartSet = { set ->
                     // Navigate to LearnModeSessionScreen and pass the set id and title
                     selectedSetId = set.setId
@@ -659,7 +672,8 @@ fun MainNavigationContainer(
                 studentName = selectedStudentName,
                 dominantHand = selectedDominantHand,
                 modifier = modifier,
-                onSessionComplete = { currentScreen = 34 }
+                onSessionComplete = { currentScreen = 34 },
+                onEarlyExit = { currentScreen = 1 }
             )
         }
         34 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
@@ -708,6 +722,7 @@ fun MainNavigationContainer(
             studentId = tutorialSessionStudentId,
             dominantHand = selectedDominantHand,
             onEndSession = { currentScreen = 39 },
+            onEarlyExit = { currentScreen = 37 },
             modifier = modifier
         )
         39 -> SessionAnalyticsScreen(
@@ -749,15 +764,21 @@ fun MainNavigationContainer(
                 }
             }
             val progressList by progressFlow.collectAsState(initial = emptyList())
-            val completedSetIds = remember(progressList) {
-                progressList.filter { it.isCompleted }.map { it.setId }.toSet()
+            val progressBySetId = remember(progressList) {
+                progressList.associateBy { it.setId }
             }
             val activitySetStatuses = sets.map { set ->
-                val isCompleted = completedSetIds.contains(set.id)
+                val progress = progressBySetId[set.id]
+                val percentage = progress?.completionPercentage ?: 0
                 com.example.app.ui.feature.learn.learnmode.ActivitySetStatus(
                     setId = set.id,
                     title = set.title,
-                    status = if (isCompleted) "Completed" else "Not Started"
+                    status = when {
+                        progress?.isCompleted == true || percentage == 100 -> "Completed"
+                        percentage > 0 -> "$percentage% Progress"
+                        else -> "Not Started"
+                    },
+                    completionPercentage = percentage
                 )
             }
             com.example.app.ui.feature.learn.learnmode.LearnModeSetStatusScreen(
@@ -784,7 +805,8 @@ fun MainNavigationContainer(
                 studentName = selectedStudentName,
                 dominantHand = selectedDominantHand,
                 modifier = modifier,
-                onSessionComplete = { currentScreen = 44 }
+                onSessionComplete = { currentScreen = 44 },
+                onEarlyExit = { currentScreen = 0 }
             )
         }
         44 -> com.example.app.ui.feature.learn.learnmode.LearnModeSessionAnalyticsScreen(
@@ -799,42 +821,22 @@ fun MainNavigationContainer(
         // --- AI ACTIVITY GENERATION FLOW ---
         48 -> AISetReviewScreen(
             onNavigate = { currentScreen = it },
-            onBackClick = { currentScreen = 6 },
-            onFinish = { activityTitle, activityDescription, setIds ->
-                // Store activity info and created set IDs
-                aiActivityTitle = activityTitle
-                aiActivityDescription = activityDescription
+            onBackClick = { currentScreen = 7 },
+            onFinish = { _, _, setIds ->
                 aiCreatedSetIds = setIds
-                aiPreviouslySavedSetIds = setIds
-
-                // Navigate directly to activity creation
-                currentScreen = 49
+                currentScreen = 51
             },
             generatedJson = aiGeneratedJsonResult,
             userId = userId,
             editableSets = aiEditableSets,
             onEditableSetsChange = { aiEditableSets = it },
-            currentSetIndex = currentAiSetIndex,
-            onCurrentSetIndexChange = { currentAiSetIndex = it },
             onRegenerateSet = { setTitle, setDescription, onResult ->
                 lessonViewModel.regenerateSet(setTitle, setDescription, onResult)
             },
-            onAddMoreSet = { existingTitles, existingDescriptions, onResult ->
-                lessonViewModel.addMoreSet(existingTitles, existingDescriptions, onResult)
-            },
             onDiscardSet = {
-                val updatedSets = aiEditableSets.toMutableList().apply {
-                    removeAt(currentAiSetIndex)
-                }
-                if (updatedSets.isEmpty()) {
-                    // No sets left — navigate back to LessonScreen
-                    currentScreen = 3
-                } else {
-                    aiEditableSets = updatedSets
-                    if (currentAiSetIndex >= updatedSets.size) {
-                        currentAiSetIndex = updatedSets.size - 1
-                    }
-                }
+                aiEditableSets = emptyList()
+                aiCreatedSetIds = emptyList()
+                currentScreen = 7  // Back to YourSetsScreen
             },
             onAddWordsClick = { existingWords ->
                 wordsToExclude = existingWords
@@ -848,8 +850,10 @@ fun MainNavigationContainer(
             modifier = modifier
         )
         50 -> {
-            LaunchedEffect(Unit) {
-                availableWords = wordRepository.getWordsForUserOnce(userId)
+            LaunchedEffect(userId) {
+                if (userId != 0L) {
+                    availableWords = wordRepository.getWordsForUserOnce(userId)
+                }
             }
             SelectWordsScreen(
                 availableWords = availableWords,
@@ -879,16 +883,23 @@ fun MainNavigationContainer(
         // --- ACTIVITY CREATION SUCCESS SCREEN ---
         51 -> ActivityCreationSuccessScreen(
             onYayClick = {
-                // Reset AI state and navigate to Your Activities
+                // Reset AI state and navigate to Your Sets
                 aiCreatedSetIds = emptyList()
                 aiPreviouslySavedSetIds = emptyList()
                 aiActivityTitle = ""
                 aiActivityDescription = ""
                 aiEditableSets = emptyList()
-                currentAiSetIndex = 0
-                currentScreen = 6
+                yourSetsScreenKey++  // Force refresh to show new set
+                currentScreen = 7
             },
             modifier = modifier
+        )
+        // --- WORD BANK SCREEN ---
+        52 -> WordBankScreen(
+            onNavigate = { currentScreen = it },
+            onBackClick = { currentScreen = 3 },
+            modifier = modifier,
+            viewModel = lessonViewModel
         )
     }
 }
