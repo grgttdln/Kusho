@@ -12,10 +12,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -41,24 +39,21 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
-import com.example.app.util.ActivityIconMapper
 import com.example.app.data.SessionManager
-import com.example.app.data.entity.Activity as ActivityEntity
+import com.example.app.data.entity.VideoTutorial
 import com.example.app.service.ConnectionState
 import com.example.app.service.WatchConnectionManager
 import com.example.app.service.PairingRequestEvent
 import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.dashboard.BatteryIcon
 import com.example.app.ui.components.dashboard.getWatchImageResource
-import com.example.app.ui.components.dashboard.ActivityProgressSection
-import com.example.app.ui.components.dashboard.ActivityProgress
+import com.example.app.ui.components.dashboard.VideoTutorialSection
 import com.example.app.ui.components.tutorial.TutorialGuideCard
 import com.example.app.ui.components.tutorial.LearnGuideCard
 
@@ -117,45 +112,8 @@ fun DashboardScreen(
         }
     }
 
-    // Collect activities from ViewModel and map into ActivityProgress UI model.
-    val activities: List<ActivityEntity> by viewModel.activities.collectAsState()
-
-    val activityProgressList: List<ActivityProgress> = remember(activities) {
-        if (activities.isEmpty()) {
-            // Return empty list to trigger the empty state in ActivityProgressSection
-            emptyList()
-        } else {
-
-
-            activities.map { act: ActivityEntity ->
-                 // If the activity doesn't have a coverImagePath, try to resolve a drawable named ic_<slugified title>
-                 val resolvedCover: String? = act.coverImagePath?.takeIf { it.isNotBlank() } ?: run {
-                     val slug = act.title
-                         .lowercase()
-                         .replace(Regex("[^a-z0-9]+"), "_")
-                         .trim('_')
-                     val candidate = "ic_$slug"
-                     val resId = context.resources.getIdentifier(candidate, "drawable", context.packageName)
-                     if (resId != 0) candidate else null
-                 }
-
-                ActivityProgress(
-                    activityId = act.id.toString(),
-                    activityName = act.title,
-                    coverImagePath = resolvedCover,
-                    iconRes = ActivityIconMapper.getIconForActivity(act.title),
-                    accuracyDeltaPercent = 0,
-                    timeDeltaSeconds = 0,
-                    masteryPercent = 0f,
-                    masteryLabel = "Beginner",
-                    avgAttempts = 0f,
-                    avgAccuracyPercent = 0,
-                    avgScoreText = "",
-                    avgTimeSeconds = 0
-                )
-             }
-         }
-     }
+    // Collect video tutorials from ViewModel
+    val videoTutorials by viewModel.videoTutorials.collectAsState()
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -478,8 +436,15 @@ fun DashboardScreen(
                 }
             }
 
-            // TODO: Dashboard sections go here
+            Spacer(modifier = Modifier.height(24.dp))
 
+            // Video Tutorials Section
+            VideoTutorialSection(
+                tutorials = videoTutorials,
+                onTutorialClick = { /* No-op for now */ }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
 
@@ -492,56 +457,6 @@ fun DashboardScreen(
 }
 
 // ---------------------- Preview ----------------------
-
-@Preview(showBackground = true)
-@Composable
-fun ActivityProgressSectionPreview() {
-    val sample = listOf(
-        ActivityProgress(
-            activityId = "a1",
-            activityName = "Alphabet Gestures",
-            coverImagePath = "ic_apple",
-            accuracyDeltaPercent = 12,
-            timeDeltaSeconds = 0,
-            masteryPercent = 0.78f,
-            masteryLabel = "Intermediate",
-            avgAttempts = 1.9f,
-            avgAccuracyPercent = 79,
-            avgScoreText = "8/10",
-            avgTimeSeconds = 124
-        ),
-        ActivityProgress(
-            activityId = "a2",
-            activityName = "Word Practice",
-            coverImagePath = "ic_apple",
-            accuracyDeltaPercent = 0,
-            timeDeltaSeconds = -20,
-            masteryPercent = 0.92f,
-            masteryLabel = "Advanced",
-            avgAttempts = 1.3f,
-            avgAccuracyPercent = 92,
-            avgScoreText = "9/10",
-            avgTimeSeconds = 80
-        ),
-        ActivityProgress(
-            activityId = "a3",
-            activityName = "Shape Matching",
-            coverImagePath = "ic_apple",
-            accuracyDeltaPercent = 0,
-            timeDeltaSeconds = 0,
-            masteryPercent = 0.45f,
-            masteryLabel = "Beginner",
-            avgAttempts = 2.4f,
-            avgAccuracyPercent = 45,
-            avgScoreText = "5/10",
-            avgTimeSeconds = 165
-        )
-    )
-
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        ActivityProgressSection(activities = sample, onActivityClick = {})
-    }
-}
 
 @Preview(showBackground = true)
 @Composable
