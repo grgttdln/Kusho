@@ -137,6 +137,11 @@ private fun PracticeModeContent(
 
     val uiState by viewModel.uiState.collectAsState()
 
+    // Playback guard: prevent tilt from re-triggering audio while playing
+    var isAudioPlaying by remember { mutableStateOf(false) }
+    var lastPlaybackEndTime by remember { mutableStateOf(0L) }
+    var activeMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+
     // Play countdown voice audio (3, 2, 1)
     LaunchedEffect(uiState.countdownSeconds) {
         val resId = when (uiState.countdownSeconds) {
