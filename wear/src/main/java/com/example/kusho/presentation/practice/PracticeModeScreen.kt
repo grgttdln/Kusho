@@ -213,17 +213,35 @@ private fun PracticeModeContent(
         if (uiState.state == PracticeModeViewModel.State.QUESTION && uiState.currentQuestion != null) {
             // Set up shake listener to repeat the question
             shakeDetector.setOnShakeListener {
+                // Guard: ignore tilt if audio is playing or within post-playback cooldown
+                if (isAudioPlaying || ttsManager.isSpeaking()) return@setOnShakeListener
+                if (System.currentTimeMillis() - lastPlaybackEndTime < 2500) return@setOnShakeListener
+
                 uiState.currentQuestion?.let { question ->
+                    isAudioPlaying = true
                     if (question.audioResId != null) {
                         // Play audio file if available
                         try {
+                            activeMediaPlayer?.release()
                             val mediaPlayer = MediaPlayer.create(context, question.audioResId)
-                            mediaPlayer?.start()
+                            activeMediaPlayer = mediaPlayer
                             mediaPlayer?.setOnCompletionListener {
                                 it.release()
+                                activeMediaPlayer = null
+                                isAudioPlaying = false
+                                lastPlaybackEndTime = System.currentTimeMillis()
                             }
+                            mediaPlayer?.setOnErrorListener { mp, _, _ ->
+                                mp.release()
+                                activeMediaPlayer = null
+                                isAudioPlaying = false
+                                lastPlaybackEndTime = System.currentTimeMillis()
+                                true
+                            }
+                            mediaPlayer?.start()
                         } catch (e: Exception) {
                             // Fallback to TTS if audio playback fails
+                            activeMediaPlayer = null
                             ttsManager.speak(question.question)
                         }
                     } else {
@@ -240,6 +258,9 @@ private fun PracticeModeContent(
 
         onDispose {
             shakeDetector.stopListening()
+            activeMediaPlayer?.release()
+            activeMediaPlayer = null
+            isAudioPlaying = false
         }
     }
 
