@@ -170,22 +170,41 @@ private fun PracticeModeContent(
     LaunchedEffect(uiState.state, uiState.currentQuestion) {
         if (uiState.state == PracticeModeViewModel.State.QUESTION && uiState.currentQuestion != null) {
             val question = uiState.currentQuestion!!
+            isAudioPlaying = true
             if (question.audioResId != null) {
                 // Play audio file if available
                 try {
+                    activeMediaPlayer?.release()
                     val mediaPlayer = MediaPlayer.create(context, question.audioResId)
-                    mediaPlayer?.start()
+                    activeMediaPlayer = mediaPlayer
                     mediaPlayer?.setOnCompletionListener {
                         it.release()
+                        activeMediaPlayer = null
+                        isAudioPlaying = false
+                        lastPlaybackEndTime = System.currentTimeMillis()
                     }
+                    mediaPlayer?.setOnErrorListener { mp, _, _ ->
+                        mp.release()
+                        activeMediaPlayer = null
+                        isAudioPlaying = false
+                        lastPlaybackEndTime = System.currentTimeMillis()
+                        true
+                    }
+                    mediaPlayer?.start()
                 } catch (e: Exception) {
                     // Fallback to TTS if audio playback fails
+                    activeMediaPlayer = null
                     ttsManager.speak(question.question)
+                    // isAudioPlaying stays true — TTS guard in shake listener will check ttsManager.isSpeaking()
                 }
             } else {
                 // Use TTS if no audio file
                 ttsManager.speak(question.question)
+                // isAudioPlaying stays true — TTS guard in shake listener will check ttsManager.isSpeaking()
             }
+        } else {
+            // Reset when leaving QUESTION state
+            isAudioPlaying = false
         }
     }
 
