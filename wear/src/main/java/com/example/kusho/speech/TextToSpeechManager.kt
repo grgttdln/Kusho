@@ -450,6 +450,11 @@ class TextToSpeechManager(context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
+     * Check if TTS is currently speaking.
+     */
+    fun isSpeaking(): Boolean = tts?.isSpeaking == true
+
+    /**
      * Stop any ongoing speech.
      */
     fun stop() {
