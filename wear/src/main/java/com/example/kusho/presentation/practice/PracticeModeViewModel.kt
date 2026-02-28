@@ -48,6 +48,9 @@ class PracticeModeViewModel(
     // Recording configuration
     companion object {
         private const val TAG = "PracticeModeVM"
+
+        /** Letters whose uppercase and lowercase forms are structurally identical in air-writing */
+        private val CASE_LENIENT_LETTERS = setOf('C', 'K', 'O', 'P', 'S', 'V', 'W', 'X', 'Z')
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 3
         private const val RESULT_DISPLAY_SECONDS = 3
@@ -399,13 +402,18 @@ class PracticeModeViewModel(
                 val predictedLetter = result.label
                 val currentQuestion = _uiState.value.currentQuestion
 
-                // Case-sensitive comparison for TRACING_COPYING and UPPERCASE_LOWERCASE
-                // Case-insensitive for other categories (LETTER_SOUND, PICTURE_MATCH)
+                // TRACING_COPYING & UPPERCASE_LOWERCASE: case-insensitive for the 9
+                // structurally identical letters (C K O P S V W X Z), strict for all others.
+                // Other categories (LETTER_SOUND, PICTURE_MATCH): always case-insensitive.
                 val isCorrect = when (currentQuestion?.category) {
                     QuestionCategory.TRACING_COPYING,
                     QuestionCategory.UPPERCASE_LOWERCASE -> {
-                        // Case-sensitive comparison
-                        predictedLetter == currentQuestion.expectedAnswer
+                        val expected = currentQuestion.expectedAnswer
+                        if (expected.length == 1 && expected[0].uppercaseChar() in CASE_LENIENT_LETTERS) {
+                            predictedLetter?.uppercase() == expected.uppercase()
+                        } else {
+                            predictedLetter == expected
+                        }
                     }
                     else -> {
                         // Case-insensitive comparison for other categories
