@@ -9,6 +9,7 @@ import com.example.app.data.repository.WordRepository
 import com.example.app.data.repository.SetRepository
 import com.example.app.data.AppDatabase
 import com.example.app.ui.feature.dashboard.DashboardScreen
+import com.example.app.ui.feature.dashboard.VideoPlayerScreen
 import com.example.app.ui.feature.learn.LearnScreen
 import com.example.app.ui.feature.classroom.*
 import com.example.app.ui.feature.learn.LessonScreen
@@ -86,6 +87,10 @@ fun MainNavigationContainer(
     var dashboardLearnActivityId by remember { mutableStateOf(0L) }
     var dashboardLearnActivityTitle by remember { mutableStateOf("") }
 
+    // --- VIDEO PLAYER STATE ---
+    var videoPlayerResName by remember { mutableStateOf("") }
+    var videoPlayerTitle by remember { mutableStateOf("") }
+
     // --- ACTIVITIES & SETS STATE ---
     var selectedActivityId by remember { mutableStateOf(0L) }
     var selectedActivityTitle by remember { mutableStateOf("") }
@@ -142,6 +147,11 @@ fun MainNavigationContainer(
                 dashboardLearnActivityId = activityId
                 dashboardLearnActivityTitle = activityTitle
                 currentScreen = 41 // Navigate to student selection for Learn mode
+            },
+            onNavigateToVideoPlayer = { resName, title ->
+                videoPlayerResName = resName
+                videoPlayerTitle = title
+                currentScreen = 53
             }
         )
         1 -> LearnScreen(onNavigate = { currentScreen = it }, modifier = modifier)
@@ -900,6 +910,13 @@ fun MainNavigationContainer(
             onBackClick = { currentScreen = 3 },
             modifier = modifier,
             viewModel = lessonViewModel
+        )
+        // --- VIDEO PLAYER SCREEN ---
+        53 -> VideoPlayerScreen(
+            videoResName = videoPlayerResName,
+            title = videoPlayerTitle,
+            onBack = { currentScreen = 0 },
+            modifier = modifier
         )
     }
 }
