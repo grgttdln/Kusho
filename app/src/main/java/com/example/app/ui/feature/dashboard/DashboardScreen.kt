@@ -66,6 +66,7 @@ fun DashboardScreen(
     onNavigateToClassDetails: (String, String, String) -> Unit = { _, _, _ -> },
     onNavigateToTutorialStudentSelection: (String) -> Unit = {},
     onNavigateToLearnStudentSelection: (Long, String) -> Unit = { _, _ -> },
+    onNavigateToVideoPlayer: (videoResName: String, title: String) -> Unit = { _, _ -> },
     viewModel: DashboardViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -441,7 +442,11 @@ fun DashboardScreen(
             // Video Tutorials Section
             VideoTutorialSection(
                 tutorials = videoTutorials,
-                onTutorialClick = { /* No-op for now */ }
+                onTutorialClick = { tutorial ->
+                    tutorial.videoResName?.let { resName ->
+                        onNavigateToVideoPlayer(resName, tutorial.title)
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
