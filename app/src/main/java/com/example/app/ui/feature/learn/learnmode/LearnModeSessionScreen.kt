@@ -188,6 +188,10 @@ fun LearnModeSessionScreen(
     // Track which word indices were correctly answered (for green progress segments)
     var correctlyAnsweredWords by remember(sessionKey) { mutableStateOf<Set<Int>>(emptySet()) }
 
+    // DEBUG: Track wrong attempt counts per item for diagnostics
+    // Key format: "word{wordIndex}" for Fill in Blank, "word{wordIndex}_letter{letterIndex}" for Write/Name
+    var wrongAttemptCounts by remember(sessionKey) { mutableStateOf<Map<String, Int>>(emptyMap()) }
+
     // State for ProgressCheckDialog (only shown for correct answers)
     var showProgressCheckDialog by remember(sessionKey) { mutableStateOf(false) }
     var predictedLetter by remember(sessionKey) { mutableStateOf("") }
@@ -701,7 +705,14 @@ fun LearnModeSessionScreen(
                             val expectedLetter = currentWord.word.getOrNull(currentWord.selectedLetterIndex)
                             // Use case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
                             val isCorrect = isLetterMatch(event.letter, expectedLetter)
-                            android.util.Log.d("LearnModeSession", "📝 Fill in the Blank: input=${event.letter}, expected=$expectedLetter, isCorrect=$isCorrect")
+
+                            // DEBUG: Track attempt count for this item
+                            val attemptKey = "word${currentWordIndex}"
+                            val attemptNum = (wrongAttemptCounts[attemptKey] ?: 0) + if (!isCorrect) 1 else 0
+                            if (!isCorrect) {
+                                wrongAttemptCounts = wrongAttemptCounts + (attemptKey to attemptNum)
+                            }
+                            android.util.Log.d("LearnModeSession", "📝 Fill in the Blank: input='${event.letter}' (code=${event.letter.code}), expected='$expectedLetter' (code=${expectedLetter?.code}), isCorrect=$isCorrect, attempt=#$attemptNum, wordIndex=$currentWordIndex, word='${currentWord.word}', maskedIndex=${currentWord.selectedLetterIndex}, isSimilarCase=${expectedLetter in similarCaseLetters}")
 
                             // Set up dialog state
                             targetLetter = expectedLetter?.toString() ?: ""
@@ -760,7 +771,14 @@ fun LearnModeSessionScreen(
                             // Check if input letter matches expected letter
                             // Uses case-insensitive matching for similar letters (c, k, o, p, s, u, v, w, x, z)
                             val isCorrect = isLetterMatch(event.letter, expectedLetter)
-                            android.util.Log.d("LearnModeSession", "📝 Write the Word/Name the Picture: input=${event.letter}, expected=$expectedLetter, isCorrect=$isCorrect")
+
+                            // DEBUG: Track attempt count for this letter position
+                            val attemptKey = "word${currentWordIndex}_letter${currentLetterIndex}"
+                            val attemptNum = (wrongAttemptCounts[attemptKey] ?: 0) + if (!isCorrect) 1 else 0
+                            if (!isCorrect) {
+                                wrongAttemptCounts = wrongAttemptCounts + (attemptKey to attemptNum)
+                            }
+                            android.util.Log.d("LearnModeSession", "📝 Write/Name: input='${event.letter}' (code=${event.letter.code}), expected='$expectedLetter' (code=${expectedLetter?.code}), isCorrect=$isCorrect, attempt=#$attemptNum, wordIndex=$currentWordIndex, letterIndex=$currentLetterIndex, word='${currentWord.word}', isSimilarCase=${expectedLetter in similarCaseLetters}")
 
                             // Set up dialog state
                             targetLetter = expectedLetter?.toString() ?: ""

@@ -245,8 +245,10 @@ class TutorialModeViewModel(
                     predictedLetter.equals(expectedLetter, ignoreCase = false)
                 }
 
-                Log.d(TAG, "Comparison: predicted='$predictedLetter' expected='$expectedLetter' " +
-                    "case=$letterCase similar=$isSimilarShape result=$isCorrect")
+                Log.d(TAG, "🔍 COMPARISON: predicted='$predictedLetter' expected='$expectedLetter' " +
+                    "targetLetter='$targetLetter' case=$letterCase similar=$isSimilarShape result=$isCorrect " +
+                    "samples=${samples.size} modelLabel='${result.label}' confidence=%.3f".format(result.confidence))
+                Log.d(TAG, "🔍 TOP5: ${result.allProbabilities.withIndex().sortedByDescending { it.value }.take(5).joinToString { "(${it.index}:%.3f)".format(it.value) }}")
 
                 // Show the predicted letter (stay in this state until phone sends feedback)
                 _uiState.update {
@@ -291,7 +293,7 @@ class TutorialModeViewModel(
      * Mirrors LearnModeViewModel.resetToIdle().
      */
     fun resetToIdle() {
-        Log.d(TAG, "Resetting to idle")
+        Log.d(TAG, "🔍 resetToIdle() called — targetLetter='$targetLetter', letterCase='$letterCase', currentState=${_uiState.value.state}")
         recordingJob?.cancel()
         recordingJob = null
         _uiState.update {

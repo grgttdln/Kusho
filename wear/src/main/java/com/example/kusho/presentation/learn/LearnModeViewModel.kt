@@ -256,8 +256,8 @@ class LearnModeViewModel(
 
                 // === Phase 4: Show the predicted letter ===
                 val predictedLetter = result.label?.trim()
-                Log.d(TAG, "Predicted: '$predictedLetter' (confidence: %.2f), Expected: '${wordData.word}'".format(result.confidence))
-                Log.d(TAG, "Top 5 probs: ${result.allProbabilities.withIndex().sortedByDescending { it.value }.take(5).joinToString { "(${it.index}:%.2f)".format(it.value) }}")
+                Log.d(TAG, "🔍 PREDICTION: '$predictedLetter' (confidence: %.3f), word='${wordData.word}', maskedIndex=${wordData.maskedIndex}, samples=${samples.size}".format(result.confidence))
+                Log.d(TAG, "🔍 TOP5: ${result.allProbabilities.withIndex().sortedByDescending { it.value }.take(5).joinToString { "(${it.index}:%.3f)".format(it.value) }}")
 
                 _uiState.update {
                     it.copy(

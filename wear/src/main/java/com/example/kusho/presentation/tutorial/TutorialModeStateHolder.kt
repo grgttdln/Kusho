@@ -60,11 +60,12 @@ object TutorialModeStateHolder {
             try {
                 // Deduplication guard: reject duplicate calls within 500ms for the same letter/case/index
                 val current = _letterData.value
+                val elapsed = System.currentTimeMillis() - current.timestamp
                 if (current.letter == letter &&
                     current.letterCase == letterCase &&
                     current.currentIndex == currentIndex &&
-                    System.currentTimeMillis() - current.timestamp < 500) {
-                    Log.d(TAG, "Duplicate letter data within 500ms, skipping")
+                    elapsed < 500) {
+                    Log.w(TAG, "⚠️ DEDUP BLOCKED: letter=$letter, case=$letterCase, index=$currentIndex, elapsed=${elapsed}ms (< 500ms) — retry letter data REJECTED")
                     return@runOnMainThread
                 }
 

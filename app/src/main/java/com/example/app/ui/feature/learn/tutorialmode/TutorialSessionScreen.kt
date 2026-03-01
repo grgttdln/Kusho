@@ -177,6 +177,8 @@ fun TutorialSessionScreen(
     var completedIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     // Track which items the student has attempted air-writing (for revisit auto-advance)
     var attemptedIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    // DEBUG: Track wrong attempt counts per letter for diagnostics
+    var wrongAttemptCounts by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     // Phase 2: Card stack grid navigation overlay
     var showCardStackGrid by remember { mutableStateOf(false) }
     // Voice playback highlight state
@@ -546,6 +548,13 @@ fun TutorialSessionScreen(
 
                 val itemIndex = currentStep - 1
                 attemptedIndices = attemptedIndices + itemIndex
+
+                // DEBUG: Track attempt count and log detailed comparison info
+                if (!gestureCorrect) {
+                    wrongAttemptCounts = wrongAttemptCounts + (itemIndex to (wrongAttemptCounts[itemIndex] ?: 0) + 1)
+                }
+                val attemptNum = wrongAttemptCounts[itemIndex] ?: 0
+                Log.d("TutorialSession", "🔍 GESTURE RESULT: predicted='$gesturePredicted', targetLetter='$currentLetter', letterType='$letterType', isCorrect=$gestureCorrect, attempt=#$attemptNum, step=$currentStep, itemIndex=$itemIndex")
 
                 // Always show teacher-gated ProgressCheckDialog
                 isCorrectGesture = gestureCorrect
