@@ -105,6 +105,11 @@ dependencies {
     // Google AI SDK for Gemini
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
+    // Media3 ExoPlayer for video tutorial playback
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+    implementation(libs.media3.datasource)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
