@@ -1,6 +1,9 @@
 package com.example.app.ui.components.dashboard
 
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,18 +15,26 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.app.data.entity.VideoTutorial
+
+private data class VideoMetadata(
+    val thumbnail: Bitmap? = null,
+    val durationMinutes: Int? = null
+)
 
 @Composable
 fun VideoTutorialSection(
@@ -63,6 +74,33 @@ fun VideoTutorialCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
+    // Load thumbnail and real duration from the video asset
+    val metadata = produceState(VideoMetadata()) {
+        val resName = tutorial.videoResName ?: return@produceState
+        try {
+            val afd = context.assets.openFd("videos/${resName}.mp4")
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+
+            val thumbnail = retriever.getFrameAtTime(0)
+            val durationMs = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull() ?: 0L
+            val minutes = ((durationMs + 59_999) / 60_000).toInt() // round up
+
+            retriever.release()
+            afd.close()
+
+            value = VideoMetadata(thumbnail = thumbnail, durationMinutes = minutes)
+        } catch (_: Exception) {
+            // Video file not found or unreadable — keep defaults
+        }
+    }
+
+    val displayDuration = metadata.value.durationMinutes ?: tutorial.durationMinutes
+
     Card(
         modifier = modifier
             .width(320.dp)
@@ -72,7 +110,7 @@ fun VideoTutorialCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // Gradient thumbnail area
+            // Thumbnail area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -87,6 +125,16 @@ fun VideoTutorialCard(
                         )
                     )
             ) {
+                // Video thumbnail (overlays gradient fallback)
+                metadata.value.thumbnail?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = tutorial.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
                 // Play button — centered
                 Box(
                     modifier = Modifier
@@ -120,7 +168,7 @@ fun VideoTutorialCard(
                         .padding(horizontal = 12.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = "${tutorial.category} \u2022 ${tutorial.durationMinutes} MIN",
+                        text = "${tutorial.category} \u2022 ${displayDuration} MIN",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
