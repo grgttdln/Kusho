@@ -59,6 +59,16 @@ object LearnModeStateHolder {
     private val _isWatchOnLearnScreen = MutableStateFlow(false)
     val isWatchOnLearnScreen: StateFlow<Boolean> = _isWatchOnLearnScreen.asStateFlow()
 
+    // True only for the first question after session start.
+    // Used so Fill-in-the-Blank auto-starts the countdown once (after the WaitScreen tap)
+    // but NOT on subsequent question transitions (skip / correct answer).
+    private val _isFirstQuestion = MutableStateFlow(true)
+    val isFirstQuestion: StateFlow<Boolean> = _isFirstQuestion.asStateFlow()
+
+    fun consumeFirstQuestion() {
+        _isFirstQuestion.value = false
+    }
+
     fun setWatchOnLearnScreen(onScreen: Boolean) {
         _isWatchOnLearnScreen.value = onScreen
     }
@@ -92,6 +102,7 @@ object LearnModeStateHolder {
         runOnMainThread {
             try {
                 Log.d(TAG, "🎯 Starting session: $setTitle ($totalWords words)")
+                _isFirstQuestion.value = true
                 _sessionData.value = SessionData(
                     setTitle = setTitle,
                     totalWords = totalWords,
@@ -133,6 +144,7 @@ object LearnModeStateHolder {
             _sessionData.value = SessionData()
             _writeTheWordState.value = WriteTheWordState()
             _isWatchOnLearnScreen.value = false
+            _isFirstQuestion.value = true
         }
     }
 

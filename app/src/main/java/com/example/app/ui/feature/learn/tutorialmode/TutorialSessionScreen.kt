@@ -997,7 +997,8 @@ fun TutorialSessionScreen(
                                 numberColor = Color.White,
                                 circleColor = Color.Black,
                                 loopAnimation = true,
-                                loopDelay = 2000
+                                loopDelay = 2000,
+                                restartTrigger = isStudentWriting
                             )
                         }
                     } else {

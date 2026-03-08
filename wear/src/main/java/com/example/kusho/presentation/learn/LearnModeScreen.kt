@@ -561,10 +561,14 @@ private fun FillInTheBlankMainContent(
         }
     }
 
-    // Auto-start the first recording so the user doesn't see a second "Tap to begin!"
-    // after already tapping the WaitScreen. Only fires once per ViewModel instance.
+    // Auto-start only for the very first question after the WaitScreen tap.
+    // Subsequent questions (skip / correct answer) require the user to tap to start.
+    val isFirstQuestion by LearnModeStateHolder.isFirstQuestion.collectAsState()
     LaunchedEffect(Unit) {
-        viewModel.startRecording()
+        if (isFirstQuestion) {
+            LearnModeStateHolder.consumeFirstQuestion()
+            viewModel.startRecording()
+        }
     }
 
     // Track last spoken prediction to avoid double TTS
@@ -635,7 +639,15 @@ private fun FillInTheBlankMainContent(
                     LearnModeViewModel.State.RECORDING -> RecordingContent(uiState)
                     LearnModeViewModel.State.PROCESSING -> ProcessingContent()
                     LearnModeViewModel.State.NO_MOVEMENT -> { /* Unused in Learn mode */ }
-                    LearnModeViewModel.State.SHOWING_PREDICTION -> ShowingPredictionContent(uiState)
+                    LearnModeViewModel.State.SHOWING_PREDICTION -> {
+                        if (previousShowingFeedback) {
+                            // Feedback just dismissed; resetToIdle() hasn't propagated yet.
+                            // Show idle to avoid flashing the stale prediction for one frame.
+                            IdleContent(maskedWord = maskedWord, viewModel = viewModel)
+                        } else {
+                            ShowingPredictionContent(uiState)
+                        }
+                    }
                 }
             }
         }

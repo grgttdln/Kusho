@@ -33,18 +33,19 @@ fun AnimatedLetterView(
     circleColor: Color = Color.Black,
     loopAnimation: Boolean = true,
     loopDelay: Int = 1500,
-    showGuidingHand: Boolean = true
+    showGuidingHand: Boolean = true,
+    restartTrigger: Boolean = false
 ) {
     var currentStroke by remember { mutableIntStateOf(0) }
     var animProgress by remember { mutableFloatStateOf(0f) }
     var animationFailed by remember { mutableStateOf(false) }
     var handPosition by remember { mutableStateOf<Offset?>(null) }
     var canvasMinDimension by remember { mutableFloatStateOf(0f) }
-    
+
     val targetLetter = if (isUpperCase) letter.uppercaseChar() else letter.lowercaseChar()
-    
-    // Main animation loop
-    LaunchedEffect(targetLetter) {
+
+    // Main animation loop — restarts when restartTrigger changes
+    LaunchedEffect(targetLetter, restartTrigger) {
         // Reset all state when letter changes
         currentStroke = 0
         animProgress = 0f
@@ -61,9 +62,9 @@ fun AnimatedLetterView(
             }
             
             // Calculate dynamic timing to ensure exactly 3 seconds total per letter
-            val totalTimeMs = 3000L
+            val totalTimeMs = 2000L
             val strokeCount = strokes.size
-            val delayBetweenStrokesMs = 150L // Short pause between strokes
+            val delayBetweenStrokesMs = 100L // Short pause between strokes
             val totalDelayTime = (strokeCount - 1) * delayBetweenStrokesMs
             val strokeDurationMs = (totalTimeMs - totalDelayTime) / strokeCount
             
