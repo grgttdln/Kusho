@@ -489,11 +489,12 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             val word = json.optString("word", "")
             val maskedIndex = json.optInt("maskedIndex", -1)
             val configurationType = json.optString("configurationType", "")
+            val dominantHand = json.optString("dominantHand", "RIGHT")
 
-            android.util.Log.d("PhoneCommunicationMgr", "📚 Word: $word, maskedIndex: $maskedIndex, type: $configurationType")
+            android.util.Log.d("PhoneCommunicationMgr", "📚 Word: $word, maskedIndex: $maskedIndex, type: $configurationType, hand: $dominantHand")
 
             if (word.isNotEmpty()) {
-                com.example.kusho.presentation.learn.LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType)
+                com.example.kusho.presentation.learn.LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType, dominantHand)
             }
         } catch (e: Exception) {
             android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing word data", e)
