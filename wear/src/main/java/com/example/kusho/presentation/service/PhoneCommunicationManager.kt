@@ -557,8 +557,9 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
                     val word = wordJson.optString("word", "")
                     val maskedIndex = wordJson.optInt("maskedIndex", -1)
                     val configurationType = wordJson.optString("configurationType", "")
+                    val dominantHand = wordJson.optString("dominantHand", "RIGHT")
                     if (word.isNotEmpty()) {
-                        com.example.kusho.presentation.learn.LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType)
+                        com.example.kusho.presentation.learn.LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType, dominantHand)
                     }
                 }
             } else {
@@ -613,12 +614,13 @@ class PhoneCommunicationManager(private val context: Context) : MessageClient.On
             val word = json.optString("word", "")
             val maskedIndex = json.optInt("maskedIndex", -1)
             val configurationType = json.optString("configurationType", "")
+            val dominantHand = json.optString("dominantHand", "RIGHT")
 
             _isPhoneInLearnMode.value = true
             if (word.isNotEmpty()) {
-                com.example.kusho.presentation.learn.LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType)
+                com.example.kusho.presentation.learn.LearnModeStateHolder.updateWordData(word, maskedIndex, configurationType, dominantHand)
             }
-            android.util.Log.d("PhoneCommunicationMgr", "✅ Learn Mode resumed with word: $word")
+            android.util.Log.d("PhoneCommunicationMgr", "✅ Learn Mode resumed with word: $word, hand: $dominantHand")
         } catch (e: Exception) {
             android.util.Log.e("PhoneCommunicationMgr", "❌ Error parsing Learn Mode resume", e)
         }
