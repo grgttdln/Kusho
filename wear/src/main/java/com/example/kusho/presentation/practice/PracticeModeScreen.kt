@@ -44,6 +44,7 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.example.kusho.R
 import com.example.kusho.ml.ClassifierLoadResult
+import com.example.kusho.ml.ModelConfig
 import com.example.kusho.ml.ModelLoader
 import com.example.kusho.presentation.theme.AppColors
 import com.example.kusho.sensors.MotionSensorManager
@@ -83,7 +84,7 @@ fun PracticeModeScreen() {
     LaunchedEffect(Unit) {
         sensorManager = MotionSensorManager(context)
         classifierResult = try {
-            ModelLoader.loadDefault(context)
+            ModelLoader.load(context, ModelConfig.getPracticeModeModel())
         } catch (e: Exception) {
             ClassifierLoadResult.Error("Failed to load model: ${e.message}", e)
         }

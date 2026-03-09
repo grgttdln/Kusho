@@ -67,35 +67,55 @@ data class ModelConfig(
             ),
             // Left-hand models
             ModelConfig(
-                fileName = "tcn_multihead_model_CAPITAL_left.tflite",
-                displayName = "Uppercase Left Hand Model",
+                fileName = "tcn_multihead_model_CAPITAL_left_retrained.tflite",
+                displayName = "Uppercase Left Hand Model (Retrained)",
                 windowSize = 295,
                 channels = 6,
                 labels = listOf(
                     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
                     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
                 ),
-                description = "Specialized model for uppercase letters (left hand)",
+                description = "Retrained specialized model for uppercase letters (left hand)",
                 indexOffset = 26
             ),
             ModelConfig(
-                fileName = "tcn_multihead_model_small_left.tflite",
-                displayName = "Lowercase Left Hand Model",
+                fileName = "tcn_multihead_model_small_left_retrained.tflite",
+                displayName = "Lowercase Left Hand Model (Retrained)",
                 windowSize = 295,
                 channels = 6,
                 labels = listOf(
                     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
                     "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
                 ),
-                description = "Specialized model for lowercase letters (left hand)"
+                description = "Retrained specialized model for lowercase letters (left hand)"
                 // No offset needed
             )
+        )
+
+        // Practice mode model (second iteration, all hands)
+        val PRACTICE_MODE_MODEL = ModelConfig(
+            fileName = "tcn_multihead_model_complete_all_hands.tflite",
+            displayName = "Complete All Hands Model",
+            windowSize = 295,
+            channels = 6,
+            labels = listOf(
+                "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+                "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+                "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+                "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+            ),
+            description = "Second iteration practice mode model for all hands"
         )
 
         /**
          * Get the default/primary model configuration
          */
         fun getDefault(): ModelConfig = MODELS.first()
+
+        /**
+         * Get the model for practice mode
+         */
+        fun getPracticeModeModel(): ModelConfig = PRACTICE_MODE_MODEL
 
         /**
          * Get model for a session based on letter case and dominant hand.
@@ -109,9 +129,8 @@ data class ModelConfig(
                 "small", "lowercase" -> "small"
                 else -> return getDefault()
             }
-            val prefix = if (hand == "left") "tcn_multihead_model" else "tcn_multihead_model"
-            val targetFileName = "${prefix}_${casePart}_${hand}.tflite"
-            return MODELS.find { it.fileName == targetFileName } ?: getDefault()
+            val targetPrefix = "tcn_multihead_model_${casePart}_${hand}"
+            return MODELS.find { it.fileName.startsWith(targetPrefix) } ?: getDefault()
         }
 
         /**
