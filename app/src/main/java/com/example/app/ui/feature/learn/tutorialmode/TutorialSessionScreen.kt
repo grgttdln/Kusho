@@ -78,6 +78,7 @@ import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
 import com.example.app.ui.components.tutorial.AnimatedLetterView
 import com.example.app.data.entity.getCompletedIndices
+import com.example.app.util.BackgroundMusicPlayer
 import com.example.app.data.entity.serializeCompletedIndices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -197,9 +198,19 @@ fun TutorialSessionScreen(
     // Tooltip state for annotation icon in progress check overlay
     var showOverlayAnnotationTooltip by remember { mutableStateOf(true) }
 
+    // Background music - starts once watch connection is ready, loops at subtle volume
+    DisposableEffect(isWatchReady) {
+        if (isWatchReady) {
+            BackgroundMusicPlayer.start(context, R.raw.bg_music)
+        }
+        onDispose {
+            BackgroundMusicPlayer.stop()
+        }
+    }
+
     // Coroutine scope for async operations
     val coroutineScope = rememberCoroutineScope()
-    
+
     // Get database instance for annotation persistence
     val database = remember { AppDatabase.getInstance(context) }
     val annotationDao = remember { database.learnerProfileAnnotationDao() }

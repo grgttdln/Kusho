@@ -78,6 +78,7 @@ import com.example.app.service.SessionDisconnectReason
 import com.example.app.ui.components.learnmode.AnnotationData
 import com.example.app.ui.components.learnmode.LearnerProfileAnnotationDialog
 import com.example.app.ui.components.common.ProgressIndicator
+import com.example.app.util.BackgroundMusicPlayer
 import com.example.app.ui.components.common.EndSessionDialog
 import com.example.app.ui.components.common.ResumeSessionDialog
 import kotlinx.coroutines.Dispatchers
@@ -281,6 +282,16 @@ fun LearnModeSessionScreen(
         onDispose {
             deepgramTtsManager.stop()
             nativeTtsManager.shutdown()
+        }
+    }
+
+    // Background music - starts once watch connection is ready, loops at subtle volume
+    DisposableEffect(isWatchReady) {
+        if (isWatchReady) {
+            BackgroundMusicPlayer.start(context, R.raw.bg_music)
+        }
+        onDispose {
+            BackgroundMusicPlayer.stop()
         }
     }
 
