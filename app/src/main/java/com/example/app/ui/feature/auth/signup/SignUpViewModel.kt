@@ -1,10 +1,12 @@
 package com.example.app.ui.feature.auth.signup
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.data.AppDatabase
 import com.example.app.data.SessionManager
+import com.example.app.data.repository.SeedRepository
 import com.example.app.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +18,12 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
     private val database = AppDatabase.getInstance(application)
     private val userRepository = UserRepository(database.userDao())
     private val sessionManager = SessionManager.getInstance(application)
+    private val seedRepository = SeedRepository(
+        database.wordDao(),
+        database.setDao(),
+        database.setWordDao(),
+        database.activityDao()
+    )
 
     private val _uiState = MutableStateFlow(SignUpUiState())
     val uiState: StateFlow<SignUpUiState> = _uiState.asStateFlow()
@@ -43,6 +51,13 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
                     val newUser = userRepository.getUserById(result.userId)
                     newUser?.let { user ->
                         sessionManager.saveUserSession(user, staySignedIn = true)
+                    }
+
+                    // Seed starter word bank, sets, and activity (non-fatal)
+                    try {
+                        seedRepository.seedDefaultData(getApplication(), result.userId)
+                    } catch (e: Exception) {
+                        Log.e("SignUpViewModel", "Failed to seed starter data", e)
                     }
 
                     _uiState.value = _uiState.value.copy(
