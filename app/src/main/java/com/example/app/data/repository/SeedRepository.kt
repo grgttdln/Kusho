@@ -34,21 +34,21 @@ class SeedRepository(
     )
 
     private val set1Words = listOf(
-        SeedSetWord("cat", "name the picture", hasImage = true),
-        SeedSetWord("dog", "name the picture", hasImage = true),
-        SeedSetWord("sun", "name the picture", hasImage = true),
-        SeedSetWord("cup", "fill in the blanks", selectedLetterIndex = 1),
-        SeedSetWord("hat", "fill in the blanks", selectedLetterIndex = 1),
-        SeedSetWord("bed", "write the word")
+        SeedSetWord("cat", "Name the Picture", hasImage = true),
+        SeedSetWord("dog", "Name the Picture", hasImage = true),
+        SeedSetWord("sun", "Name the Picture", hasImage = true),
+        SeedSetWord("cup", "Fill in the Blank", selectedLetterIndex = 1),
+        SeedSetWord("hat", "Fill in the Blank", selectedLetterIndex = 1),
+        SeedSetWord("bed", "Write the Word")
     )
 
     private val set2Words = listOf(
-        SeedSetWord("pig", "name the picture", hasImage = true),
-        SeedSetWord("fox", "name the picture", hasImage = true),
-        SeedSetWord("pen", "fill in the blanks", selectedLetterIndex = 1),
-        SeedSetWord("map", "fill in the blanks", selectedLetterIndex = 1),
-        SeedSetWord("bus", "write the word"),
-        SeedSetWord("nut", "write the word")
+        SeedSetWord("pig", "Name the Picture", hasImage = true),
+        SeedSetWord("fox", "Name the Picture", hasImage = true),
+        SeedSetWord("pen", "Fill in the Blank", selectedLetterIndex = 1),
+        SeedSetWord("map", "Fill in the Blank", selectedLetterIndex = 1),
+        SeedSetWord("bus", "Write the Word"),
+        SeedSetWord("nut", "Write the Word")
     )
 
     private val allSeedWords = listOf(
@@ -91,7 +91,7 @@ class SeedRepository(
         val set1Id = setDao.insertSet(
             Set(
                 userId = userId,
-                title = "Starter: Simple CVC Words",
+                title = "Simple CVC Words",
                 description = "Practice simple three-letter words",
                 itemCount = set1Words.size,
                 createdAt = now,
@@ -101,7 +101,7 @@ class SeedRepository(
         val set2Id = setDao.insertSet(
             Set(
                 userId = userId,
-                title = "Starter: More CVC Words",
+                title = "More CVC Words",
                 description = "More three-letter words to practice",
                 itemCount = set2Words.size,
                 createdAt = now + 1,
@@ -140,7 +140,7 @@ class SeedRepository(
         val activityId = activityDao.insertActivity(
             Activity(
                 userId = userId,
-                title = "Starter: CVC Word Practice",
+                title = "CVC Word Practice",
                 description = "Practice reading and writing simple CVC words",
                 createdAt = now,
                 updatedAt = now
