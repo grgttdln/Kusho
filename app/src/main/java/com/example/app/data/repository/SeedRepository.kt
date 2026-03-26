@@ -67,6 +67,9 @@ class SeedRepository(
     )
 
     suspend fun seedDefaultData(context: Context, userId: Long) = withContext(Dispatchers.IO) {
+        // Skip if user already has words (e.g., retry after partial signup)
+        if (wordDao.getWordCountForUser(userId) > 0) return@withContext
+
         // Step 1: Copy images from assets to internal storage
         val imagePaths = copyStarterImages(context)
 
